@@ -277,18 +277,25 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
 
 <!-- Detail Modal -->
 <div class="modal-bg" id="detail-modal" style="padding:20px;">
-  <div class="modal-box" style="width:900px; max-width:95vw; height:85vh; display:flex; flex-direction:column; padding:24px;">
-    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+  <div class="modal-box" style="width:900px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; padding:24px; overflow:hidden;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; flex-shrink:0;">
       <div>
         <h2 id="det-name" style="color:#fff; font-size:22px; line-height:1.2;">Name</h2>
         <div id="det-sub" style="font-family:var(--mono); font-size:12px; color:var(--text-muted); margin-top:4px;">TKR</div>
       </div>
       <button class="btn" onclick="closeDetail()">✕ CLOSE</button>
     </div>
-    <div style="flex:1; min-height:0; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
-      <canvas id="det-chart"></canvas>
+    
+    <div style="overflow-y:auto; flex:1; padding-right:8px;" id="det-scroll">
+      <div style="height:250px; min-height:250px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+        <canvas id="det-chart"></canvas>
+      </div>
+      
+      <div class="quant-grid" id="det-grid" style="margin-top:16px; grid-template-columns: repeat(5, 1fr); gap:8px;"></div>
+      
+      <h3 style="margin-top:24px; margin-bottom:12px; font-size:15px; color:#fff; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px;">Mathematical Breakdown</h3>
+      <div id="det-expl" style="display:flex; flex-direction:column; gap:10px;"></div>
     </div>
-    <div class="quant-grid" id="det-grid" style="margin-top:16px; grid-template-columns: repeat(4, 1fr); gap:8px;"></div>
   </div>
 </div>
 
@@ -409,20 +416,22 @@ function calcVolAndRisk(prices) {
   for (let i = 1; i < prices.length; i++) rets.push((prices[i] - prices[i-1]) / prices[i-1]);
   const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
   const variance = rets.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / rets.length;
-  const vol = Math.sqrt(variance) * Math.sqrt(52); // Annualized
+  const vol = Math.sqrt(variance) * Math.sqrt(52);
 
-  // Sortino — uses downside deviation only
   const downRets = rets.filter(r => r < 0);
   const downVar = downRets.reduce((a, b) => a + b * b, 0) / (rets.length || 1);
   const downStd = Math.sqrt(downVar) * Math.sqrt(52);
-  const riskFree = 0.045; // ~4.5% 10Y Treasury rate
+  const riskFree = 0.045;
   const sortino = downStd === 0 ? 0 : (mean * 52 - riskFree) / downStd;
   const sharpe  = vol === 0 ? 0 : (mean * 52 - riskFree) / vol;
 
-  // Parametric 95% weekly VaR
   const var95 = (mean - 1.645 * Math.sqrt(variance)) * 100;
+  
+  const varThreshold = mean - 1.645 * Math.sqrt(variance);
+  const tailRets = rets.filter(r => r <= varThreshold);
+  const cvar95 = tailRets.length ? (tailRets.reduce((a,b)=>a+b,0) / tailRets.length) * 100 : var95;
 
-  return { weeklyDrift: mean, vol, sharpe, sortino, var95 };
+  return { weeklyDrift: mean, vol, sharpe, sortino, var95, cvar95 };
 }
 
 function calcMaxDD(prices) {
@@ -467,8 +476,8 @@ function calcTechAndFib(prices) {
   return { fib618, fib382, distHigh, cross, crossCls, sma10, sma40 };
 }
 
-function calcBetaAlpha(prices, benchPrices) {
-  if (!benchPrices || benchPrices.length < 30 || prices.length < 30) return { beta: 1, alpha: 0 };
+function calcBetaAlphaAndMore(prices, benchPrices) {
+  if (!benchPrices || benchPrices.length < 30 || prices.length < 30) return { beta: 1, alpha: 0, r2: 0, treynor: 0, infoRatio: 0 };
   const len = Math.min(prices.length, benchPrices.length);
   const pS = prices.slice(-len);
   const bS = benchPrices.slice(-len);
@@ -482,16 +491,30 @@ function calcBetaAlpha(prices, benchPrices) {
   const pMean = pRets.reduce((a, b) => a + b, 0) / pRets.length;
   const bMean = bRets.reduce((a, b) => a + b, 0) / bRets.length;
   
-  let cov = 0, varB = 0;
+  let cov = 0, varB = 0, varP = 0;
   for (let i = 0; i < pRets.length; i++) {
-    cov += (pRets[i] - pMean) * (bRets[i] - bMean);
-    varB += Math.pow(bRets[i] - bMean, 2);
+    const pDiff = pRets[i] - pMean;
+    const bDiff = bRets[i] - bMean;
+    cov += pDiff * bDiff;
+    varB += bDiff * bDiff;
+    varP += pDiff * pDiff;
   }
   
   const beta = varB === 0 ? 1 : cov / varB;
   const rf = 0.045 / 52;
   const weeklyAlpha = pMean - (rf + beta * (bMean - rf));
-  return { beta, alpha: weeklyAlpha * 52 };
+  
+  const r2 = (varP === 0 || varB === 0) ? 0 : (cov * cov) / (varP * varB);
+  const annRet = pMean * 52;
+  const treynor = beta === 0 ? 0 : (annRet - 0.045) / beta;
+  
+  const excessRets = pRets.map((pr, i) => pr - bRets[i]);
+  const excessMean = excessRets.reduce((a, b) => a + b, 0) / excessRets.length;
+  const trackingErrorSq = excessRets.reduce((a, b) => a + Math.pow(b - excessMean, 2), 0) / excessRets.length;
+  const annTrackingError = Math.sqrt(trackingErrorSq) * Math.sqrt(52);
+  const infoRatio = annTrackingError === 0 ? 0 : (excessMean * 52) / annTrackingError;
+  
+  return { beta, alpha: weeklyAlpha * 52, r2, treynor, infoRatio };
 }
 
 function calcKelly(prices) {
@@ -501,14 +524,19 @@ function calcKelly(prices) {
     if (r > 0) { wins++; sumW += r; }
     else if (r < 0) { loss++; sumL += Math.abs(r); }
   }
-  if (loss === 0) return 100;
-  if (wins === 0) return 0;
+  if (loss === 0) return { size: 100, winRate: 1, avgWin: sumW/wins, avgLoss: 0 };
+  if (wins === 0) return { size: 0, winRate: 0, avgWin: 0, avgLoss: sumL/loss };
   const wProb = wins / (wins + loss);
   const avgW = sumW / wins;
   const avgL = sumL / loss;
   const R = avgW / avgL;
   const kelly = wProb - ((1 - wProb) / R);
-  return Math.max(0, Math.min(1, kelly / 2)) * 100;
+  return {
+    size: Math.max(0, Math.min(1, kelly / 2)) * 100,
+    winRate: wProb,
+    avgWin: avgW,
+    avgLoss: avgL
+  };
 }
 
 // Monte Carlo 6-Month Simulation (2000 Iterations)
@@ -658,15 +686,15 @@ async function fetchOne(ticker, isBench = false) {
 
   const rsi   = calcRSI(closes, 14);
   const stoch = calcStoch(closes, 14);
-  const { weeklyDrift, vol, sharpe, sortino, var95 } = calcVolAndRisk(closes);
+  const { weeklyDrift, vol, sharpe, sortino, var95, cvar95 } = calcVolAndRisk(closes);
   const maxDD  = calcMaxDD(closes);
   const bb     = calcBollinger(closes, 20);
   const macd   = calcMACD(closes);
   const mc     = runMonteCarlo(cur, weeklyDrift, vol, 2000, 26);
   const fg     = calcFearGreed(rsi, stoch, vol);
   const tech   = calcTechAndFib(closes);
-  const { beta, alpha } = isBench ? { beta: 1, alpha: 0 } : calcBetaAlpha(closes, SPY_CLOSES);
-  const kelly  = calcKelly(closes);
+  const { beta, alpha, r2, treynor, infoRatio } = isBench ? { beta: 1, alpha: 0, r2: 0, treynor: 0, infoRatio: 0 } : calcBetaAlphaAndMore(closes, SPY_CLOSES);
+  const kellyObj  = calcKelly(closes);
 
   // Momentum State (based strictly on price action — NOT fundamental valuation)
   let momentum = 'NEUTRAL', momCls = 'b';
@@ -691,8 +719,8 @@ async function fetchOne(ticker, isBench = false) {
 
   return {
     ok: true, source, price: cur, prices: closes,
-    chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, maxDD,
-    macd, mc, momentum, momCls, score, fg, tech, beta, alpha, kelly
+    chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, cvar95, maxDD,
+    macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, kellyObj
   };
 }
 
@@ -897,14 +925,36 @@ function openDetail(ticker, name) {
   });
 
   document.getElementById('det-grid').innerHTML = `
-    <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val">${d.score} / 100</span></div>
+    <div class="q-box"><span class="q-lbl">Treynor Ratio</span><span class="q-val">${d.treynor.toFixed(3)}</span></div>
+    <div class="q-box"><span class="q-lbl">Info Ratio</span><span class="q-val">${d.infoRatio.toFixed(3)}</span></div>
+    <div class="q-box"><span class="q-lbl">R-Squared</span><span class="q-val">${(d.r2*100).toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">CVaR (95%)</span><span class="q-val r">${d.cvar95.toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val">${d.score}/100</span></div>
+    
     <div class="q-box"><span class="q-lbl">Beta (vs SPY)</span><span class="q-val">${d.beta.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">Annual Alpha</span><span class="q-val ${d.alpha>0?'g':'r'}">${(d.alpha*100).toFixed(2)}%</span></div>
-    <div class="q-box"><span class="q-lbl">Half-Kelly Size</span><span class="q-val b">${d.kelly.toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Half-Kelly Size</span><span class="q-val b">${d.kellyObj.size.toFixed(1)}%</span></div>
     <div class="q-box"><span class="q-lbl">10-Wk SMA</span><span class="q-val">$${d.tech.sma10.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">40-Wk SMA</span><span class="q-val">$${d.tech.sma40.toFixed(2)}</span></div>
-    <div class="q-box"><span class="q-lbl">Bollinger Upper</span><span class="q-val">$${(d.tech.sma10 * 1.1).toFixed(2)}</span></div>
-    <div class="q-box"><span class="q-lbl">Fib 38.2%</span><span class="q-val">$${d.tech.fib382.toFixed(2)}</span></div>
+  `;
+  
+  document.getElementById('det-expl').innerHTML = `
+    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Monte Carlo Extrapolation</div>
+      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Simulated 2,000 parallel futures using Geometric Brownian Motion based on a historical annualized volatility of ${(d.vol*100).toFixed(1)}%. The Median baseline price in 6 months is $${d.mc.median.toFixed(2)}, with a 90% Bull Case ceiling of $${d.mc.p90.toFixed(2)}.</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Kelly Criterion & Portfolio Sizing</div>
+      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Over the past 5 years, this stock had a positive weekly win rate of ${(d.kellyObj.winRate*100).toFixed(1)}%. The average weekly gain was ${(d.kellyObj.avgWin*100).toFixed(2)}% vs an average loss of ${(d.kellyObj.avgLoss*100).toFixed(2)}%. To maximize long-term compound growth while mathematically avoiding ruin, the Half-Kelly formula suggests an optimal portfolio allocation of exactly ${d.kellyObj.size.toFixed(1)}%.</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Systematic Risk & Outperformance</div>
+      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Compared to the S&P 500, this asset has a Beta of ${d.beta.toFixed(2)} (1.0 = matches market exactly). It explains ${(d.r2*100).toFixed(1)}% of its variance through broader market moves (R-Squared). Over the period, it generated an Annualized Alpha of ${(d.alpha*100).toFixed(2)}% in risk-adjusted excess return.</div>
+    </div>
+    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
+      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Downside Analysis (CVaR & MaxDD)</div>
+      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">The 95% Value at Risk is ${d.var95.toFixed(2)}%, meaning 95% of weeks perform better than this. In the 5% of weeks that are *worse*, the Conditional VaR (Expected Shortfall) averages ${d.cvar95.toFixed(2)}%. The maximum peak-to-trough drop recorded was ${d.maxDD.toFixed(1)}%.</div>
+    </div>
   `;
   
   document.getElementById('detail-modal').style.display = 'flex';

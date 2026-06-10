@@ -378,6 +378,7 @@ const COS = [
 ];
 
 let D = {}, activeFilter = 'all', searchQ = '', sortKey = '';
+let SPY_CLOSES = [];
 const PUB = COS.filter(c => c.pub);
 
 // ============================
@@ -466,6 +467,50 @@ function calcTechAndFib(prices) {
   return { fib618, fib382, distHigh, cross, crossCls, sma10, sma40 };
 }
 
+function calcBetaAlpha(prices, benchPrices) {
+  if (!benchPrices || benchPrices.length < 30 || prices.length < 30) return { beta: 1, alpha: 0 };
+  const len = Math.min(prices.length, benchPrices.length);
+  const pS = prices.slice(-len);
+  const bS = benchPrices.slice(-len);
+  
+  let pRets = [], bRets = [];
+  for (let i = 1; i < len; i++) {
+    pRets.push((pS[i] - pS[i-1]) / pS[i-1]);
+    bRets.push((bS[i] - bS[i-1]) / bS[i-1]);
+  }
+  
+  const pMean = pRets.reduce((a, b) => a + b, 0) / pRets.length;
+  const bMean = bRets.reduce((a, b) => a + b, 0) / bRets.length;
+  
+  let cov = 0, varB = 0;
+  for (let i = 0; i < pRets.length; i++) {
+    cov += (pRets[i] - pMean) * (bRets[i] - bMean);
+    varB += Math.pow(bRets[i] - bMean, 2);
+  }
+  
+  const beta = varB === 0 ? 1 : cov / varB;
+  const rf = 0.045 / 52;
+  const weeklyAlpha = pMean - (rf + beta * (bMean - rf));
+  return { beta, alpha: weeklyAlpha * 52 };
+}
+
+function calcKelly(prices) {
+  let wins = 0, loss = 0, sumW = 0, sumL = 0;
+  for (let i = 1; i < prices.length; i++) {
+    const r = (prices[i] - prices[i-1]) / prices[i-1];
+    if (r > 0) { wins++; sumW += r; }
+    else if (r < 0) { loss++; sumL += Math.abs(r); }
+  }
+  if (loss === 0) return 100;
+  if (wins === 0) return 0;
+  const wProb = wins / (wins + loss);
+  const avgW = sumW / wins;
+  const avgL = sumL / loss;
+  const R = avgW / avgL;
+  const kelly = wProb - ((1 - wProb) / R);
+  return Math.max(0, Math.min(1, kelly / 2)) * 100;
+}
+
 // Monte Carlo 6-Month Simulation (2000 Iterations)
 function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
   if (!vol || vol === 0) return { median: cur, p10: cur, p90: cur };
@@ -536,12 +581,12 @@ function saveKeys() {
 // ============================
 // DATA FETCHING ENGINE
 // ============================
-async function fetchOne(ticker) {
+async function fetchOne(ticker, isBench = false) {
   const now   = Math.floor(Date.now() / 1000);
-  const from1Y = now - 31536000;
+  const from5Y = now - 5 * 31536000;
   let closes = [], source = 'Unknown';
 
-  const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&period1=${from1Y}&period2=${now}`;
+  const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&period1=${from5Y}&period2=${now}`;
   const proxies = [
     u => u,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
@@ -571,7 +616,7 @@ async function fetchOne(ticker) {
   if (closes.length < 25 && apiKeys.poly) {
     try {
       const fmt  = d => d.toISOString().split('T')[0];
-      const dNow = new Date(), dFrom = new Date(Date.now() - 31536000000);
+      const dNow = new Date(), dFrom = new Date(Date.now() - 5 * 31536000000);
       const c = new AbortController(); const t = setTimeout(() => c.abort(), 9000);
       const r = await fetch(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/week/${fmt(dFrom)}/${fmt(dNow)}?adjusted=true&apiKey=${apiKeys.poly}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
@@ -586,7 +631,7 @@ async function fetchOne(ticker) {
       const r = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=${ticker}&apikey=${apiKeys.alpha}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
       if (r['Weekly Time Series']) {
-        const vals = Object.values(r['Weekly Time Series']).slice(0, 52).reverse().map(x => parseFloat(x['4. close']));
+        const vals = Object.values(r['Weekly Time Series']).slice(0, 260).reverse().map(x => parseFloat(x['4. close']));
         if (vals.length > 25) { closes = vals; source = 'Alpha Vantage'; }
       }
     } catch(_) {}
@@ -596,7 +641,7 @@ async function fetchOne(ticker) {
   if (closes.length < 25 && apiKeys.finnhub) {
     try {
       const c = new AbortController(); const t = setTimeout(() => c.abort(), 9000);
-      const r = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=W&from=${from1Y}&to=${now}&token=${apiKeys.finnhub}`, { signal: c.signal }).then(x => x.json());
+      const r = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=W&from=${from5Y}&to=${now}&token=${apiKeys.finnhub}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
       if (r.s === 'ok' && r.c?.length > 25) { closes = r.c; source = 'Finnhub'; }
     } catch(_) {}
@@ -607,8 +652,9 @@ async function fetchOne(ticker) {
 
   const cur   = closes[closes.length - 1];
   const idx6M = Math.max(0, closes.length - 26);
+  const idx1Y = Math.max(0, closes.length - 52);
   const chg6m = ((cur - closes[idx6M]) / closes[idx6M]) * 100;
-  const chg1y = ((cur - closes[0])     / closes[0])     * 100;
+  const chg1y = ((cur - closes[idx1Y]) / closes[idx1Y]) * 100;
 
   const rsi   = calcRSI(closes, 14);
   const stoch = calcStoch(closes, 14);
@@ -619,6 +665,8 @@ async function fetchOne(ticker) {
   const mc     = runMonteCarlo(cur, weeklyDrift, vol, 2000, 26);
   const fg     = calcFearGreed(rsi, stoch, vol);
   const tech   = calcTechAndFib(closes);
+  const { beta, alpha } = isBench ? { beta: 1, alpha: 0 } : calcBetaAlpha(closes, SPY_CLOSES);
+  const kelly  = calcKelly(closes);
 
   // Momentum State (based strictly on price action — NOT fundamental valuation)
   let momentum = 'NEUTRAL', momCls = 'b';
@@ -637,12 +685,14 @@ async function fetchOne(ticker) {
   if (sortino > 1.5)       score += 8;
   if (sharpe  > 1.0)       score += 6;
   if (tech.cross === 'BULL CROSS') score += 5;
+  if (alpha > 0.05)        score += 8;
+  if (alpha < 0)           score -= 8;
   score = Math.max(5, Math.min(99, Math.round(score)));
 
   return {
     ok: true, source, price: cur, prices: closes,
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, maxDD,
-    macd, mc, momentum, momCls, score, fg, tech
+    macd, mc, momentum, momCls, score, fg, tech, beta, alpha, kelly
   };
 }
 
@@ -788,14 +838,14 @@ function openDetail(ticker, name) {
   if (!d || !d.ok) return;
   
   document.getElementById('det-name').textContent = name;
-  document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 52-Week Trajectory`;
+  document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 5-Year Trajectory`;
   
   const dates = [];
   const oneWeek = 7 * 24 * 60 * 60 * 1000;
   const nowMs = Date.now();
   for (let i = 0; i < d.prices.length; i++) {
     const dt = new Date(nowMs - (d.prices.length - 1 - i) * oneWeek);
-    dates.push(dt.toLocaleDateString(undefined, {month:'short', day:'numeric'}));
+    dates.push(dt.toLocaleDateString(undefined, {year:'numeric', month:'short'}));
   }
 
   const ctx = document.getElementById('det-chart').getContext('2d');
@@ -848,9 +898,9 @@ function openDetail(ticker, name) {
 
   document.getElementById('det-grid').innerHTML = `
     <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val">${d.score} / 100</span></div>
-    <div class="q-box"><span class="q-lbl">RSI (14)</span><span class="q-val ${d.rsi>75?'r':d.rsi<30?'g':''}">${d.rsi.toFixed(1)}</span></div>
-    <div class="q-box"><span class="q-lbl">MACD Hist</span><span class="q-val ${d.macd.hist>0?'g':'r'}">${d.macd.hist.toFixed(3)}</span></div>
-    <div class="q-box"><span class="q-lbl">Stochastic</span><span class="q-val">${d.stoch.toFixed(1)}</span></div>
+    <div class="q-box"><span class="q-lbl">Beta (vs SPY)</span><span class="q-val">${d.beta.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Annual Alpha</span><span class="q-val ${d.alpha>0?'g':'r'}">${(d.alpha*100).toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Half-Kelly Size</span><span class="q-val b">${d.kelly.toFixed(1)}%</span></div>
     <div class="q-box"><span class="q-lbl">10-Wk SMA</span><span class="q-val">$${d.tech.sma10.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">40-Wk SMA</span><span class="q-val">$${d.tech.sma40.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">Bollinger Upper</span><span class="q-val">$${(d.tech.sma10 * 1.1).toFixed(2)}</span></div>
@@ -901,6 +951,13 @@ async function loadAll() {
   document.getElementById('s-loaded').textContent = 0;
   document.getElementById('prog').style.width = '0%';
   D = {};
+  
+  setPill('loading', 'FETCHING SPY BENCHMARK...');
+  try {
+    const s = await fetchOne('SPY', true);
+    if (s.ok) SPY_CLOSES = s.prices;
+  } catch(e) {}
+  
   setPill('loading', 'EXECUTING QUANT MODELS...');
   renderAll();
 

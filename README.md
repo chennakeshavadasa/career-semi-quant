@@ -56,9 +56,10 @@ Every single metric on the dashboard is computed **live in your browser** from r
 
 | Metric | What It Tells You |
 |---|---|
-| **Fibonacci 61.8% Support** | The "golden ratio" retracement level. If the stock is near this price, it's at a historically significant support zone. |
-| **Distance to 52-Week High** | How far the stock has fallen from its peak. A stock at -45% from its high is either a deep value opportunity or in serious trouble — the other indicators help you decide which. |
 | **Monte Carlo 6M Target** | A 2,000-iteration Monte Carlo simulation of Geometric Brownian Motion based on historical drift and volatility. Returns a 3-point confidence interval: Median (Base Case), 90th percentile (Bull Case), and 10th percentile (Bear Case). |
+| **Beta (vs SPY)** | Systemic risk measurement. Calculates the stock's covariance against the S&P 500 over 5 years. A Beta > 1 means it is more volatile than the market. |
+| **Annual Alpha** | Risk-adjusted excess return. The exact percentage return the stock generated *beyond* what the broader market (SPY) provided, factoring in the risk-free rate. |
+| **Half-Kelly Size** | The mathematically optimal percentage of your portfolio you should allocate to this stock to maximize compound growth while preventing the risk of ruin, based on its 5-year win/loss ratio. |
 
 ### Composite Quant Score (0–100)
 
@@ -141,8 +142,8 @@ Private companies are displayed with a `NOT PUBLICLY LISTED` state — they're i
 │  Once data is obtained:                              │
 │  → Run RSI, Stoch, Vol, Sharpe, Sortino, VaR,       │
 │    MaxDD, MACD, Bollinger, Fibonacci, Monte Carlo,   │
-│    Fear & Greed, Composite Score                     │
-│  → Render card with sparkline + all metrics          │
+│    Beta, Alpha, Kelly Criterion, Composite Score     │
+│  → Render card and interactive 5-Year charting       │
 │                                                      │
 └─────────────────────────────────────────────────────┘
 ```

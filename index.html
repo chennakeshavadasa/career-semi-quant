@@ -287,11 +287,28 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
     </div>
     
     <div style="overflow-y:auto; flex:1; padding-right:8px;" id="det-scroll">
-      <div style="height:250px; min-height:250px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+      
+      <h3 style="margin-top:0px; margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Price Action, 40-Wk SMA & Volatility Bands</h3>
+      <div style="height:230px; min-height:230px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
         <canvas id="det-chart"></canvas>
       </div>
+
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Underwater Drawdown</h3>
+          <div style="height:140px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-dd-chart"></canvas>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Weekly Returns Distribution</h3>
+          <div style="height:140px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-dist-chart"></canvas>
+          </div>
+        </div>
+      </div>
       
-      <div class="quant-grid" id="det-grid" style="margin-top:16px; grid-template-columns: repeat(5, 1fr); gap:8px;"></div>
+      <div class="quant-grid" id="det-grid" style="margin-top:20px; grid-template-columns: repeat(5, 1fr); gap:8px;"></div>
       
       <h3 style="margin-top:24px; margin-bottom:12px; font-size:15px; color:#fff; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px;">Mathematical Breakdown</h3>
       <div id="det-expl" style="display:flex; flex-direction:column; gap:10px;"></div>
@@ -859,7 +876,7 @@ function cardHTML(co) {
 // ============================
 // DETAIL MODAL & CHART
 // ============================
-let chartInst = null;
+let chartInst = null, chartInst2 = null, chartInst3 = null;
 function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
 function openDetail(ticker, name) {
   const d = D[ticker];
@@ -868,59 +885,92 @@ function openDetail(ticker, name) {
   document.getElementById('det-name').textContent = name;
   document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 5-Year Trajectory`;
   
-  const dates = [];
+  if (chartInst) chartInst.destroy();
+  if (chartInst2) chartInst2.destroy();
+  if (chartInst3) chartInst3.destroy();
+
+  const dates = [], sma40 = [], bbUp = [], bbDn = [], ddData = [], wRets = [];
+  let peak = d.prices[0];
   const oneWeek = 7 * 24 * 60 * 60 * 1000;
   const nowMs = Date.now();
+
   for (let i = 0; i < d.prices.length; i++) {
     const dt = new Date(nowMs - (d.prices.length - 1 - i) * oneWeek);
     dates.push(dt.toLocaleDateString(undefined, {year:'numeric', month:'short'}));
+    
+    if (d.prices[i] > peak) peak = d.prices[i];
+    ddData.push(((d.prices[i] - peak) / peak) * 100);
+    
+    if (i > 0) wRets.push(((d.prices[i] - d.prices[i-1]) / d.prices[i-1]) * 100);
+    
+    if (i < 39) sma40.push(null);
+    else sma40.push(d.prices.slice(i-39, i+1).reduce((a,b)=>a+b,0)/40);
+    
+    if (i < 19) { bbUp.push(null); bbDn.push(null); }
+    else {
+      const slice = d.prices.slice(i-19, i+1);
+      const sma20 = slice.reduce((a,b)=>a+b,0)/20;
+      const std = Math.sqrt(slice.reduce((a,b)=>a+Math.pow(b-sma20,2),0)/20);
+      bbUp.push(sma20 + 2*std);
+      bbDn.push(sma20 - 2*std);
+    }
   }
 
-  const ctx = document.getElementById('det-chart').getContext('2d');
-  if (chartInst) chartInst.destroy();
-  
+  const bins = [], counts = [];
+  for(let i=-20; i<=20; i+=2) { bins.push(i+'%'); counts.push(0); }
+  for(let r of wRets) {
+    let idx = Math.floor((r + 20) / 2);
+    if(idx < 0) idx = 0;
+    if(idx >= counts.length) idx = counts.length - 1;
+    counts[idx]++;
+  }
+
   Chart.defaults.color = '#8b949e';
   Chart.defaults.font.family = "'JetBrains Mono', monospace";
-  
-  chartInst = new Chart(ctx, {
+
+  chartInst = new Chart(document.getElementById('det-chart').getContext('2d'), {
     type: 'line',
     data: {
       labels: dates,
-      datasets: [{
-        label: 'Weekly Close Price',
-        data: d.prices,
-        borderColor: '#58a6ff',
-        backgroundColor: 'rgba(88, 166, 255, 0.1)',
-        borderWidth: 2,
-        pointBackgroundColor: '#010409',
-        pointBorderColor: '#58a6ff',
-        pointRadius: 3,
-        pointHoverRadius: 6,
-        fill: true,
-        tension: 0.2
-      }]
+      datasets: [
+        { label: 'Close', data: d.prices, borderColor: '#58a6ff', borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.1, z: 10 },
+        { label: 'SMA 40', data: sma40, borderColor: '#d29922', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.1 },
+        { label: 'BB Upper', data: bbUp, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, pointRadius: 0, fill: '+1', backgroundColor: 'rgba(255,255,255,0.03)' },
+        { label: 'BB Lower', data: bbDn, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, pointRadius: 0, fill: false }
+      ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(13, 17, 23, 0.9)',
-          titleColor: '#8b949e',
-          bodyColor: '#fff',
-          borderColor: 'rgba(99, 102, 241, 0.8)',
-          borderWidth: 1,
-          padding: 12,
-          displayColors: false,
-          callbacks: { label: (ctx) => '$' + ctx.parsed.y.toFixed(2) }
-        }
-      },
-      scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.05)' } },
-        y: { grid: { color: 'rgba(255,255,255,0.05)' }, position: 'right' }
-      }
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.dataset.label+': $'+c.parsed.y.toFixed(2)} } },
+      scales: { x: { grid: { color: 'rgba(255,255,255,0.05)' } }, y: { grid: { color: 'rgba(255,255,255,0.05)' }, position: 'right' } }
+    }
+  });
+
+  chartInst2 = new Chart(document.getElementById('det-dd-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{ label: 'Drawdown', data: ddData, borderColor: '#f85149', backgroundColor: 'rgba(248,81,73,0.15)', borderWidth: 1.5, pointRadius: 0, fill: true }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.parsed.y.toFixed(1)+'%'} } },
+      scales: { x: { display: false }, y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
+    }
+  });
+
+  chartInst3 = new Chart(document.getElementById('det-dist-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: bins,
+      datasets: [{ label: 'Weeks', data: counts, backgroundColor: '#bc8cff', borderRadius: 2 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1 } },
+      scales: { x: { grid: { display: false } }, y: { display: false } }
     }
   });
 

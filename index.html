@@ -571,6 +571,7 @@ function spark(prices, up) {
 function cardHTML(co) {
   const id = `c${(co.t || co.n).replace(/[^a-z0-9]/gi, '_')}`;
   const d = co.pub ? D[co.t] : null;
+  const tierB = `<span class="badge ${co.tier === 'a' ? 'b-a' : 'b-b'}">TIER-${co.tier.toUpperCase()}</span>`;
   
   if (co.pub && d && !d.ok) {
     return `<div class="card pvt" id="${id}">

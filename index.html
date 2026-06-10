@@ -958,7 +958,7 @@ function openDetail(ticker, name) {
 
   // Normal Curve PDF Overlay
   const wStd = d.vol / Math.sqrt(52);
-  const wMean = d.weeklyDrift;
+  const wMean = wRets.reduce((a,b)=>a+b,0)/wRets.length;
   const normalCurve = [];
   for (let i = -20; i <= 20; i += 2) {
     const x = i / 100;

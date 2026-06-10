@@ -322,6 +322,21 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
           </div>
         </div>
       </div>
+
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">26-Wk Rolling Sharpe Ratio</h3>
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-sharpe-chart"></canvas>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Monte Carlo Simulation (Geometric Brownian Motion)</h3>
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-mc-chart"></canvas>
+          </div>
+        </div>
+      </div>
       
       <div class="quant-grid" id="det-grid" style="margin-top:20px; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:12px;"></div>
     </div>
@@ -888,7 +903,7 @@ function cardHTML(co) {
 // ============================
 // DETAIL MODAL & CHART
 // ============================
-let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null;
+let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null, chartInst6 = null, chartInst7 = null;
 function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
 function openDetail(ticker, name) {
   const d = D[ticker];
@@ -902,6 +917,8 @@ function openDetail(ticker, name) {
   if (chartInst3) chartInst3.destroy();
   if (chartInst4) chartInst4.destroy();
   if (chartInst5) chartInst5.destroy();
+  if (chartInst6) chartInst6.destroy();
+  if (chartInst7) chartInst7.destroy();
 
   const dates = [], sma40 = [], bbUp = [], bbDn = [], ddData = [], wRets = [];
   let peak = d.prices[0];
@@ -939,18 +956,34 @@ function openDetail(ticker, name) {
     counts[idx]++;
   }
 
-  const rollingVol = [], rollingBeta = [];
+  // Normal Curve PDF Overlay
+  const wStd = d.vol / Math.sqrt(52);
+  const wMean = d.weeklyDrift;
+  const normalCurve = [];
+  for (let i = -20; i <= 20; i += 2) {
+    const x = i / 100;
+    const exponent = Math.exp(-Math.pow(x - wMean, 2) / (2 * Math.pow(wStd, 2)));
+    const pdf = (1 / (wStd * Math.sqrt(2 * Math.PI))) * exponent;
+    normalCurve.push(pdf * wRets.length * 0.02);
+  }
+
+  const rollingVol = [], rollingBeta = [], rollingSharpe = [];
   for (let i = 0; i < d.prices.length; i++) {
     if (i < 26) {
       rollingVol.push(null);
       rollingBeta.push(null);
+      rollingSharpe.push(null);
     } else {
       const windowPrices = d.prices.slice(i-26, i+1);
       const wR = [];
       for (let j = 1; j < windowPrices.length; j++) wR.push((windowPrices[j] - windowPrices[j-1]) / windowPrices[j-1]);
       const mean = wR.reduce((a,b)=>a+b,0)/26;
       const variance = wR.reduce((a,b)=>a+Math.pow(b-mean,2),0)/26;
-      rollingVol.push(Math.sqrt(variance) * Math.sqrt(52) * 100);
+      const rVol = Math.sqrt(variance) * Math.sqrt(52);
+      rollingVol.push(rVol * 100);
+      
+      const rSharpe = rVol === 0 ? 0 : (mean * 52 - 0.045) / rVol;
+      rollingSharpe.push(rSharpe);
       
       if (SPY_CLOSES && SPY_CLOSES.length > 0) {
         const bIndexEnd = SPY_CLOSES.length - (d.prices.length - i);
@@ -973,6 +1006,20 @@ function openDetail(ticker, name) {
         rollingBeta.push(null);
       }
     }
+  }
+
+  const mcPaths = [], mcLabels = [];
+  for (let i = 0; i <= 26; i++) mcLabels.push('Wk ' + i);
+  for (let p = 0; p < 15; p++) {
+    const path = [d.price];
+    let simP = d.price;
+    for (let step = 0; step < 26; step++) {
+      const u1 = Math.random(), u2 = Math.random();
+      const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+      simP = simP * Math.exp(wMean - (wStd * wStd / 2) + wStd * z);
+      path.push(simP);
+    }
+    mcPaths.push({ label: 'Path '+(p+1), data: path, borderColor: 'rgba(88,166,255,0.2)', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.2 });
   }
 
   Chart.defaults.color = '#8b949e';
@@ -1015,7 +1062,10 @@ function openDetail(ticker, name) {
     type: 'bar',
     data: {
       labels: bins,
-      datasets: [{ label: 'Weeks', data: counts, backgroundColor: '#bc8cff', borderRadius: 2 }]
+      datasets: [
+        { label: 'Normal Distribution', data: normalCurve, type: 'line', borderColor: 'rgba(255,255,255,0.5)', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4, order: 1 },
+        { label: 'Weeks', data: counts, backgroundColor: '#bc8cff', borderRadius: 2, order: 2 }
+      ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -1048,6 +1098,34 @@ function openDetail(ticker, name) {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.parsed.y.toFixed(2)} } },
+      scales: { x: { display: false }, y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
+    }
+  });
+
+  chartInst6 = new Chart(document.getElementById('det-sharpe-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{ label: 'Rolling Sharpe', data: rollingSharpe, borderColor: '#d2a8ff', borderWidth: 1.5, pointRadius: 0, fill: false }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.parsed.y.toFixed(2)} } },
+      scales: { x: { display: false }, y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
+    }
+  });
+
+  chartInst7 = new Chart(document.getElementById('det-mc-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: mcLabels,
+      datasets: mcPaths
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
       scales: { x: { display: false }, y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
     }
   });

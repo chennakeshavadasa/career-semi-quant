@@ -199,7 +199,7 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
     <div class="stat"><div class="stat-label">Total Tracked</div><div class="stat-val" id="s-total">31</div></div>
     <div class="stat"><div class="stat-label">Extreme Fear</div><div class="stat-val r" id="s-fear">0</div></div>
     <div class="stat"><div class="stat-label">Extreme Greed</div><div class="stat-val g" id="s-greed">0</div></div>
-    <div class="stat"><div class="stat-label">Undervalued (Buy)</div><div class="stat-val" style="color: var(--cyan)" id="s-buy">0</div></div>
+    <div class="stat"><div class="stat-label">Oversold (Buy Zone)</div><div class="stat-val" style="color: var(--cyan)" id="s-buy">0</div></div>
     <div class="stat"><div class="stat-label">Avg Quant Score</div><div class="stat-val" style="color: var(--blue)" id="s-score">0</div></div>
   </div>
 
@@ -536,17 +536,17 @@ async function fetchOne(ticker) {
   const tech = calcTechAndFib(closes);
   
   // Valuation Engine
-  let valStatus = "FAIR VALUE"; let valCls = "b";
-  if (cur < bb.lower || (cur < bb.sma && rsi < 35)) { valStatus = "UNDERVALUED"; valCls = "g"; }
-  else if (cur > bb.upper || rsi > 70) { valStatus = "OVERVALUED"; valCls = "r"; }
+  let valStatus = "NEUTRAL"; let valCls = "b";
+  if (cur < bb.lower || (cur < bb.sma && rsi < 30)) { valStatus = "OVERSOLD"; valCls = "g"; }
+  else if (cur > bb.upper || rsi > 75) { valStatus = "OVERBOUGHT"; valCls = "r"; }
 
   // Overall Quant Score (0-100)
   let score = 50;
   if (chg6m > 0) score += 10;
   if (chg1y > 0) score += 10;
   if (macd.hist > 0) score += 15;
-  if (valStatus === "UNDERVALUED") score += 20;
-  if (valStatus === "OVERVALUED") score -= 20;
+  if (valStatus === "OVERSOLD") score += 20;
+  if (valStatus === "OVERBOUGHT") score -= 20;
   if (fg.val < 30) score += 10; // Buy fear
   if (fg.val > 80) score -= 15; // Sell greed
   if (sortino > 1.5) score += 10;
@@ -618,7 +618,7 @@ function cardHTML(co) {
 
     <div class="quant-grid">
       <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val ${d.score >= 70 ? 'g' : d.score < 40 ? 'r' : 'y'}">${d.score.toFixed(0)} / 100</span></div>
-      <div class="q-box"><span class="q-lbl">Valuation</span><span class="q-val ${d.valCls}">${d.valStatus}</span></div>
+      <div class="q-box"><span class="q-lbl">Momentum</span><span class="q-val ${d.valCls}">${d.valStatus}</span></div>
       <div class="q-box"><span class="q-lbl">6M Target</span><span class="q-val ${d.target6M > d.price ? 'g' : 'r'}">$${d.target6M.toFixed(2)}</span></div>
       <div class="q-box"><span class="q-lbl">Volatility</span><span class="q-val">${(d.vol*100).toFixed(1)}%</span></div>
       <div class="q-box"><span class="q-lbl">Fib 61.8% Supp</span><span class="q-val b">$${d.tech.fib618.toFixed(2)}</span></div>
@@ -651,7 +651,7 @@ function updateStats() {
   const vals = Object.values(D).filter(d => d.ok);
   document.getElementById('s-fear').textContent = vals.filter(d => d.fg.val < 25).length;
   document.getElementById('s-greed').textContent = vals.filter(d => d.fg.val > 75).length;
-  document.getElementById('s-buy').textContent = vals.filter(d => d.valStatus === 'UNDERVALUED').length;
+  document.getElementById('s-buy').textContent = vals.filter(d => d.valStatus === 'OVERSOLD').length;
   const avgScore = vals.reduce((a,b)=>a+b.score,0) / (vals.length || 1);
   document.getElementById('s-score').textContent = avgScore.toFixed(0);
 }

@@ -220,6 +220,7 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
 /* Tooltip for GBM disclaimer */
 .disclaimer { font-size: 9px; color: var(--text-muted); opacity: 0.7; font-style: italic; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -272,6 +273,23 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
   </div>
 
   <div class="grid" id="grid"></div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-bg" id="detail-modal" style="padding:20px;">
+  <div class="modal-box" style="width:900px; max-width:95vw; height:85vh; display:flex; flex-direction:column; padding:24px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;">
+      <div>
+        <h2 id="det-name" style="color:#fff; font-size:22px; line-height:1.2;">Name</h2>
+        <div id="det-sub" style="font-family:var(--mono); font-size:12px; color:var(--text-muted); margin-top:4px;">TKR</div>
+      </div>
+      <button class="btn" onclick="closeDetail()">✕ CLOSE</button>
+    </div>
+    <div style="flex:1; min-height:0; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+      <canvas id="det-chart"></canvas>
+    </div>
+    <div class="quant-grid" id="det-grid" style="margin-top:16px; grid-template-columns: repeat(4, 1fr); gap:8px;"></div>
+  </div>
 </div>
 
 <!-- Settings Modal -->
@@ -702,7 +720,7 @@ function cardHTML(co) {
   const scoreColor = d.score >= 70 ? 'g' : d.score < 40 ? 'r' : 'y';
   const cardCls = d.score >= 70 ? 'buy' : d.score < 35 ? 'sell' : '';
 
-  return `<div class="card ${cardCls}" id="${id}"
+  return `<div class="card ${cardCls}" id="${id}" onclick="openDetail('${co.t}', '${co.n}')" style="cursor:pointer;"
     data-tier="${co.tier}" data-pub="true"
     data-score="${d.score}" data-fg="${d.fg.val.toFixed(0)}"
     data-rsi="${d.rsi.toFixed(1)}" data-chg6m="${d.chg6m.toFixed(2)}"
@@ -758,6 +776,88 @@ function cardHTML(co) {
       <div class="tech-item">Stoch: <strong style="color:${d.stoch>80?'var(--red)':d.stoch<20?'var(--green)':'inherit'}">${d.stoch.toFixed(0)}</strong></div>
     </div>
   </div>`;
+}
+
+// ============================
+// DETAIL MODAL & CHART
+// ============================
+let chartInst = null;
+function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
+function openDetail(ticker, name) {
+  const d = D[ticker];
+  if (!d || !d.ok) return;
+  
+  document.getElementById('det-name').textContent = name;
+  document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 52-Week Trajectory`;
+  
+  const dates = [];
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  const nowMs = Date.now();
+  for (let i = 0; i < d.prices.length; i++) {
+    const dt = new Date(nowMs - (d.prices.length - 1 - i) * oneWeek);
+    dates.push(dt.toLocaleDateString(undefined, {month:'short', day:'numeric'}));
+  }
+
+  const ctx = document.getElementById('det-chart').getContext('2d');
+  if (chartInst) chartInst.destroy();
+  
+  Chart.defaults.color = '#8b949e';
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  
+  chartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{
+        label: 'Weekly Close Price',
+        data: d.prices,
+        borderColor: '#58a6ff',
+        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+        borderWidth: 2,
+        pointBackgroundColor: '#010409',
+        pointBorderColor: '#58a6ff',
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        fill: true,
+        tension: 0.2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(13, 17, 23, 0.9)',
+          titleColor: '#8b949e',
+          bodyColor: '#fff',
+          borderColor: 'rgba(99, 102, 241, 0.8)',
+          borderWidth: 1,
+          padding: 12,
+          displayColors: false,
+          callbacks: { label: (ctx) => '$' + ctx.parsed.y.toFixed(2) }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, position: 'right' }
+      }
+    }
+  });
+
+  document.getElementById('det-grid').innerHTML = `
+    <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val">${d.score} / 100</span></div>
+    <div class="q-box"><span class="q-lbl">RSI (14)</span><span class="q-val ${d.rsi>75?'r':d.rsi<30?'g':''}">${d.rsi.toFixed(1)}</span></div>
+    <div class="q-box"><span class="q-lbl">MACD Hist</span><span class="q-val ${d.macd.hist>0?'g':'r'}">${d.macd.hist.toFixed(3)}</span></div>
+    <div class="q-box"><span class="q-lbl">Stochastic</span><span class="q-val">${d.stoch.toFixed(1)}</span></div>
+    <div class="q-box"><span class="q-lbl">10-Wk SMA</span><span class="q-val">$${d.tech.sma10.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">40-Wk SMA</span><span class="q-val">$${d.tech.sma40.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Bollinger Upper</span><span class="q-val">$${(d.tech.sma10 * 1.1).toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Fib 38.2%</span><span class="q-val">$${d.tech.fib382.toFixed(2)}</span></div>
+  `;
+  
+  document.getElementById('detail-modal').style.display = 'flex';
 }
 
 // ============================

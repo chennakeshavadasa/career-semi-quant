@@ -58,7 +58,7 @@ Every single metric on the dashboard is computed **live in your browser** from r
 |---|---|
 | **Fibonacci 61.8% Support** | The "golden ratio" retracement level. If the stock is near this price, it's at a historically significant support zone. |
 | **Distance to 52-Week High** | How far the stock has fallen from its peak. A stock at -45% from its high is either a deep value opportunity or in serious trouble — the other indicators help you decide which. |
-| **GBM 6-Month Drift** | A Geometric Brownian Motion extrapolation of where the price would be in 6 months if current weekly drift and volatility persist. **This is NOT a prediction.** It's a statistical projection of the current trajectory. |
+| **Monte Carlo 6M Target** | A 2,000-iteration Monte Carlo simulation of Geometric Brownian Motion based on historical drift and volatility. Returns a 3-point confidence interval: Median (Base Case), 90th percentile (Bull Case), and 10th percentile (Bear Case). |
 
 ### Composite Quant Score (0–100)
 
@@ -140,7 +140,7 @@ Private companies are displayed with a `NOT PUBLICLY LISTED` state — they're i
 │                                                      │
 │  Once data is obtained:                              │
 │  → Run RSI, Stoch, Vol, Sharpe, Sortino, VaR,       │
-│    MaxDD, MACD, Bollinger, Fibonacci, GBM Drift,     │
+│    MaxDD, MACD, Bollinger, Fibonacci, Monte Carlo,   │
 │    Fear & Greed, Composite Score                     │
 │  → Render card with sparkline + all metrics          │
 │                                                      │
@@ -205,7 +205,7 @@ Keys are stored locally in your browser. They help fetch data for international 
 
 > **This tool is for educational and informational purposes only. It is NOT financial advice.**
 
-- The **GBM 6M Drift** is a statistical extrapolation, not a price prediction. It assumes constant drift and volatility, which never holds in reality.
+- The **Monte Carlo Simulation** generates mathematical probabilities based on historical volatility. It cannot predict market crashes, earnings misses, or macroeconomic shocks.
 - The **Quant Score** is a composite heuristic, not a trading signal. It surfaces interesting stocks — it doesn't tell you to buy or sell.
 - **Momentum states** (Overbought/Oversold) are technical indicators based on price action. They are not fundamental valuations (P/E, DCF, etc.).
 - Data depends on free proxy availability. Some international tickers may show `DATA UNAVAILABLE` if all proxies are blocked.

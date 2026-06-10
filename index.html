@@ -227,7 +227,7 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
   <header>
     <div>
       <div class="h-title">Career Semi Quant Terminal</div>
-      <div class="h-sub">RSI · MACD · Bollinger · Sortino/VaR · Fibonacci · Fear Index · GBM Price Drift</div>
+      <div class="h-sub">RSI · MACD · Bollinger · Sortino/VaR · Fib · Monte Carlo 6M Target</div>
       <div class="h-ts" id="ts-line">Data freshness: loading...</div>
     </div>
     <div class="controls">
@@ -448,9 +448,31 @@ function calcTechAndFib(prices) {
   return { fib618, fib382, distHigh, cross, crossCls, sma10, sma40 };
 }
 
-// GBM 6-month drift price target (NOT a financial prediction)
-function gbmDriftTarget(cur, drift) {
-  return cur * Math.exp(drift * 26);
+// Monte Carlo 6-Month Simulation (2000 Iterations)
+function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
+  if (!vol || vol === 0) return { median: cur, p10: cur, p90: cur };
+  const finalPrices = new Float32Array(iterations);
+  const weeklyVol = vol / Math.sqrt(52);
+  const driftAdj = drift - 0.5 * Math.pow(weeklyVol, 2);
+  
+  for(let i=0; i<iterations; i++) {
+    let p = cur;
+    for(let w=0; w<weeks; w++) {
+      let u = 0, v = 0;
+      while(u === 0) u = Math.random();
+      while(v === 0) v = Math.random();
+      const rand = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+      p = p * Math.exp(driftAdj + weeklyVol * rand);
+    }
+    finalPrices[i] = p;
+  }
+  
+  finalPrices.sort();
+  return {
+    p10: finalPrices[Math.floor(iterations * 0.10)],
+    median: finalPrices[Math.floor(iterations * 0.50)],
+    p90: finalPrices[Math.floor(iterations * 0.90)]
+  };
 }
 
 function calcFearGreed(rsi, stoch, vol) {
@@ -576,7 +598,7 @@ async function fetchOne(ticker) {
   const maxDD  = calcMaxDD(closes);
   const bb     = calcBollinger(closes, 20);
   const macd   = calcMACD(closes);
-  const target = gbmDriftTarget(cur, weeklyDrift);
+  const mc     = runMonteCarlo(cur, weeklyDrift, vol, 2000, 26);
   const fg     = calcFearGreed(rsi, stoch, vol);
   const tech   = calcTechAndFib(closes);
 
@@ -602,7 +624,7 @@ async function fetchOne(ticker) {
   return {
     ok: true, source, price: cur, prices: closes,
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, maxDD,
-    macd, target, momentum, momCls, score, fg, tech
+    macd, mc, momentum, momCls, score, fg, tech
   };
 }
 
@@ -718,13 +740,16 @@ function cardHTML(co) {
     <div class="quant-grid">
       <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val ${scoreColor}">${d.score} / 100</span></div>
       <div class="q-box"><span class="q-lbl">Momentum</span><span class="q-val ${d.momCls}">${d.momentum}</span></div>
-      <div class="q-box"><span class="q-lbl">GBM 6M Drift</span><span class="q-val ${d.target>d.price?'g':'r'}">$${d.target.toFixed(2)}</span></div>
+      <div class="q-box"><span class="q-lbl">Ann. Volatility</span><span class="q-val">${(d.vol*100).toFixed(1)}%</span></div>
       <div class="q-box"><span class="q-lbl">Sharpe Ratio</span><span class="q-val ${d.sharpe>1?'g':d.sharpe>0?'y':'r'}">${d.sharpe.toFixed(2)}</span></div>
       <div class="q-box"><span class="q-lbl">Fib 61.8% Sup</span><span class="q-val b">$${d.tech.fib618.toFixed(2)}</span></div>
       <div class="q-box"><span class="q-lbl">Dist 52W High</span><span class="q-val ${d.tech.distHigh<-30?'r':'inherit'}">${d.tech.distHigh.toFixed(1)}%</span></div>
+      <div class="q-box"><span class="q-lbl">MC 6M Median</span><span class="q-val ${d.mc.median>d.price?'g':'r'}">$${d.mc.median.toFixed(2)}</span></div>
+      <div class="q-box"><span class="q-lbl">MC Bull (90%)</span><span class="q-val g">$${d.mc.p90.toFixed(2)}</span></div>
+      <div class="q-box"><span class="q-lbl">MC Bear (10%)</span><span class="q-val r">$${d.mc.p10.toFixed(2)}</span></div>
     </div>
 
-    <div class="spark-wrap">${spark(d.prices, d.target > d.price)}</div>
+    <div class="spark-wrap">${spark(d.prices, d.mc.median > d.price)}</div>
 
     <div class="tech-bar">
       <div class="tech-item">RSI: <strong style="color:${d.rsi>75?'var(--red)':d.rsi<30?'var(--green)':'inherit'}">${d.rsi.toFixed(1)}</strong></div>

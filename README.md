@@ -2,6 +2,8 @@
 
 A zero-server, fully client-side quantitative stock analysis dashboard built explicitly to track the global semiconductor supply chain (Foundries, Fabrication Equipment, and Memory). 
 
+**🎯 Built for Semiconductor Engineers:** This terminal was designed specifically for hardware, ASIC, analog, and layout engineers who are job hunting or researching companies. It provides a massive, curated directory of the top players in every specialized sub-field (Optical Rx/Tx, SerDes IP, Mixed-Signal, AI Infrastructure) and runs live algorithmic stock analysis so you can instantly evaluate a prospective employer's financial health, market momentum, and stock option potential before deciding to join them.
+
 This terminal executes institutional-grade mathematical models entirely within the browser to identify heavily discounted assets, predict future price action, and manage downside risk.
 
 ![Quant Terminal Dashboard](https://img.shields.io/badge/Status-Live-brightgreen) ![Architecture](https://img.shields.io/badge/Architecture-Serverless-blue) ![Math Engine](https://img.shields.io/badge/Math-Algorithmic-purple)

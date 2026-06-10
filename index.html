@@ -277,7 +277,7 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
 
 <!-- Detail Modal -->
 <div class="modal-bg" id="detail-modal" style="padding:20px;">
-  <div class="modal-box" style="width:900px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; padding:24px; overflow:hidden;">
+  <div class="modal-box" style="width:1100px; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; padding:24px; overflow:hidden;">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; flex-shrink:0;">
       <div>
         <h2 id="det-name" style="color:#fff; font-size:22px; line-height:1.2;">Name</h2>
@@ -289,29 +289,26 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
     <div style="overflow-y:auto; flex:1; padding-right:8px;" id="det-scroll">
       
       <h3 style="margin-top:0px; margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Price Action, 40-Wk SMA & Volatility Bands</h3>
-      <div style="height:230px; min-height:230px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+      <div style="height:350px; min-height:350px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
         <canvas id="det-chart"></canvas>
       </div>
 
       <div style="display:flex; gap:12px; margin-top:16px;">
         <div style="flex:1;">
           <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Underwater Drawdown</h3>
-          <div style="height:140px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+          <div style="height:200px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
             <canvas id="det-dd-chart"></canvas>
           </div>
         </div>
         <div style="flex:1;">
           <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Weekly Returns Distribution</h3>
-          <div style="height:140px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+          <div style="height:200px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
             <canvas id="det-dist-chart"></canvas>
           </div>
         </div>
       </div>
       
-      <div class="quant-grid" id="det-grid" style="margin-top:20px; grid-template-columns: repeat(5, 1fr); gap:8px;"></div>
-      
-      <h3 style="margin-top:24px; margin-bottom:12px; font-size:15px; color:#fff; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:8px;">Mathematical Breakdown</h3>
-      <div id="det-expl" style="display:flex; flex-direction:column; gap:10px;"></div>
+      <div class="quant-grid" id="det-grid" style="margin-top:20px; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:12px;"></div>
     </div>
   </div>
 </div>
@@ -986,25 +983,6 @@ function openDetail(ticker, name) {
     <div class="q-box"><span class="q-lbl">Half-Kelly Size</span><span class="q-val b">${d.kellyObj.size.toFixed(1)}%</span></div>
     <div class="q-box"><span class="q-lbl">10-Wk SMA</span><span class="q-val">$${d.tech.sma10.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">40-Wk SMA</span><span class="q-val">$${d.tech.sma40.toFixed(2)}</span></div>
-  `;
-  
-  document.getElementById('det-expl').innerHTML = `
-    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
-      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Monte Carlo Extrapolation</div>
-      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Simulated 2,000 parallel futures using Geometric Brownian Motion based on a historical annualized volatility of ${(d.vol*100).toFixed(1)}%. The Median baseline price in 6 months is $${d.mc.median.toFixed(2)}, with a 90% Bull Case ceiling of $${d.mc.p90.toFixed(2)}.</div>
-    </div>
-    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
-      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Kelly Criterion & Portfolio Sizing</div>
-      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Over the past 5 years, this stock had a positive weekly win rate of ${(d.kellyObj.winRate*100).toFixed(1)}%. The average weekly gain was ${(d.kellyObj.avgWin*100).toFixed(2)}% vs an average loss of ${(d.kellyObj.avgLoss*100).toFixed(2)}%. To maximize long-term compound growth while mathematically avoiding ruin, the Half-Kelly formula suggests an optimal portfolio allocation of exactly ${d.kellyObj.size.toFixed(1)}%.</div>
-    </div>
-    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
-      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Systematic Risk & Outperformance</div>
-      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">Compared to the S&P 500, this asset has a Beta of ${d.beta.toFixed(2)} (1.0 = matches market exactly). It explains ${(d.r2*100).toFixed(1)}% of its variance through broader market moves (R-Squared). Over the period, it generated an Annualized Alpha of ${(d.alpha*100).toFixed(2)}% in risk-adjusted excess return.</div>
-    </div>
-    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 14px;">
-      <div style="font-size:11px; font-weight:700; color:#fff; text-transform:uppercase; margin-bottom:6px; letter-spacing:0.5px;">Downside Analysis (CVaR & MaxDD)</div>
-      <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">The 95% Value at Risk is ${d.var95.toFixed(2)}%, meaning 95% of weeks perform better than this. In the 5% of weeks that are *worse*, the Conditional VaR (Expected Shortfall) averages ${d.cvar95.toFixed(2)}%. The maximum peak-to-trough drop recorded was ${d.maxDD.toFixed(1)}%.</div>
-    </div>
   `;
   
   document.getElementById('detail-modal').style.display = 'flex';

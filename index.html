@@ -296,14 +296,29 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
       <div style="display:flex; gap:12px; margin-top:16px;">
         <div style="flex:1;">
           <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Underwater Drawdown</h3>
-          <div style="height:200px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
             <canvas id="det-dd-chart"></canvas>
           </div>
         </div>
         <div style="flex:1;">
           <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Weekly Returns Distribution</h3>
-          <div style="height:200px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
             <canvas id="det-dist-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">26-Wk Rolling Volatility (Annualized)</h3>
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-vol-chart"></canvas>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">26-Wk Rolling Beta (vs SPY)</h3>
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-beta-chart"></canvas>
           </div>
         </div>
       </div>
@@ -873,7 +888,7 @@ function cardHTML(co) {
 // ============================
 // DETAIL MODAL & CHART
 // ============================
-let chartInst = null, chartInst2 = null, chartInst3 = null;
+let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null;
 function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
 function openDetail(ticker, name) {
   const d = D[ticker];
@@ -885,6 +900,8 @@ function openDetail(ticker, name) {
   if (chartInst) chartInst.destroy();
   if (chartInst2) chartInst2.destroy();
   if (chartInst3) chartInst3.destroy();
+  if (chartInst4) chartInst4.destroy();
+  if (chartInst5) chartInst5.destroy();
 
   const dates = [], sma40 = [], bbUp = [], bbDn = [], ddData = [], wRets = [];
   let peak = d.prices[0];
@@ -920,6 +937,42 @@ function openDetail(ticker, name) {
     if(idx < 0) idx = 0;
     if(idx >= counts.length) idx = counts.length - 1;
     counts[idx]++;
+  }
+
+  const rollingVol = [], rollingBeta = [];
+  for (let i = 0; i < d.prices.length; i++) {
+    if (i < 26) {
+      rollingVol.push(null);
+      rollingBeta.push(null);
+    } else {
+      const windowPrices = d.prices.slice(i-26, i+1);
+      const wR = [];
+      for (let j = 1; j < windowPrices.length; j++) wR.push((windowPrices[j] - windowPrices[j-1]) / windowPrices[j-1]);
+      const mean = wR.reduce((a,b)=>a+b,0)/26;
+      const variance = wR.reduce((a,b)=>a+Math.pow(b-mean,2),0)/26;
+      rollingVol.push(Math.sqrt(variance) * Math.sqrt(52) * 100);
+      
+      if (SPY_CLOSES && SPY_CLOSES.length > 0) {
+        const bIndexEnd = SPY_CLOSES.length - (d.prices.length - i);
+        if (bIndexEnd >= 26) {
+          const bWindow = SPY_CLOSES.slice(bIndexEnd - 26, bIndexEnd + 1);
+          const bR = [];
+          for (let j = 1; j < bWindow.length; j++) bR.push((bWindow[j] - bWindow[j-1]) / bWindow[j-1]);
+          const bMean = bR.reduce((a,b)=>a+b,0)/26;
+          
+          let cov = 0, varB = 0;
+          for (let k = 0; k < 26; k++) {
+            cov += (wR[k] - mean) * (bR[k] - bMean);
+            varB += Math.pow(bR[k] - bMean, 2);
+          }
+          rollingBeta.push(varB === 0 ? 1 : cov / varB);
+        } else {
+          rollingBeta.push(null);
+        }
+      } else {
+        rollingBeta.push(null);
+      }
+    }
   }
 
   Chart.defaults.color = '#8b949e';
@@ -968,6 +1021,34 @@ function openDetail(ticker, name) {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1 } },
       scales: { x: { grid: { display: false } }, y: { display: false } }
+    }
+  });
+
+  chartInst4 = new Chart(document.getElementById('det-vol-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{ label: 'Rolling Volatility %', data: rollingVol, borderColor: '#e3b341', borderWidth: 1.5, pointRadius: 0, fill: false }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.parsed.y.toFixed(1)+'%'} } },
+      scales: { x: { display: false }, y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
+    }
+  });
+
+  chartInst5 = new Chart(document.getElementById('det-beta-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [{ label: 'Rolling Beta', data: rollingBeta, borderColor: '#3fb950', borderWidth: 1.5, pointRadius: 0, fill: false }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.parsed.y.toFixed(2)} } },
+      scales: { x: { display: false }, y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
     }
   });
 

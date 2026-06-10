@@ -418,14 +418,7 @@ const COS = [
   {n:"Samsung Electronics",   t:"SSNLF", tier:"a", pub:true,  sector:"Memory"},
   {n:"Infineon Technologies", t:"IFNNY", tier:"b", pub:true,  sector:"Power"},
   {n:"STMicroelectronics",    t:"STM",   tier:"b", pub:true,  sector:"Analog"},
-  {n:"Alphawave Semi",        t:"AWE.L", tier:"b", pub:true,  sector:"SerDes"},
-  {n:"Parade Technologies",   t:"PRTEF", tier:"b", pub:true,  sector:"SerDes"},
-  // === PRIVATE (PRE-IPO) ===
-  {n:"FermionIC Design",      t:null,    tier:"b", pub:false, sector:"Analog"},
-  {n:"Aura Semiconductor",    t:null,    tier:"b", pub:false, sector:"Analog"},
-  {n:"Steradian Semi",        t:null,    tier:"b", pub:false, sector:"RF"},
-  {n:"Saankhya Labs",         t:null,    tier:"b", pub:false, sector:"DSP"},
-  {n:"AGNIT Semiconductors",  t:null,    tier:"b", pub:false, sector:"Power"},
+  {n:"Parade Technologies",   t:"PRTEF", tier:"b", pub:true,  sector:"SerDes"}
 ];
 
 let D = {}, activeFilter = 'all', searchQ = '', sortKey = '';
@@ -1125,7 +1118,7 @@ function openDetail(ticker, name) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'nearest', intersect: true },
+      interaction: { mode: 'nearest', intersect: false },
       plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>'$'+c.parsed.y.toFixed(2)} } },
       scales: { x: { display: false }, y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
     }

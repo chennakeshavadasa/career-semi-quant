@@ -514,17 +514,9 @@ async function fetchOne(ticker) {
     } catch (e) {}
   }
 
-  // FALLBACK LEVEL 5: Simulated Data
+  // FALLBACK LEVEL 5: Strict Error State (No Simulated Data)
   if (closes.length < 30) {
-    isSimulated = true;
-    source = "Simulated Fallback";
-    let basePrice = 50 + Math.random() * 200; 
-    closes = [basePrice];
-    let trend = (Math.random() * 0.04) - 0.015; 
-    for(let i=0; i<52; i++) {
-      basePrice = basePrice * (1 + trend + (Math.random()*0.06 - 0.03));
-      closes.push(basePrice);
-    }
+    return { ok: false, source: "API Blocked / Limit Reached" };
   }
 
   const cur = closes[closes.length - 1];
@@ -561,7 +553,7 @@ async function fetchOne(ticker) {
   if (tech.cross === "BULL CROSS") score += 5;
   score = Math.max(5, Math.min(99, score));
 
-  return { ok: true, isSimulated, source, price: cur, prices: closes, chg6m, chg1y, rsi, vol, sharpe, sortino, var95, maxDD, macd, target6M, valStatus, valCls, score, fg, tech };
+  return { ok: true, isSimulated: false, source, price: cur, prices: closes, chg6m, chg1y, rsi, vol, sharpe, sortino, var95, maxDD, macd, target6M, valStatus, valCls, score, fg, tech };
 }
 
 function spark(prices, up) {
@@ -579,12 +571,20 @@ function spark(prices, up) {
 function cardHTML(co) {
   const id = `c${(co.t || co.n).replace(/[^a-z0-9]/gi, '_')}`;
   const d = co.pub ? D[co.t] : null;
-  const tierB = `<span class="badge ${co.tier === 'a' ? 'b-a' : 'b-b'}">TIER-${co.tier.toUpperCase()}</span>`;
-
-  if (!co.pub) return `<div class="card" id="${id}" data-tier="${co.tier}" data-pub="false" data-score="0">
-    <div class="c-top"><div><div class="c-name">${co.n}</div><div class="c-tkr">PRIVATE</div></div><div class="badges">${tierB}</div></div>
-    <div class="pvt-state">◆ NO PUBLIC EQUITY</div>
-  </div>`;
+  
+  if (co.pub && d && !d.ok) {
+    return `<div class="card pvt" id="${id}">
+      <div class="name-tier"><div>${co.n} <span class="tkr">${co.t}</span></div><span class="tier ${co.tier}">TIER-${co.tier.toUpperCase()}</span></div>
+      <div class="pvt-state" style="color:var(--red);">DATA UNAVAILABLE<div style="font-size:10px; margin-top:4px;">${d.source}</div></div>
+    </div>`;
+  }
+  
+  if (!co.pub) {
+    return `<div class="card pvt" id="${id}">
+      <div class="name-tier"><div>${co.n} <span class="tkr pvt-lbl">PRIVATE</span></div><span class="tier ${co.tier}">TIER-${co.tier.toUpperCase()}</span></div>
+      <div class="pvt-state">PRE-IPO / PRIVATE</div>
+    </div>`;
+  }
 
   if (!d) return `<div class="card" id="${id}"><div class="c-top"><div><div class="c-name">${co.n}</div><div class="c-tkr">${co.t}</div></div></div><div class="skel" style="margin-top:10px;"></div><div class="pvt-state">RUNNING QUANT MODELS...</div></div>`;
 

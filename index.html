@@ -271,7 +271,7 @@ const COS=[
   {n:"Renesas Electronics",   t:"RNECY", tier:"a",pub:true},
   {n:"Parade Technologies",   t:"PRTEF", tier:"a",pub:true},
   {n:"Cadence Design Sys.",   t:"CDNS",  tier:"a",pub:true},
-  {n:"Samsung (SSIR)",        t:"SSNLF", tier:"b",pub:true},
+  {n:"Samsung Electronics",   t:"SSNLF", tier:"a",pub:true},
   {n:"Infineon Technologies", t:"IFNNY", tier:"b",pub:true},
   {n:"STMicroelectronics",    t:"STM",   tier:"b",pub:true},
   {n:"Skyworks Solutions",    t:"SWKS",  tier:"b",pub:true},
@@ -448,7 +448,7 @@ async function fetchOne(ticker) {
     const promises = proxies.map(mkP => new Promise(async (resolve, reject) => {
       try {
         const c = new AbortController();
-        const tId = setTimeout(() => c.abort(), 4000); // 4s max wait
+        const tId = setTimeout(() => c.abort(), 8000); // 8s max wait
         const res = await fetch(mkP(yurl), { signal: c.signal });
         clearTimeout(tId);
         if (res.ok) {
@@ -475,7 +475,7 @@ async function fetchOne(ticker) {
       const dNow = new Date(); const dFrom = new Date(Date.now() - 31536000000);
       const fmt = d => d.toISOString().split('T')[0];
       const pUrl = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/week/${fmt(dFrom)}/${fmt(dNow)}?adjusted=true&apiKey=${apiKeys.poly}`;
-      const c = new AbortController(); const tId = setTimeout(() => c.abort(), 4000);
+      const c = new AbortController(); const tId = setTimeout(() => c.abort(), 8000);
       const r = await fetch(pUrl, { signal: c.signal }).then(x => x.json());
       clearTimeout(tId);
       if (r.results && r.results.length > 30) {
@@ -489,7 +489,7 @@ async function fetchOne(ticker) {
   if (closes.length < 30 && apiKeys.alpha) {
     try {
       const aUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=${ticker}&apikey=${apiKeys.alpha}`;
-      const c = new AbortController(); const tId = setTimeout(() => c.abort(), 5000);
+      const c = new AbortController(); const tId = setTimeout(() => c.abort(), 8000);
       const r = await fetch(aUrl, { signal: c.signal }).then(x => x.json());
       clearTimeout(tId);
       if (r['Weekly Time Series']) {
@@ -504,7 +504,7 @@ async function fetchOne(ticker) {
   if (closes.length < 30 && apiKeys.finnhub) {
     try {
       const fUrl = `https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=W&from=${from1Y}&to=${now}&token=${apiKeys.finnhub}`;
-      const c = new AbortController(); const tId = setTimeout(() => c.abort(), 4000);
+      const c = new AbortController(); const tId = setTimeout(() => c.abort(), 8000);
       const r = await fetch(fUrl, { signal: c.signal }).then(x => x.json());
       clearTimeout(tId);
       if (r.s === "ok" && r.c && r.c.length > 30) {
@@ -668,7 +668,12 @@ async function loadAll() {
   for (let i = 0; i < total; i += 4) {
     const batch = PUB.slice(i, i + 4);
     await Promise.all(batch.map(async co => {
-      D[co.t] = await fetchOne(co.t);
+      try {
+        D[co.t] = await fetchOne(co.t);
+      } catch (err) {
+        console.error(co.t, err);
+        D[co.t] = { ok: false, source: "MATH CRASH" };
+      }
       loaded++;
       document.getElementById('prog').style.width = `${Math.round(loaded / total * 100)}%`;
       refreshCard(co);

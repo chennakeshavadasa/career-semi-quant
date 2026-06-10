@@ -47,4 +47,8 @@ If you want to add your own API keys for the Level 2/3/4 fallbacks:
 **Foundries:** Taiwan Semi (TSM), GlobalFoundries (GFS)  
 **Equipment & Fab:** ASML, Lam Research (LRCX), Applied Materials (AMAT), KLA Corp (KLAC), Tokyo Electron (TOELY)  
 **Memory & Storage:** Micron (MU), Western Digital (WDC), Seagate (STX)  
-**Design & IP:** Nvidia (NVDA), AMD, ARM Holdings (ARM), Qualcomm (QCOM), Broadcom (AVGO), Texas Instruments (TXN), and 25+ more.
+**Optical Rx/Tx & Photonics:** Coherent Corp (COHR), Lumentum (LITE), MACOM (MTSI)  
+**SerDes IP & High-Speed:** Rambus (RMBS), Alphawave Semi (AWE.L), Credo (CRDO), Astera Labs (ALAB)  
+**Analog & Mixed-Signal:** Monolithic Power (MPWR), Cirrus Logic (CRUS), Synaptics (SYNA), Silicon Labs (SLAB)  
+**AI & Design IP:** NVIDIA (NVDA), AMD, ARM Holdings (ARM), Super Micro Computer (SMCI), CEVA (CEVA)  
+**Core Logic & RF:** Intel (INTC), Qualcomm (QCOM), Broadcom (AVGO), Texas Instruments (TXN), and 15+ more.

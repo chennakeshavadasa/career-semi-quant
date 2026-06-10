@@ -277,6 +277,16 @@ const COS=[
   {n:"Skyworks Solutions",    t:"SWKS",  tier:"b",pub:true},
   {n:"Qorvo",                 t:"QRVO",  tier:"b",pub:true},
   {n:"Semtech",               t:"SMTC",  tier:"b",pub:true},
+  {n:"Coherent Corp",         t:"COHR",  tier:"a",pub:true},
+  {n:"Lumentum Holdings",     t:"LITE",  tier:"a",pub:true},
+  {n:"MACOM Technology",      t:"MTSI",  tier:"a",pub:true},
+  {n:"Rambus",                t:"RMBS",  tier:"a",pub:true},
+  {n:"Alphawave Semi",        t:"AWE.L", tier:"b",pub:true},
+  {n:"Monolithic Power",      t:"MPWR",  tier:"a",pub:true},
+  {n:"Cirrus Logic",          t:"CRUS",  tier:"a",pub:true},
+  {n:"Synaptics",             t:"SYNA",  tier:"b",pub:true},
+  {n:"CEVA Inc",              t:"CEVA",  tier:"b",pub:true},
+  {n:"Super Micro Computer",  t:"SMCI",  tier:"a",pub:true},
   {n:"FermionIC Design",      t:null,    tier:"b",pub:false},
   {n:"Aura Semiconductor",    t:null,    tier:"b",pub:false},
   {n:"Steradian Semi",        t:null,    tier:"b",pub:false},
@@ -648,11 +658,12 @@ function updateStats() {
 function setPill(cls, txt) { const p = document.getElementById('status-pill'); p.className = `pill ${cls}`; p.textContent = txt; }
 
 async function loadAll() {
-  loaded = 0; D = {};
-  setPill('loading', 'EXECUTING QUANT MODELS...');
-  document.getElementById('prog').style.width = '0%';
-  
+  let loaded = 0;
   const total = PUB.length;
+  document.getElementById('s-total').textContent = total;
+  D = {};
+  setPill('loading', 'EXECUTING QUANT MODELS...');
+  
   for (let i = 0; i < total; i += 4) {
     const batch = PUB.slice(i, i + 4);
     await Promise.all(batch.map(async co => {

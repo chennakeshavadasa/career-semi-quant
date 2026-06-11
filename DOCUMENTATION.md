@@ -694,63 +694,40 @@ It then looks at all 2,000 futures and gives you three numbers:
 
 Clicking any stock card opens the full-screen detail modal with 9 professional charts.
 
----
-
 ### Chart 1: Price Action + SMA40 + Bollinger Bands
-
 See Section 2. Master reference showing 52 weeks of price history, long-term trend (SMA40), and statistical volatility envelope (Bollinger Bands).
 
----
-
 ### Chart 2: Underwater Drawdown
+**What it shows:** "How deep is the water?" A red area chart that sits at 0% when the stock is making all-time highs, but plunges underwater to show exactly how much money you have lost from the peak.
+![Underwater Drawdown](./plots/chart2_drawdown.png)
 
-**What it shows:** Red area chart. Sits at 0% when stock is at or above its prior peak, dips negative when underwater.
+### Chart 3: Weekly Returns Distribution (Fat Tails)
+**What it shows:** A perfect Bell Curve (yellow) versus what the stock *actually* did (blue). It visually proves "Fat Tails" — that stock market crashes happen far more often than statistics predict.
+![Returns Distribution](./plots/chart3_dist.png)
 
-![AMD Underwater Drawdown](./plots/amd_drawdown.png)
-
----
-
-### Chart 3: Weekly Returns Distribution (Histogram + Normal Overlay)
-
-**What it shows:** Histogram of all weekly returns, with theoretical normal curve overlaid.
-
-![NVDA Returns Distribution](./plots/nvda_dist.png)
-
----
-
-### Chart 4: 26-Week Rolling Volatility (Annualized)
-
-![NVDA Rolling Volatility](./plots/nvda_rolling_vol.png)
-
----
+### Chart 4: 26-Week Rolling Volatility
+**What it shows:** Volatility is not constant. This shows the exact periods in history when the stock went completely insane and started swinging wildly.
+![Rolling Volatility](./plots/chart4_rollvol.png)
 
 ### Chart 5: 26-Week Rolling Beta (vs SPY)
-
-Beta is NOT constant. During crashes, Beta can spike as stocks become highly correlated with market risk.
-
----
+**What it shows:** Beta changes over time! During a crash, almost all stocks get pulled down with the market (Beta spikes). This chart shows when your stock acts as an amplifier.
+![Rolling Beta](./plots/chart5_rollbeta.png)
 
 ### Chart 6: 26-Week Rolling Sharpe Ratio
+**What it shows:** When was the stock actually a good investment? When the line drops below 1.0, you were taking on massive risk for zero reward.
+![Rolling Sharpe](./plots/chart6_rollsharpe.png)
 
-This chart reveals *when* a stock was a good risk-adjusted investment vs. when it wasn't.
-
----
-
-### Chart 7: Merton Jump-Diffusion Monte Carlo (15 sample paths)
-
-For full math see Section 12. Displays 15 possible future price paths based on historical volatility and jump risks.
-
----
+### Chart 7: Merton Jump-Diffusion Monte Carlo
+**What it shows:** "Doctor Strange's Futures Simulator". Displays 15 possible future price paths over the next 6 months, factoring in historical volatility and sudden, violent "jump" crashes.
+![Monte Carlo Paths](./plots/chart7_merton.png)
 
 ### Chart 8: 26-Week Rolling Correlation vs S&P 500
-
-"Correlations go to 1 in a crisis". During market crashes, diversification disappears. This chart lets you SEE this happening.
-
----
+**What it shows:** "Correlations go to 1 in a crisis." When the market crashes, diversification often disappears entirely. This chart lets you SEE your stock tethering itself to the crashing market.
+![Rolling Correlation](./plots/chart8_rollcorr.png)
 
 ### Chart 9: VaR Stress Test Bar Chart
-
-Five different risk measurement methodologies shown side-by-side for the same stock, highlighting the fat tail risks.
+**What it shows:** Different risk algorithms measure danger differently. This puts 5 methods side-by-side. If the Extreme Value or Cornish-Fisher bars are massive, the stock has hidden "Fat Tail" dangers.
+![VaR Stress Test](./plots/chart9_varstress.png)
 
 ---
 
@@ -758,104 +735,47 @@ Five different risk measurement methodologies shown side-by-side for the same st
 
 25 metrics in a 5×5 grid at the bottom of the detail modal.
 
----
-
 ### 9.1 Calmar Ratio
-
-```
-Calmar = Annualized Return / |Max Drawdown|
-```
-
-Measures how efficiently the stock uses its worst-case pain budget.
-
----
+**Simple explanation — Reward ÷ Max Pain:** How efficiently does the stock use its worst-case pain budget?
+![Calmar Ratio](./plots/calmar_ratio.png)
 
 ### 9.2 ATR % (Average True Range, 14-Week)
-
-```
-ATR% = ATR / Current Price × 100
-```
-
-The typical weekly price swing as a percentage of current price. Useful for stop-loss placement and position sizing.
-
----
+**Simple explanation:** The average size of the weekly swing. If ATR is 10%, you should expect your portfolio value to swing by 10% *every single week*.
+![ATR Percent](./plots/atr_percent.png)
 
 ### 9.3 Price Z-Score
-
-Where does the current price sit in its recent statistical distribution? High Z-score implies statistically expensive.
-
----
+Where does the current price sit in its recent statistical distribution? High Z-score implies it is statistically expensive and due for a pullback.
 
 ### 9.4 Win Rate & 9.5 Half-Kelly Position Size
-
-```
-Kelly Fraction K = p − (1-p)/R
-  where: p = Win Rate, R = Average Win / Average Loss
-
-Half-Kelly = K / 2  ← recommended position size as % of portfolio
-```
-
----
+**Simple explanation:** The Kelly Criterion uses your Win Rate and Average Win Size to mathematically calculate exactly what percentage of your portfolio you should bet.
+![Kelly Criterion](./plots/kelly_criterion.png)
 
 ### 9.6 Gain-to-Pain Ratio
-
-```
-G2P = Σ(positive returns) / Σ(|negative returns|)
-```
-
-Simple cumulative ratio of gains to losses.
-
----
+**Simple explanation:** Adds up all the money you made in green weeks, and divides it by all the money you lost in red weeks.
+![Gain to Pain](./plots/gain_pain.png)
 
 ### 9.7 Pain Index & 9.9 Serenity Ratio
-
-```
-Pain Index = (1/n) × Σ|DD[t]| × 100    (average of absolute drawdowns)
-```
-
-Pain Index is MORE sensitive to DURATION than Ulcer Index.
-
-```
-Serenity Ratio = (Annualized Return − Risk-Free Rate) / Pain Index
-```
-
----
+Pain Index averages out the depth of drawdowns, penalizing stocks that trap your money underwater. Serenity Ratio measures your return against that Pain.
 
 ### 9.8 Recovery Factor
-
-```
-Recovery Factor = |Total Return (%)| / |Max Drawdown (%)|
-```
-
-Did the cumulative gains justify the worst episode of pain?
-
----
+**Simple explanation:** Did the total, long-term cumulative gains justify having to endure the absolute deepest, most terrifying crash?
+![Recovery Factor](./plots/recovery_factor.png)
 
 ### 9.10 Fama-French 12-1 Momentum Factor
-
-Return from 12 months ago to 1 month ago, **skipping the most recent 4 weeks** to avoid short-term reversal noise.
-
----
+**Simple explanation:** Return from 12 months ago to 1 month ago. It deliberately ignores the last 30 days of "noise" to find the true, underlying long-term trend.
+![Momentum Factor](./plots/momentum_factor.png)
 
 ### 9.11 Volatility Regime (EWMA/Historical)
-
-Compares exponential moving average volatility (responsive) with long-term historical volatility to detect current risk spikes.
-
----
+Compares short-term responsive volatility to long-term historical volatility to act as an early-warning radar for incoming market chaos.
 
 ### 9.12 Max Drawdown Duration
-
-```
-DD Duration = Maximum consecutive weeks spent below prior peak
-```
-
-Why duration matters MORE than depth for RSU holders: You don't want to vest underwater for years.
-
----
+**Simple explanation:** How long was your money trapped underwater? Depth matters, but duration kills morale.
+![Drawdown Duration](./plots/drawdown_duration.png)
+**RSU Implication:** You do not want to hold RSUs in a stock that historically stays underwater for 3 years at a time. 
 
 ### 9.13 Historical VaR at 90%, 95%, 99%
-
-Uses the actual observed returns to determine value at risk, highlighting non-normal fat tails.
+**Simple explanation:** Looks backwards at actual history (instead of assuming a bell curve) to see exactly how bad the worst 10%, 5%, and 1% of weeks actually were.
+![Historical VaR](./plots/historical_var.png)
 
 ---
 

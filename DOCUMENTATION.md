@@ -620,29 +620,13 @@ A stock could beat the market by 20% in one massive, lucky week, and then do abs
 
 The terminal's **proprietary composite signal** — a single number summarizing all quantitative inputs for quick screening.
 
-```mermaid
-flowchart TD
-    BASE[Base Score = 50\nNeutral starting point] --> CALC[Score Adjustment]
+![Quant Score Visualized](./plots/quant_score.png)
 
-    CALC -->|+8| A[6-month return > 0]
-    CALC -->|+8| B[1-year return > 0]
-    CALC -->|+12| C[MACD histogram > 0\nbullish momentum]
-    CALC -->|+18| D[Momentum = OVERSOLD\ncontrarian buy opportunity]
-    CALC -->|+8| E[Fear & Greed < 30\nextreme fear = buy zone]
-    CALC -->|+8| F[Sortino > 1.5\ngood risk-adjusted return]
-    CALC -->|+6| G[Sharpe > 1.0]
-    CALC -->|+5| H[SMA10 > SMA40\nBull Cross active]
-    CALC -->|+8| I[Alpha > 5%\noutperforming market]
+This score starts at 50 (neutral) and adds/subtracts points based on all the factors we discussed earlier:
+- **Positives (+):** MACD Bullish momentum, Oversold RSI, High Alpha, Great Sortino Ratio.
+- **Negatives (-):** Overbought RSI, Extreme Greed, Negative Alpha.
 
-    CALC -->|-18| J[Momentum = OVERBOUGHT\ncaution zone]
-    CALC -->|-12| K[Fear & Greed > 80\nextreme greed = sell zone]
-    CALC -->|-8| L[Alpha < 0\nunderperforming market]
-
-    CALC --> FINAL[Final Score\nclamped 5–99]
-    FINAL -->|70-99| GREEN[🟢 Green border\nBUY signal]
-    FINAL -->|40-69| GREY[⚪ No border\nMixed signals]
-    FINAL -->|0-35| RED[🔴 Red border\nSELL signal]
-```
+The final score acts as your ultimate cheat sheet for buying or selling.
 
 ---
 
@@ -655,6 +639,8 @@ Imagine two stocks, A and B. Both made a 20% return last year.
 - **Stock B** surged up 50%, crashed down 40%, and then barely crawled back up to finish at 20%. You had three panic attacks.
 
 If you only look at the final "Return", they look exactly the same (20%). But Stock A is vastly superior because it gave you the same money for way less "Risk" (stress/bounciness).
+
+![Sharpe Ratio Visualized](./plots/sharpe_ratio.png)
 
 The **Sharpe Ratio** (invented by Nobel laureate William Sharpe) measures exactly this. It takes the extra money you made (above what a safe, boring bank savings account would pay) and divides it by the "bounciness" (volatility) of the stock. 
 
@@ -669,31 +655,38 @@ It answers the ultimate question: *Am I actually being compensated for all these
 
 ### 7.3 Annual Volatility
 
-The core risk measure — the typical annual swing range of returns.
+**Simple explanation — The Rollercoaster Rating:**
+Volatility measures how violently a stock swings up and down over a year. 
 
-```
-Ann. Volatility = StdDev(weekly returns) × sqrt(52)
-```
+![Annual Volatility Visualized](./plots/annual_volatility.png)
+
+- **Low Volatility (15%):** Safe, slow, boring. Great for retirement accounts.
+- **High Volatility (60%):** Wild, massive swings. You might double your money, or you might lose half of it in a month. (Common in crypto and biotech).
 
 ---
 
 ### 7.4 Fibonacci Support Level (61.8%)
 
-Fibonacci levels come from the Golden Ratio. Traders believe price levels at these ratios act as natural support/resistance.
+**Simple explanation — The Golden Bounce:**
+When a stock goes on a massive run upward, it almost never goes up in a straight line. Eventually, buyers take profit and the stock "pulls back" (drops temporarily).
 
-```
-Fib 61.8% Level = High − (High − Low) × 0.618
-```
+![Fibonacci Retracement Visualized](./plots/fibonacci.png)
+
+Traders use the Fibonacci "Golden Ratio" (61.8%) to predict exactly where that drop will stop and bounce back up. If a stock drops past the 61.8% line, the upward trend is likely dead. If it bounces off the line, the rally continues!
 
 ---
 
 ### 7.5 Monte Carlo Scenarios (6-Month Projections)
 
-**MC 6M Median:** Most likely 6-month price (50th percentile of 2,000 simulations)
-**MC Bull 90%:** Optimistic scenario (90th percentile)
-**MC Bear 10%:** Pessimistic scenario (10th percentile)
+**Simple explanation — Doctor Strange's 2,000 Futures:**
+Instead of guessing where a stock will be in 6 months, a Monte Carlo simulation uses advanced math (Merton Jump-Diffusion) to simulate 2,000 different possible futures, factoring in the stock's normal volatility and its history of random crashes.
 
-See Section 12 for the full Merton Jump-Diffusion mathematical explanation.
+![Monte Carlo Visualized](./plots/monte_carlo.png)
+
+It then looks at all 2,000 futures and gives you three numbers:
+- **MC Bull 90%:** The optimistic scenario (only 10% of futures were better than this).
+- **MC Median:** The most likely outcome right in the middle of the pack.
+- **MC Bear 10%:** The pessimistic crash scenario (only 10% of futures were worse than this).
 
 ---
 

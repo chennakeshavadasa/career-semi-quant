@@ -1815,9 +1815,13 @@ function toggleRiskMap() {
 }
 
 function renderRiskMap() {
-  if (riskMapChart) riskMapChart.destroy();
-  const ctx = document.getElementById('risk-map-canvas').getContext('2d');
-  
+  const container = document.getElementById('risk-map-container');
+  let canvas = document.getElementById('risk-map-canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'risk-map-canvas';
+  }
+
   const data = [];
   for (const c of COS) {
     const d = D[c.t];
@@ -1825,6 +1829,20 @@ function renderRiskMap() {
       data.push({ x: d.vol * 100, y: d.chg1y, ticker: c.t, r: 6 });
     }
   }
+
+  if (data.length < 2) {
+    container.innerHTML = "<p style='color:#f85149; text-align:center; margin-top:150px; font-weight:500;'>Not enough data loaded.<br><br>If this persists, your network may be blocking the free proxies. Please open Settings and add API keys.</p>";
+    if (riskMapChart) { riskMapChart.destroy(); riskMapChart = null; }
+    return;
+  }
+  
+  if (!document.getElementById('risk-map-canvas')) {
+    container.innerHTML = '';
+    container.appendChild(canvas);
+  }
+
+  if (riskMapChart) riskMapChart.destroy();
+  const ctx = canvas.getContext('2d');
   
   riskMapChart = new Chart(ctx, {
     type: 'bubble',
@@ -1870,7 +1888,7 @@ function renderCorrelation() {
   const container = document.getElementById('correlation-matrix-container');
   const validCos = COS.filter(c => D[c.t] && D[c.t].ok && D[c.t].prices);
   if (validCos.length < 2) {
-    container.innerHTML = "<p>Not enough data</p>";
+    container.innerHTML = "<p style='color:#f85149; text-align:center; margin-top:250px; font-weight:500;'>Not enough data loaded.<br><br>If this persists, your network may be blocking the free proxies. Please open Settings and add API keys.</p>";
     return;
   }
   
@@ -1906,7 +1924,13 @@ function renderCorrelation() {
   }
 
   // Draw Heatmap on Canvas
-  const canvas = document.getElementById('correlation-canvas');
+  let canvas = document.getElementById('correlation-canvas');
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = 'correlation-canvas';
+    canvas.style.borderRadius = '8px';
+    canvas.style.boxShadow = '0 4px 15px rgba(0,0,0,0.5)';
+  }
   container.innerHTML = ''; 
   container.appendChild(canvas); // Re-attach
 

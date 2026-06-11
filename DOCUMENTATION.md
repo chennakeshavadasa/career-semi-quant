@@ -359,35 +359,35 @@ These appear in the lower section of the risk grid — color-coded purple/cyan t
 
 ### 5.1 Cornish-Fisher Modified VaR (CF mVaR 95%)
 
-**The problem with standard VaR:** The z-score of 1.645 assumes a perfect bell curve. Real stock returns are NOT bell-curved. They have fat tails.
+**Simple explanation — Fixing the Bell Curve Lie:**
 
-**The Cornish-Fisher expansion (1938):**
-Adjusts the z-score based on the actual shape of the distribution:
+Earlier in Section 4.2, we used a standard Bell Curve to predict our worst-case losses (VaR). Look at the chart below for NVDA:
 
-```
-z_CF = z + (1/6)(z²-1)×S + (1/24)(z³-3z)×K − (1/36)(2z³-5z)×S²
+![NVDA Returns Distribution](./plots/nvda_dist.png)
 
-CF mVaR = −(μ + z_CF × σ)
-```
+The smooth white line is the perfect, mathematical Bell Curve. The blue bars are what *actually happened* in the real world. 
+Notice two massive problems with the real world (the blue bars):
+1. **The Leaning Tower (Skewness):** The blue bars aren't perfectly symmetrical. They lean slightly to one side.
+2. **The Fat Tails (Kurtosis):** Look at the far left edge of the chart. The white line drops to basically zero, claiming that extreme crashes are mathematically "impossible." But there are blue bars way out there! These extreme, catastrophic crashes happen much more often than theory predicts. We call these **Fat Tails**.
 
-Where:
-- `z = −1.645` (standard 5% z-score)
-- `S` = skewness of the return distribution
-- `K` = excess kurtosis (kurtosis − 3)
+If you only use the standard Bell Curve VaR, it will tell you those extreme crashes don't exist. You will feel falsely safe.
+
+**What does CF mVaR do?**
+Cornish and Fisher were two statisticians who created a brilliant fix. Instead of forcing the stock to fit a perfect bell curve, their formula mathematically bends, twists, and stretches the curve to match the *actual* blue bars. 
+
+The result is a much more honest, real-world estimate of your worst-case scenario. If a stock has a history of catastrophic "Fat Tail" crashes, CF mVaR will be significantly worse (more negative) than standard VaR, warning you of the true danger.
 
 > [!IMPORTANT]
-> When the JB test score is high, standard VaR is dangerously misleading. CF mVaR is the honest single-number risk estimate.
+> When evaluating a highly volatile tech stock or RSU package, **always** look at the CF mVaR instead of standard VaR. Standard VaR will hide the extreme dangers.
 
 ---
 
 ### 5.2 Jarque-Bera Test (JB Statistic)
 
-**Simple explanation — The normality smoke alarm:**
-JB is a formal statistical test. Its null hypothesis: "This distribution is normal." High JB score = alarm triggered = distribution has significant skewness/kurtosis = standard risk models are unreliable.
+**Simple explanation — The Normality Smoke Alarm:**
+The Jarque-Bera (JB) test is like a smoke alarm that analyzes the chart above. It mathematically measures exactly how far the blue bars deviate from the white line. 
 
-![NVDA Returns Distribution](./plots/nvda_dist.png)
-
-Notice how the actual returns histogram deviates from the smooth normal curve, often showing fat tails and skewness.
+If the blue bars fit the white line perfectly, the JB score is close to 0. The higher the score, the more distorted and dangerous the "Fat Tails" are, meaning standard risk models are useless.
 
 **JB interpretation with real examples:**
 

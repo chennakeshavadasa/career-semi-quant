@@ -648,10 +648,10 @@ function saveKeys() {
 // ============================
 async function fetchOne(ticker, isBench = false) {
   const now   = Math.floor(Date.now() / 1000);
-  const from5Y = now - 5 * 31536000;
+  const from1Y = now - 1.5 * 31536000;
   let closes = [], source = 'Unknown';
 
-  const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&period1=${from5Y}&period2=${now}`;
+  const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&period1=${from1Y}&period2=${now}`;
   const proxies = [
     u => u,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
@@ -681,7 +681,7 @@ async function fetchOne(ticker, isBench = false) {
   if (closes.length < 25 && apiKeys.poly) {
     try {
       const fmt  = d => d.toISOString().split('T')[0];
-      const dNow = new Date(), dFrom = new Date(Date.now() - 5 * 31536000000);
+      const dNow = new Date(), dFrom = new Date(Date.now() - 1.5 * 31536000000);
       const c = new AbortController(); const t = setTimeout(() => c.abort(), 9000);
       const r = await fetch(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/week/${fmt(dFrom)}/${fmt(dNow)}?adjusted=true&apiKey=${apiKeys.poly}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
@@ -696,7 +696,7 @@ async function fetchOne(ticker, isBench = false) {
       const r = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=${ticker}&apikey=${apiKeys.alpha}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
       if (r['Weekly Time Series']) {
-        const vals = Object.values(r['Weekly Time Series']).slice(0, 260).reverse().map(x => parseFloat(x['4. close']));
+        const vals = Object.values(r['Weekly Time Series']).slice(0, 78).reverse().map(x => parseFloat(x['4. close']));
         if (vals.length > 25) { closes = vals; source = 'Alpha Vantage'; }
       }
     } catch(_) {}
@@ -706,7 +706,7 @@ async function fetchOne(ticker, isBench = false) {
   if (closes.length < 25 && apiKeys.finnhub) {
     try {
       const c = new AbortController(); const t = setTimeout(() => c.abort(), 9000);
-      const r = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=W&from=${from5Y}&to=${now}&token=${apiKeys.finnhub}`, { signal: c.signal }).then(x => x.json());
+      const r = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=W&from=${from1Y}&to=${now}&token=${apiKeys.finnhub}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
       if (r.s === 'ok' && r.c?.length > 25) { closes = r.c; source = 'Finnhub'; }
     } catch(_) {}
@@ -903,7 +903,7 @@ function openDetail(ticker, name) {
   if (!d || !d.ok) return;
   
   document.getElementById('det-name').textContent = name;
-  document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 5-Year Trajectory`;
+  document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 1.5-Year Trajectory`;
   
   if (chartInst) chartInst.destroy();
   if (chartInst2) chartInst2.destroy();

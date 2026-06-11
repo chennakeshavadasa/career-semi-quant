@@ -178,13 +178,29 @@ FearGreed = (RSI + Stochastic + VolScore) / 3
 VolScore = clamp(100 − (AnnualVol% − 15) × 1.5, 0, 100)
 ```
 
-**How each component contributes:**
+**What are these three ingredients? (Explained for Beginners)**
+
+1. **RSI (Relative Strength Index): The "Fatigue" Meter**
+   Imagine a runner sprinting at full speed. No matter how fit they are, eventually, they will get tired and have to slow down. RSI measures this for a stock. If a stock surges up day after day without resting, its RSI climbs toward 100 ("Overbought" or GREED). If it crashes straight down, RSI drops near 0 ("Oversold" or FEAR). It tells us when a stock has moved too far, too fast, and is due for a break.
+
+2. **Stochastic Oscillator: The "Where are we in the room?" Meter**
+   Imagine a room with a floor at 0 feet and a ceiling at 10 feet. If a balloon is floating at 9.5 feet, it's almost touching the ceiling. Stochastic simply asks: "Looking at the highest and lowest prices over the last few months, where is today's price?" 
+   - Near 100: The stock is hovering right at its recent "ceiling" (GREED).
+   - Near 0: The stock is scraping its recent "floor" (FEAR).
+
+3. **VolScore: The "Panic" Meter**
+   When investors are confident, prices move smoothly. When they are terrified, they panic-sell, causing wild, violent price swings (high volatility). 
+   We take this Volatility and flip it upside down to make the `VolScore`. So:
+   - High Volatility (wild price swings) = Low VolScore = FEAR.
+   - Low Volatility (smooth sailing) = High VolScore = GREED.
+
+**How they combine:**
 
 ```mermaid
 flowchart LR
-    A[RSI\n0-100\nMomentum strength] --> D[Average\nof 3 inputs]
-    B[Stochastic\n0-100\nPrice position in range] --> D
-    C[VolScore\n0-100\nInverted volatility] --> D
+    A[RSI\n'Fatigue'] --> D[Average\nof 3 inputs]
+    B[Stochastic\n'Room Position'] --> D
+    C[VolScore\n'Panic'] --> D
     D --> E{Final Score}
     E -->|0-25| F[🔴 EXTREME FEAR\nBuy Zone]
     E -->|25-45| G[🟠 FEAR\nCautious]

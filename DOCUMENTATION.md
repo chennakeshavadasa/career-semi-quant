@@ -254,22 +254,25 @@ An employee who received AMD RSUs in Nov 2021 watched their equity lose 68% of i
 
 ### 4.2 Value at Risk — VaR 95% (Weekly Parametric)
 
-**Simple explanation — The weather forecast for losses:**
-A weather forecast says "90% chance of less than 1 inch of rain." VaR says "95% chance your weekly loss will be smaller than X%." In the *worst 5% of weeks*, you lose at least X%.
+**Simple explanation — The Worst-Case Weather Forecast:**
 
-**Mathematical definition (Parametric / Gaussian VaR):**
+Imagine a weatherman says: *"I am 95% confident that it will rain LESS than 2 inches tomorrow."* 
+This means there is only a 5% chance (1 out of 20 days) that it rains *more* than 2 inches.
 
-```
-VaR 95% = −(μ_weekly − 1.645 × σ_weekly) × 100
-```
+VaR does the exact same thing for losing money. If a stock's weekly VaR 95% is **-8%**, it means: *"We are 95% confident that your worst loss in a normal week will not exceed 8%."*
+Or flipped around: **1 out of every 20 weeks, you should expect to lose MORE than 8%.**
 
-Where:
-- `μ_weekly` = mean of all weekly returns
-- `σ_weekly` = standard deviation of all weekly returns
-- `1.645` = the 5th percentile z-score of the standard normal distribution
+**How it's calculated (The "Bell Curve" method):**
+Instead of using confusing math formulas, think of it like grading on a curve in school:
+1. We find the stock's "average" weekly return.
+2. We measure how much it normally bounces around.
+3. We assume these bounces form a perfect, smooth, symmetrical Bell Curve.
+4. We look at the absolute worst 5% slice at the very bottom of that curve to get our final number.
 
 > [!WARNING]
-> Parametric VaR assumes a normal (bell curve) distribution. Real returns have **fat tails** — crashes happen more often and are worse than the bell curve predicts. Always check CF mVaR (Section 5.1) alongside this number.
+> **The "Fat Tail" Danger:**
+> This standard VaR model assumes stock crashes happen just as predictably as test scores fall on a perfect bell curve. **They don't.** 
+> Real stock markets have "Fat Tails" — meaning extreme, catastrophic crashes (like 2008 or 2020) happen much more often, and are much worse, than a smooth bell curve predicts. If you only look at standard VaR, you might be underestimating the danger of a true panic. (Because of this, we also use "CF mVaR" in Section 5.1, which mathematically adjusts for these real-world extreme crashes!)
 
 ---
 

@@ -664,9 +664,9 @@ body {
 <!-- Correlation Matrix Modal -->
 <div class="modal-bg" id="correlation-modal">
   <div class="modal-box" style="max-width: 900px; max-height: 85vh; overflow-y: auto;">
-    <h3>Universe Correlation Matrix</h3>
-    <div id="correlation-matrix-container" style="margin-top: 10px; overflow-x: auto;">
-      <!-- Table goes here -->
+    <h3>Universe Correlation Heatmap</h3>
+    <div id="correlation-matrix-container" style="margin-top: 15px; position: relative; width: 100%; height: 600px;">
+      <canvas id="correlation-canvas" style="border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);"></canvas>
     </div>
     <div class="modal-actions" style="margin-top: 15px;">
       <button class="btn" onclick="toggleCorrelation()">Close</button>
@@ -1028,6 +1028,15 @@ function calcUlcerIndex(prices) {
   return Math.sqrt(sumSqDD / prices.length) * 100;
 }
 
+function calcTailRatio(returns) {
+  if (returns.length < 20) return 1;
+  const sorted = [...returns].sort((a,b)=>a-b);
+  const p95 = sorted[Math.floor(sorted.length * 0.95)] || 0;
+  const p5 = sorted[Math.floor(sorted.length * 0.05)] || 0;
+  if (p5 === 0) return 99;
+  return Math.abs(p95 / p5);
+}
+
 // ==== END ADVANCED QUANT ANALYTICS ====
 
 // Monte Carlo 6-Month Simulation (2000 Iterations)
@@ -1201,6 +1210,7 @@ async function fetchOne(ticker, isBench = false) {
   const autoCorr = calcAutocorrelation(returns);
   const omega = calcOmegaRatio(returns);
   const ulcer = calcUlcerIndex(closes);
+  const tailRatio = calcTailRatio(returns);
 
   // Momentum State (based strictly on price action — NOT fundamental valuation)
   let momentum = 'NEUTRAL', momCls = 'b';
@@ -1228,7 +1238,7 @@ async function fetchOne(ticker, isBench = false) {
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, cvar95, maxDD,
     macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, kellyObj,
     calmar, atrPct, priceZ, upCapture, downCapture,
-    momentsJB, cfVaR, hurst, autoCorr, omega, ulcer
+    momentsJB, cfVaR, hurst, autoCorr, omega, ulcer, tailRatio
   };
 }
 
@@ -1346,6 +1356,7 @@ function cardHTML(co) {
       <div class="r-box"><span class="r-lbl" style="color:var(--cyan);">Hurst Exp</span><span class="r-val" style="color:var(--cyan);">${d.hurst.toFixed(2)}</span></div>
       <div class="r-box"><span class="r-lbl" style="color:var(--cyan);">Ulcer Index</span><span class="r-val" style="color:var(--cyan);">${d.ulcer.toFixed(1)}</span></div>
       <div class="r-box"><span class="r-lbl" style="color:var(--cyan);">AutoCorr (1W)</span><span class="r-val" style="color:var(--cyan);">${d.autoCorr.toFixed(2)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--orange);">Tail Ratio</span><span class="r-val" style="color:var(--orange);">${d.tailRatio.toFixed(2)}</span></div>
     </div>
 
     <div class="quant-grid">
@@ -1833,15 +1844,14 @@ function renderCorrelation() {
   }
   
   const cos = validCos.slice(0, 15);
+  const n = cos.length;
   
-  let html = '<table style="width:100%; text-align:center; border-collapse: collapse; font-size: 13px;">';
-  html += '<tr><th style="padding: 8px;"></th>' + cos.map(c => `<th style="padding: 8px;">${c.t}</th>`).join('') + '</tr>';
-  
-  for (let i = 0; i < cos.length; i++) {
-    html += `<tr><th style="text-align:left; padding: 8px;">${cos[i].t}</th>`;
-    for (let j = 0; j < cos.length; j++) {
+  // Calculate matrix
+  const matrix = Array(n).fill(0).map(()=>Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
       if (i === j) {
-        html += '<td style="background:var(--bg-r2); color:var(--text-muted); border: 1px solid rgba(255,255,255,0.1);">1.00</td>';
+        matrix[i][j] = 1;
       } else {
         const cP1 = cos[i]._cache.prices;
         const cP2 = cos[j]._cache.prices;
@@ -1859,15 +1869,71 @@ function renderCorrelation() {
           den1 += Math.pow(r1[k]-mean1, 2);
           den2 += Math.pow(r2[k]-mean2, 2);
         }
-        const corr = (den1===0||den2===0) ? 0 : num/Math.sqrt(den1*den2);
-        const color = corr > 0.5 ? 'var(--green)' : (corr < -0.3 ? 'var(--red)' : 'var(--text-main)');
-        html += `<td style="color:${color}; border: 1px solid rgba(255,255,255,0.1); padding: 8px;">${corr.toFixed(2)}</td>`;
+        matrix[i][j] = (den1===0||den2===0) ? 0 : num/Math.sqrt(den1*den2);
       }
     }
-    html += '</tr>';
   }
-  html += '</table>';
-  container.innerHTML = html;
+
+  // Draw Heatmap on Canvas
+  const canvas = document.getElementById('correlation-canvas');
+  container.innerHTML = ''; 
+  container.appendChild(canvas); // Re-attach
+
+  const W = 800; const H = 600;
+  canvas.width = W * 2; canvas.height = H * 2; // Retina
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(2, 2);
+  
+  const paddingLeft = 100;
+  const paddingTop = 100;
+  const cellSize = Math.min((W - paddingLeft) / n, (H - paddingTop) / n);
+  
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#010409'; // bg
+  ctx.fillRect(0,0,W,H);
+
+  ctx.font = '12px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  for(let i=0; i<n; i++) {
+    // Labels
+    ctx.fillStyle = '#a0aab4';
+    ctx.textAlign = 'right';
+    ctx.fillText(cos[i].t, paddingLeft - 10, paddingTop + i*cellSize + cellSize/2);
+    
+    ctx.save();
+    ctx.translate(paddingLeft + i*cellSize + cellSize/2, paddingTop - 10);
+    ctx.rotate(-Math.PI/4);
+    ctx.textAlign = 'left';
+    ctx.fillText(cos[i].t, 0, 0);
+    ctx.restore();
+
+    for(let j=0; j<n; j++) {
+      const v = matrix[i][j];
+      // Color scale from Red (-1) to Black (0) to Green (1)
+      let r, g, b;
+      if (v > 0) {
+        // Black to Green
+        r = 0; g = Math.floor(v * 200); b = 0;
+      } else {
+        // Black to Red
+        r = Math.floor(Math.abs(v) * 200); g = 0; b = 0;
+      }
+      
+      const x = paddingLeft + j*cellSize;
+      const y = paddingTop + i*cellSize;
+      
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x, y, cellSize-2, cellSize-2);
+      
+      // Text
+      ctx.fillStyle = Math.abs(v) > 0.5 ? '#fff' : '#666';
+      ctx.textAlign = 'center';
+      ctx.fillText(v.toFixed(2), x + cellSize/2, y + cellSize/2);
+    }
+  }
 }
 
 // ============================

@@ -830,15 +830,23 @@ Detailed statistical breakdowns:
 
 ## 14. Quick-Reference Cheat Sheet
 
-| Metric | 🟢 Green (Good) | 🟡 Yellow (Caution) | 🔴 Red (Bad) | Key Question |
-|--------|----------------|--------------------|-----------|----|
-| **Max Drawdown** | > −20% | −20% to −40% | < −50% | Worst-case loss from peak? |
-| **VaR 95% (Wk)** | > −5% | −5% to −10% | < −15% | Worst 5% of weeks? |
-| **Sortino** | > 1.5 | 0.5–1.5 | < 0.5 | Return per downside risk? |
-| **Sharpe** | > 1.0 | 0.5–1.0 | < 0.5 | Return per total risk? |
-| **Beta** | 0.8–1.5 | 1.5–2.5 | > 3.0 | Market amplification? |
-| **Alpha** | > +5% | −2% to +5% | < −5% | True outperformance? |
-| **Omega** | > 1.5 | 1.0–1.5 | < 1.0 | Gains vs losses ledger? |
+| Metric | The Analogy | 🟢 Green (Good) | 🟡 Yellow (Caution) | 🔴 Red (Bad) | Key Question |
+|--------|-------------|----------------|--------------------|-----------|----|
+| **Quant Score** | The Cheat Sheet | > 70 | 40–69 | < 35 | What is the final Buy/Sell grade? |
+| **Fear & Greed** | The Auction Crowd | < 25 (Fear/Buy) | 45-55 (Neutral) | > 75 (Greed/Sell) | Are people panic selling or overbidding? |
+| **Max Drawdown** | The Deepest Hole | > −20% | −20% to −40% | < −50% | How much money did you lose at the absolute bottom? |
+| **Ulcer Index** | The Chronic Pain Meter | < 5.0 | 5.0–15.0 | > 15.0 | How LONG was your money trapped underwater? |
+| **VaR 95% (Wk)** | The Weather Forecast | > −5% | −5% to −10% | < −15% | How bad is the worst 5% of normal weeks? |
+| **CF mVaR 95%** | The Fat Tail Alarm | > −6% | −6% to −12% | < −18% | How bad is the crash when the bell curve lies? |
+| **Sharpe** | Is the juice worth the squeeze? | > 1.0 | 0.5–1.0 | < 0.5 | Were you compensated for all that bounciness? |
+| **Sortino** | Forgiving the Good Surprises | > 1.5 | 0.5–1.5 | < 0.5 | Were you compensated for the *downside* crashes? |
+| **Beta** | The Market Amplifier | 0.8–1.2 | 1.2–2.0 | > 2.5 | If the market drops 1%, how much worse does this drop? |
+| **Alpha** | The Skill Bonus | > +5% | −2% to +5% | < −5% | Did this stock earn more than its Beta risk deserved? |
+| **Information Ratio**| The Consistency Champion | > 0.5 | 0.2–0.5 | < 0.2 | Does it beat the market *every* week, or was it just lucky once? |
+| **R-Squared** | The Puppet String | < 0.4 (Independent) | 0.4–0.8 | > 0.8 (Puppet) | Is this stock just a leveraged SPY clone? |
+| **Tail Ratio** | Battle of the Extremes | > 1.2 | 0.8–1.2 | < 0.8 | Are the massive green weeks bigger than the massive red weeks? |
+| **Omega Ratio** | The Totals Ledger | > 1.5 | 1.0–1.5 | < 1.0 | If you add up all green vs all red, who wins? |
+| **Calmar Ratio** | Return ÷ Max Pain | > 1.0 | 0.5–1.0 | < 0.5 | Does the annual return justify the absolute worst crash? |
 
 ---
 

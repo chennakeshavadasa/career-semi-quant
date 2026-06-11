@@ -162,6 +162,8 @@ Finally, we compare the current stretch (MACD Line) to the average stretch (Sign
 **Why it matters:**
 Stock prices can sometimes still be going up while the MACD Histogram starts going down. This is an early warning that the stock is "running out of gas" *before* the price actually falls!
 
+![MACD Visualized](./plots/macd.png)
+
 ---
 
 ## 3. Fear & Greed Gauge
@@ -196,18 +198,15 @@ VolScore = clamp(100 − (AnnualVol% − 15) × 1.5, 0, 100)
 
 **How they combine:**
 
-```mermaid
-flowchart LR
-    A[RSI\n'Fatigue'] --> D[Average\nof 3 inputs]
-    B[Stochastic\n'Room Position'] --> D
-    C[VolScore\n'Panic'] --> D
-    D --> E{Final Score}
-    E -->|0-25| F[🔴 EXTREME FEAR\nBuy Zone]
-    E -->|25-45| G[🟠 FEAR\nCautious]
-    E -->|45-55| H[⚪ NEUTRAL]
-    E -->|55-75| I[🟡 GREED\nCaution]
-    E -->|75-100| J[🔴 EXTREME GREED\nSell Zone]
-```
+Instead of looking at three different numbers, the terminal just averages them together to give you one master reading from 0 to 100:
+
+![Fear and Greed Index Visualized](./plots/fear_greed.png)
+
+- **0-25 (EXTREME FEAR / Buy Zone):** Panic selling. Everyone is dumping the stock. Historically the best time to buy.
+- **25-45 (FEAR):** Cautious pessimism.
+- **45-55 (NEUTRAL):** Normal, calm trading.
+- **55-75 (GREED):** Bullish optimism. Caution advised for new buyers.
+- **75-100 (EXTREME GREED / Sell Zone):** Pure euphoria. Everyone is buying the stock regardless of price. Usually a terrible time to buy, and a great time to take profits.
 
 **Step-by-step worked example — NVDA at trough:**
 

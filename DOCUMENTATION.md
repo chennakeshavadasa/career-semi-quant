@@ -385,18 +385,23 @@ The result is a much more honest, real-world estimate of your worst-case scenari
 ### 5.2 Jarque-Bera Test (JB Statistic)
 
 **Simple explanation — The Normality Smoke Alarm:**
-The Jarque-Bera (JB) test is like a smoke alarm that analyzes the chart above. It mathematically measures exactly how far the blue bars deviate from the white line. 
+The Jarque-Bera (JB) test is like a mathematical smoke alarm. It calculates exactly how badly the real-world data (the bars) miss the theoretical, safe Bell Curve (the white line). 
 
-If the blue bars fit the white line perfectly, the JB score is close to 0. The higher the score, the more distorted and dangerous the "Fat Tails" are, meaning standard risk models are useless.
+If the bars fit the white line perfectly, the JB score is 0. As the "Fat Tails" get larger and more dangerous, the JB score explodes higher.
 
-**JB interpretation with real examples:**
+Here is what different JB scores actually look like:
 
-| JB Value | Assessment | Real example |
-|----------|-----------|--------------|
-| < 5 | Nearly normal. Standard risk models reliable. | COHR: JB ≈ 2.5 |
-| 5–20 | Mild non-normality. Use CF mVaR alongside VaR. | TSMC: JB ≈ 9.1 |
-| 20–100 | Significant non-normality. CF mVaR and CVaR essential. | MTSI: JB ≈ 56.4 |
-| > 100 | Extreme non-normality. Standard VaR dangerously wrong. | MXL: JB ≈ 145 |
+![Jarque-Bera Visual Comparison](./plots/jb_comparison.png)
+
+**How to use this score:**
+When analyzing a stock, check its JB score first to know if you can trust standard risk models:
+
+| JB Score | What the chart looks like | What it means for you | Real Example |
+|----------|-------------------------|------------------------|--------------|
+| **< 5** | The Perfect Bell Curve | Very safe to use standard VaR. | COHR (JB = 2.5) |
+| **5 – 20** | The Leaning Tower | The curve is skewed. Standard VaR is slightly off. You must use CF mVaR. | TSMC (JB = 9.1) |
+| **20 – 100** | Fat Tails Appearing | Dangerous. Extreme crashes happen more often. Standard VaR will lie to you. | MTSI (JB = 56.4) |
+| **> 100** | Massive Fat Tails | Highly dangerous and unpredictable. Massive crashes are common. | MXL (JB = 145) |
 
 ---
 

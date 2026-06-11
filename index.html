@@ -882,7 +882,7 @@ function cardHTML(co) {
       <div class="q-box"><span class="q-lbl">MC Bear (10%)</span><span class="q-val r">$${d.mc.p10.toFixed(2)}</span></div>
     </div>
 
-    <div class="spark-wrap">${spark(d.prices, d.mc.median > d.price)}</div>
+    <div class="spark-wrap">${spark(d.prices.slice(-52), d.mc.median > d.price)}</div>
 
     <div class="tech-bar">
       <div class="tech-item">RSI: <strong style="color:${d.rsi>75?'var(--red)':d.rsi<30?'var(--green)':'inherit'}">${d.rsi.toFixed(1)}</strong></div>
@@ -903,7 +903,7 @@ function openDetail(ticker, name) {
   if (!d || !d.ok) return;
   
   document.getElementById('det-name').textContent = name;
-  document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 1.5-Year Trajectory`;
+  document.getElementById('det-sub').innerHTML = `<span style="color:#fff;font-weight:700;">$${d.price.toFixed(2)}</span> &nbsp;·&nbsp; ${ticker} &nbsp;·&nbsp; 1-Year Trajectory`;
   
   if (chartInst) chartInst.destroy();
   if (chartInst2) chartInst2.destroy();
@@ -1016,18 +1016,28 @@ function openDetail(ticker, name) {
     mcPaths.push({ label: 'Path '+(p+1), data: path, borderColor: 'rgba(88,166,255,0.2)', borderWidth: 1, pointRadius: 0, fill: false, tension: 0.2 });
   }
 
-  Chart.defaults.color = '#8b949e';
+  const d_dates = dates.slice(-52);
+  const d_prices = d.prices.slice(-52);
+  const d_sma40 = sma40.slice(-52);
+  const d_bbUp = bbUp.slice(-52);
+  const d_bbDn = bbDn.slice(-52);
+  const d_ddData = ddData.slice(-52);
+  const d_rollingVol = rollingVol.slice(-52);
+  const d_rollingBeta = rollingBeta.slice(-52);
+  const d_rollingSharpe = rollingSharpe.slice(-52);
+
+  Chart.defaults.color = 'rgba(255,255,255,0.7)';
   Chart.defaults.font.family = "'JetBrains Mono', monospace";
 
   chartInst = new Chart(document.getElementById('det-chart').getContext('2d'), {
     type: 'line',
     data: {
-      labels: dates,
+      labels: d_dates,
       datasets: [
-        { label: 'Close', data: d.prices, borderColor: '#58a6ff', borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.1, z: 10 },
-        { label: 'SMA 40', data: sma40, borderColor: '#d29922', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.1 },
-        { label: 'BB Upper', data: bbUp, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, pointRadius: 0, fill: '+1', backgroundColor: 'rgba(255,255,255,0.03)' },
-        { label: 'BB Lower', data: bbDn, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, pointRadius: 0, fill: false }
+        { label: 'Close', data: d_prices, borderColor: '#58a6ff', borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: false, tension: 0.1, z: 10 },
+        { label: 'SMA 40', data: d_sma40, borderColor: '#d29922', borderWidth: 1.5, pointRadius: 0, fill: false, tension: 0.1 },
+        { label: 'BB Upper', data: d_bbUp, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, pointRadius: 0, fill: '+1', backgroundColor: 'rgba(255,255,255,0.03)' },
+        { label: 'BB Lower', data: d_bbDn, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1, pointRadius: 0, fill: false }
       ]
     },
     options: {
@@ -1041,8 +1051,8 @@ function openDetail(ticker, name) {
   chartInst2 = new Chart(document.getElementById('det-dd-chart').getContext('2d'), {
     type: 'line',
     data: {
-      labels: dates,
-      datasets: [{ label: 'Drawdown', data: ddData, borderColor: '#f85149', backgroundColor: 'rgba(248,81,73,0.15)', borderWidth: 1.5, pointRadius: 0, fill: true }]
+      labels: d_dates,
+      datasets: [{ label: 'Drawdown', data: d_ddData, borderColor: '#f85149', backgroundColor: 'rgba(248,81,73,0.15)', borderWidth: 1.5, pointRadius: 0, fill: true }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -1071,8 +1081,8 @@ function openDetail(ticker, name) {
   chartInst4 = new Chart(document.getElementById('det-vol-chart').getContext('2d'), {
     type: 'line',
     data: {
-      labels: dates,
-      datasets: [{ label: 'Rolling Volatility %', data: rollingVol, borderColor: '#e3b341', borderWidth: 1.5, pointRadius: 0, fill: false }]
+      labels: d_dates,
+      datasets: [{ label: 'Rolling Volatility %', data: d_rollingVol, borderColor: '#e3b341', borderWidth: 1.5, pointRadius: 0, fill: false }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -1085,8 +1095,8 @@ function openDetail(ticker, name) {
   chartInst5 = new Chart(document.getElementById('det-beta-chart').getContext('2d'), {
     type: 'line',
     data: {
-      labels: dates,
-      datasets: [{ label: 'Rolling Beta', data: rollingBeta, borderColor: '#3fb950', borderWidth: 1.5, pointRadius: 0, fill: false }]
+      labels: d_dates,
+      datasets: [{ label: 'Rolling Beta', data: d_rollingBeta, borderColor: '#3fb950', borderWidth: 1.5, pointRadius: 0, fill: false }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -1099,8 +1109,8 @@ function openDetail(ticker, name) {
   chartInst6 = new Chart(document.getElementById('det-sharpe-chart').getContext('2d'), {
     type: 'line',
     data: {
-      labels: dates,
-      datasets: [{ label: 'Rolling Sharpe', data: rollingSharpe, borderColor: '#d2a8ff', borderWidth: 1.5, pointRadius: 0, fill: false }]
+      labels: d_dates,
+      datasets: [{ label: 'Rolling Sharpe', data: d_rollingSharpe, borderColor: '#bc8cff', borderWidth: 1.5, pointRadius: 0, fill: false }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,

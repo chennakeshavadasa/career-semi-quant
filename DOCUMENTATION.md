@@ -334,14 +334,20 @@ RS = Average Up-Week Gain / Average Down-Week Loss  (over last 14 weeks)
 
 ### 4.5 Stochastic Oscillator — shown in tech bar
 
-**Simple explanation — Where in the room are you?**
-If ceiling height is 10 ft and floor is 0 ft, and you're at 8.5 ft — you're at 85% of the range. Stochastic asks: "Where is today's price inside its recent high/low range?"
+**Simple explanation — The Floor and the Ceiling:**
 
-**Mathematical definition:**
+Imagine you are tracking the price of a house over the last 14 weeks. 
+- The absolute highest price anyone paid was **$1,000,000** (The Ceiling).
+- The absolute lowest price anyone paid was **$500,000** (The Floor).
 
-```
-Stochastic = (Close − Lowest Low[14wk]) / (Highest High[14wk] − Lowest Low[14wk]) × 100
-```
+If the house sells today for **$900,000**, where does that sit between the floor and the ceiling? It is 80% of the way up.
+
+The **Stochastic Oscillator** does exactly this for stocks. It skips all the complicated averages and math. It simply finds the highest peak and the lowest valley of the last 14 weeks, and tells you exactly where today's price sits on a scale of 0 to 100.
+
+**How to read it:**
+- **> 80 (Overbought / Too Hot):** The stock is pushing right against its 14-week ceiling. Buyers are usually exhausted here, and the price is statistically likely to bounce back down.
+- **< 20 (Oversold / Too Cold):** The stock is scraping the absolute bottom of its 14-week floor. Panic sellers are exhausted, making it a prime spot for the stock to bounce back up.
+- **Around 50:** The stock is floating comfortably right in the middle of the room.
 
 ---
 

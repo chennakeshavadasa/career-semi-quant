@@ -449,6 +449,53 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* Modern Aesthetics Inject */
+body {
+  background-image: 
+    radial-gradient(ellipse at 10% 10%, rgba(57, 197, 207, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 90%, rgba(188, 140, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(88, 166, 255, 0.05) 0%, transparent 60%);
+}
+.card {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: linear-gradient(145deg, var(--bg-card), rgba(15, 15, 25, 0.8));
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s;
+}
+.card:hover {
+  transform: translateY(-8px) scale(1.01);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(88, 166, 255, 0.2);
+  border: 1px solid rgba(88, 166, 255, 0.4);
+}
+.btn {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+.btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.modal-box {
+  background: linear-gradient(145deg, var(--bg-card-solid), rgba(20,20,30,1));
+  border: 1px solid var(--border);
+  box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+  border-radius: 16px;
+}
+.r-box, .q-box {
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+</style>
 </head>
 <body>
 
@@ -463,6 +510,8 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
       <div class="pill loading" id="status-pill">INITIALIZING QUANT ENGINE</div>
       <button class="btn" onclick="reloadAll()">↻ REFRESH</button>
       <button class="btn" onclick="toggleSettings()" style="border-color:var(--accent);color:var(--accent);">⚙ API KEYS</button>
+      <button class="btn" onclick="toggleRiskMap()" style="border-color:var(--cyan);color:var(--cyan);">📊 RISK MAP</button>
+      <button class="btn" onclick="toggleCorrelation()" style="border-color:var(--purple);color:var(--purple);">📉 CORRELATION</button>
       <div class="theme-switcher" title="Switch theme">
         <div class="theme-dot active" data-theme="midnight" onclick="setTheme('midnight')" title="Midnight"></div>
         <div class="theme-dot" data-theme="obsidian" onclick="setTheme('obsidian')" title="Obsidian"></div>
@@ -595,6 +644,32 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
     <div class="modal-actions">
       <button class="btn" onclick="toggleSettings()">Cancel</button>
       <button class="btn" style="background:rgba(188,140,255,0.2);border-color:var(--purple);color:#c4b5fd;" onclick="saveKeys()">Save & Reload</button>
+    </div>
+  </div>
+</div>
+
+<!-- Risk Map Modal -->
+<div class="modal-bg" id="risk-map-modal">
+  <div class="modal-box" style="max-width: 800px;">
+    <h3>Universe Risk Map (Return vs Volatility)</h3>
+    <div id="risk-map-container" style="height: 400px; position: relative; margin-top: 15px;">
+      <canvas id="risk-map-canvas"></canvas>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="toggleRiskMap()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Correlation Matrix Modal -->
+<div class="modal-bg" id="correlation-modal">
+  <div class="modal-box" style="max-width: 900px; max-height: 85vh; overflow-y: auto;">
+    <h3>Universe Correlation Matrix</h3>
+    <div id="correlation-matrix-container" style="margin-top: 10px; overflow-x: auto;">
+      <!-- Table goes here -->
+    </div>
+    <div class="modal-actions" style="margin-top: 15px;">
+      <button class="btn" onclick="toggleCorrelation()">Close</button>
     </div>
   </div>
 </div>
@@ -872,6 +947,89 @@ function calcCaptureRatios(prices, benchPrices) {
   };
 }
 
+// ==== ADVANCED QUANT ANALYTICS ====
+
+function calcMomentsJB(returns) {
+  const n = returns.length;
+  if (n < 4) return { skew: 0, kurtosis: 3, jb: 0 };
+  const mean = returns.reduce((a,b)=>a+b,0)/n;
+  let m2=0, m3=0, m4=0;
+  for(let i=0; i<n; i++) {
+    const d = returns[i] - mean;
+    m2 += d*d; m3 += d*d*d; m4 += d*d*d*d;
+  }
+  m2 /= n; m3 /= n; m4 /= n;
+  const std = Math.sqrt(m2);
+  const skew = std === 0 ? 0 : m3 / Math.pow(std, 3);
+  const kurt = std === 0 ? 3 : m4 / Math.pow(std, 4); 
+  const jb = (n / 6) * (skew*skew + 0.25 * Math.pow(kurt - 3, 2));
+  return { skew, kurtosis: kurt, jb };
+}
+
+function calcCornishFisherVaR(returns, conf = 0.95) {
+  if (returns.length < 4) return 0;
+  const z = -1.645;
+  const { skew, kurtosis } = calcMomentsJB(returns);
+  const excessK = kurtosis - 3;
+  const z_cf = z + (1/6)*(z*z - 1)*skew + (1/24)*(z*z*z - 3*z)*excessK - (1/36)*(2*z*z*z - 5*z)*skew*skew;
+  const mean = returns.reduce((a,b)=>a+b,0)/returns.length;
+  const std = Math.sqrt(returns.reduce((a,b)=>a+Math.pow(b-mean,2),0)/returns.length);
+  return -(mean + z_cf * std);
+}
+
+function calcHurst(prices) {
+  if (prices.length < 20) return 0.5;
+  const returns = [];
+  for(let i=1; i<prices.length; i++) returns.push(Math.log(prices[i]/prices[i-1]));
+  const mean = returns.reduce((a,b)=>a+b,0)/returns.length;
+  let dev = 0, sum = 0, maxZ = -Infinity, minZ = Infinity;
+  for(let i=0; i<returns.length; i++) {
+    dev += Math.pow(returns[i]-mean, 2);
+    sum += (returns[i]-mean);
+    if(sum > maxZ) maxZ = sum;
+    if(sum < minZ) minZ = sum;
+  }
+  const R = maxZ - minZ;
+  const S = Math.sqrt(dev/returns.length);
+  if (S === 0) return 0.5;
+  const RS = R/S;
+  return Math.log(RS) / Math.log(returns.length);
+}
+
+function calcAutocorrelation(returns) {
+  if (returns.length < 3) return 0;
+  const mean = returns.reduce((a,b)=>a+b,0)/returns.length;
+  let num = 0, den = 0;
+  for(let i=1; i<returns.length; i++) {
+    num += (returns[i]-mean) * (returns[i-1]-mean);
+    den += Math.pow(returns[i-1]-mean, 2);
+  }
+  return den === 0 ? 0 : num / den;
+}
+
+function calcOmegaRatio(returns, threshold = 0) {
+  let gains = 0, losses = 0;
+  for(let r of returns) {
+    if (r > threshold) gains += (r - threshold);
+    else if (r < threshold) losses += (threshold - r);
+  }
+  return losses === 0 ? 99 : gains / losses;
+}
+
+function calcUlcerIndex(prices) {
+  if (prices.length < 2) return 0;
+  let maxP = prices[0];
+  let sumSqDD = 0;
+  for(let i=1; i<prices.length; i++) {
+    if (prices[i] > maxP) maxP = prices[i];
+    const dd = (prices[i] - maxP) / maxP;
+    sumSqDD += dd * dd;
+  }
+  return Math.sqrt(sumSqDD / prices.length) * 100;
+}
+
+// ==== END ADVANCED QUANT ANALYTICS ====
+
 // Monte Carlo 6-Month Simulation (2000 Iterations)
 function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
   if (!vol || vol === 0) return { median: cur, p10: cur, p90: cur };
@@ -1033,6 +1191,17 @@ async function fetchOne(ticker, isBench = false) {
   const priceZ     = calcPriceZScore(closes);
   const { upCapture, downCapture } = isBench ? { upCapture: 100, downCapture: 100 } : calcCaptureRatios(closes, SPY_CLOSES);
 
+  // Advanced Quant Analytics
+  const returns = [];
+  for(let i=1; i<closes.length; i++) returns.push((closes[i] - closes[i-1])/closes[i-1]);
+  
+  const momentsJB = calcMomentsJB(returns);
+  const cfVaR = calcCornishFisherVaR(returns) * 100;
+  const hurst = calcHurst(closes);
+  const autoCorr = calcAutocorrelation(returns);
+  const omega = calcOmegaRatio(returns);
+  const ulcer = calcUlcerIndex(closes);
+
   // Momentum State (based strictly on price action — NOT fundamental valuation)
   let momentum = 'NEUTRAL', momCls = 'b';
   if      (cur < bb.lower || (cur < bb.sma && rsi < 30)) { momentum = 'OVERSOLD';   momCls = 'g'; }
@@ -1058,7 +1227,8 @@ async function fetchOne(ticker, isBench = false) {
     ok: true, source, price: cur, prices: closes,
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, cvar95, maxDD,
     macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, kellyObj,
-    calmar, atrPct, priceZ, upCapture, downCapture
+    calmar, atrPct, priceZ, upCapture, downCapture,
+    momentsJB, cfVaR, hurst, autoCorr, omega, ulcer
   };
 }
 
@@ -1169,6 +1339,13 @@ function cardHTML(co) {
       <div class="r-box"><span class="r-lbl">Max Drawdown</span><span class="r-val r">${d.maxDD.toFixed(1)}%</span></div>
       <div class="r-box"><span class="r-lbl">VaR 95% (Wk)</span><span class="r-val r">${d.var95.toFixed(2)}%</span></div>
       <div class="r-box"><span class="r-lbl">Sortino Ratio</span><span class="r-val ${d.sortino>1?'g':'r'}">${d.sortino.toFixed(2)}</span></div>
+      <div class="r-box" style="border-top: 1px solid var(--border); padding-top: 6px; margin-top: 6px; grid-column: span 3;"></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--purple);">CF mVaR 95%</span><span class="r-val" style="color:var(--purple);">${d.cfVaR.toFixed(2)}%</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--purple);">Jarque-Bera</span><span class="r-val" style="color:var(--purple);">${d.momentsJB.jb.toFixed(1)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--purple);">Omega Ratio</span><span class="r-val" style="color:var(--purple);">${d.omega.toFixed(2)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--cyan);">Hurst Exp</span><span class="r-val" style="color:var(--cyan);">${d.hurst.toFixed(2)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--cyan);">Ulcer Index</span><span class="r-val" style="color:var(--cyan);">${d.ulcer.toFixed(1)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--cyan);">AutoCorr (1W)</span><span class="r-val" style="color:var(--cyan);">${d.autoCorr.toFixed(2)}</span></div>
     </div>
 
     <div class="quant-grid">
@@ -1578,6 +1755,119 @@ function applyFS() {
     if (searchQ && !el.innerText.toLowerCase().includes(searchQ)) show = false;
     el.style.display = show ? 'flex' : 'none';
   });
+}
+
+// ============================
+// UNIVERSE MODALS
+// ============================
+
+let riskMapChart = null;
+function toggleRiskMap() {
+  const m = document.getElementById('risk-map-modal');
+  if (m.style.display === 'flex') {
+    m.style.display = 'none';
+  } else {
+    m.style.display = 'flex';
+    renderRiskMap();
+  }
+}
+
+function renderRiskMap() {
+  if (riskMapChart) riskMapChart.destroy();
+  const ctx = document.getElementById('risk-map-canvas').getContext('2d');
+  
+  const data = [];
+  for (const c of COS) {
+    const d = c._cache;
+    if (d && d.ok) {
+      data.push({ x: d.vol * 100, y: d.chg1y, ticker: c.t, r: 6 });
+    }
+  }
+  
+  riskMapChart = new Chart(ctx, {
+    type: 'bubble',
+    data: {
+      datasets: [{
+        label: 'Universe Risk/Return',
+        data: data,
+        backgroundColor: 'rgba(57, 197, 207, 0.6)',
+        borderColor: 'rgba(57, 197, 207, 1)'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              return `${ctx.raw.ticker}: Vol ${ctx.raw.x.toFixed(1)}%, Ret ${ctx.raw.y.toFixed(1)}%`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Volatility (Risk) %', color: '#fff' }, ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+        y: { title: { display: true, text: '1Y Return %', color: '#fff' }, ticks: { color: '#aaa' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+      }
+    }
+  });
+}
+
+function toggleCorrelation() {
+  const m = document.getElementById('correlation-modal');
+  if (m.style.display === 'flex') {
+    m.style.display = 'none';
+  } else {
+    m.style.display = 'flex';
+    renderCorrelation();
+  }
+}
+
+function renderCorrelation() {
+  const container = document.getElementById('correlation-matrix-container');
+  const validCos = COS.filter(c => c._cache && c._cache.ok && c._cache.prices);
+  if (validCos.length < 2) {
+    container.innerHTML = "<p>Not enough data</p>";
+    return;
+  }
+  
+  const cos = validCos.slice(0, 15);
+  
+  let html = '<table style="width:100%; text-align:center; border-collapse: collapse; font-size: 13px;">';
+  html += '<tr><th style="padding: 8px;"></th>' + cos.map(c => `<th style="padding: 8px;">${c.t}</th>`).join('') + '</tr>';
+  
+  for (let i = 0; i < cos.length; i++) {
+    html += `<tr><th style="text-align:left; padding: 8px;">${cos[i].t}</th>`;
+    for (let j = 0; j < cos.length; j++) {
+      if (i === j) {
+        html += '<td style="background:var(--bg-r2); color:var(--text-muted); border: 1px solid rgba(255,255,255,0.1);">1.00</td>';
+      } else {
+        const cP1 = cos[i]._cache.prices;
+        const cP2 = cos[j]._cache.prices;
+        const len = Math.min(cP1.length, cP2.length);
+        const r1=[], r2=[];
+        for(let k=1; k<len; k++) {
+          r1.push((cP1[k]-cP1[k-1])/cP1[k-1]);
+          r2.push((cP2[k]-cP2[k-1])/cP2[k-1]);
+        }
+        const mean1 = r1.reduce((a,b)=>a+b,0)/r1.length;
+        const mean2 = r2.reduce((a,b)=>a+b,0)/r2.length;
+        let num=0, den1=0, den2=0;
+        for(let k=0; k<r1.length; k++) {
+          num += (r1[k]-mean1)*(r2[k]-mean2);
+          den1 += Math.pow(r1[k]-mean1, 2);
+          den2 += Math.pow(r2[k]-mean2, 2);
+        }
+        const corr = (den1===0||den2===0) ? 0 : num/Math.sqrt(den1*den2);
+        const color = corr > 0.5 ? 'var(--green)' : (corr < -0.3 ? 'var(--red)' : 'var(--text-main)');
+        html += `<td style="color:${color}; border: 1px solid rgba(255,255,255,0.1); padding: 8px;">${corr.toFixed(2)}</td>`;
+      }
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  container.innerHTML = html;
 }
 
 // ============================

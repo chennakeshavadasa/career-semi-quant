@@ -267,7 +267,9 @@ Instead of using confusing math formulas, think of it like grading on a curve in
 1. We find the stock's "average" weekly return.
 2. We measure how much it normally bounces around.
 3. We assume these bounces form a perfect, smooth, symmetrical Bell Curve.
-4. We look at the absolute worst 5% slice at the very bottom of that curve to get our final number.
+4. We look at the absolute worst 5% slice at the very bottom of that curve to get our final VaR number.
+
+![Value at Risk Visualized](./plots/var_95.png)
 
 > [!WARNING]
 > **The "Fat Tail" Danger:**

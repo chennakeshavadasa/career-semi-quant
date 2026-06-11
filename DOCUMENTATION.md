@@ -518,58 +518,57 @@ If you ignore all the "normal" weeks and only look at the most extreme, chaotic 
 
 ### 6.1 Beta (vs SPY)
 
-**Simple explanation — The market amplifier:**
+**Simple explanation — The Market Amplifier:**
 Beta measures how much the stock amplifies or dampens market moves. If the S&P 500 drops 1%, how much does this stock drop?
 
-**Mathematical definition:**
-
-```
-β = Cov(r_stock, r_market) / Var(r_market)
-  = ρ × (σ_stock / σ_market)
-```
+![Beta Visualized](./plots/beta.png)
 
 **Beta color coding:**
-- Beta > 1.2 → 🔴 Red (high systematic risk — in a crash, expect outsized losses)
-- Beta 0.8–1.2 → 🟢 Green (market-proportional)
-- Beta < 0.8 → 🟡 Yellow (defensive; may underperform in bull markets)
+- **Beta > 1.2 (🔴 Red):** High market risk. The stock is a massive amplifier. In a crash, expect outsized, painful losses.
+- **Beta 0.8–1.2 (🟢 Green):** Market-proportional. The stock moves relatively in sync with the broader market.
+- **Beta < 0.8 (🟡 Yellow):** Defensive. A "shield" stock. It won't crash hard, but it will lag behind in huge bull markets.
 
-**RSU implication:** Beta = 3.0 means a 10% market crash → ~30% RSU stock crash. With a 4-year vesting cliff, one bad market cycle can wipe out years of expected comp.
+**RSU Implication:** If your company's Beta is 3.0, a 10% market crash means a 30% crash in your RSU value. With a 4-year vesting cliff, one bad market cycle can wipe out years of expected compensation.
 
 ---
 
 ### 6.2 Annual Alpha (Jensen's Alpha)
 
-**Simple explanation — The skill bonus:**
-If you hired a portfolio manager investing in 2× leveraged stocks (Beta=2) and markets rose 20%, you'd *expect* their portfolio up ~40%. If it went up 47%, the extra +7% is their **Alpha** — genuine skill, not just market risk.
+**Simple explanation — The Skill Bonus:**
+Alpha answers a very specific question: *"How much did this stock earn BEYOND what its risk level deserved?"*
 
-Alpha answers: *"How much did this stock earn BEYOND what its Beta-level risk deserved?"*
+![Alpha Visualized](./plots/alpha.png)
+
+If you hold a highly volatile tech stock (Beta = 2.0), and the market goes up 20%, you logically *expect* your stock to go up 40%. 
+If your stock actually goes up **47%**, that extra **+7%** is the **Alpha**. It is the genuine "bonus" return that came from the company actually doing great things (new products, great earnings), not just riding the coattails of a rising market.
 
 ---
 
 ### 6.3 R-Squared (R²)
 
-**Simple explanation — The market puppet string:**
-What percentage of this stock's weekly price moves are explained by the S&P 500? How much is it just a leveraged market proxy vs. having its own story?
+**Simple explanation — The Puppet Strings:**
+What percentage of this stock's weekly price moves are purely controlled by the S&P 500? Is it just a puppet dancing to the market's strings, or does it have a mind of its own?
+
+![R-Squared Visualized](./plots/r_squared.png)
 
 | R² | Meaning | RSU implication |
 |----|---------|-----------------|
-| > 0.8 | Highly market-driven | Essentially a leveraged index fund with extra vol |
-| 0.4–0.8 | Mixed drivers | Both macro and company factors matter |
-| < 0.4 | Company-specific dominant | Earnings, products, management drive price |
-| < 0.1 | Nearly market-independent | Alpha calculation is statistically uncertain |
+| **> 0.8** | The Puppet | Highly market-driven. Your RSUs act like a leveraged index fund. |
+| **0.4–0.8** | Mixed Drivers | Both macro-economics and company earnings matter. |
+| **< 0.4** | Independent | Company-specific news (earnings, products, scandals) completely dominates the price. |
 
 ---
 
 ### 6.4 Treynor Ratio
 
-**Simple explanation — Return per market risk unit:**
-Sharpe penalizes ALL volatility. But if you hold this stock inside a diversified portfolio, company-specific volatility gets diversified away. Only **Beta risk** (market risk) remains. Treynor rewards efficient use of that undiversifiable risk.
+**Simple explanation — Forgiving Company Volatility:**
+The Sharpe Ratio punishes a stock for *all* bounciness. But if you hold a highly diversified portfolio, the random company-specific bounciness cancels itself out. The only risk left is "Market Risk" (Beta). 
 
-**Mathematical definition:**
+The **Treynor Ratio** only punishes a stock for its Beta risk.
 
-```
-Treynor Ratio = (Annualized Return − Risk-Free Rate) / Beta
-```
+![Treynor Ratio Visualized](./plots/treynor.png)
+
+If a stock is incredibly bouncy but has a low Beta (meaning it doesn't crash when the market crashes), Treynor will rate it extremely highly, while Sharpe would unfairly penalize it.
 
 ---
 
@@ -594,24 +593,23 @@ When evaluating an RSU or a stock, you want to map it into one of four quadrants
 
 ### 6.6 Information Ratio (IR)
 
-**Simple explanation — The consistency champion:**
-Alpha says "did this stock beat the market?" IR says "how *consistently* did it beat the market?" You can be lucky once. IR penalizes inconsistency.
+**Simple explanation — The Consistency Champion:**
+Alpha tells you *if* a stock beat the market. The Information Ratio (IR) tells you *how consistently* it did it.
 
-**Mathematical definition:**
+![Information Ratio Visualized](./plots/information_ratio.png)
 
-```
-IR = Mean(weekly excess return) / StdDev(weekly excess return) × sqrt(52)
-
-where excess return = stock return − SPY return each week
-```
+A stock could beat the market by 20% in one massive, lucky week, and then do absolutely nothing for the rest of the year. It will have a great Alpha, but a terrible Information Ratio. IR rewards the slow, steady grinder that consistently beats the market week after week.
 
 ---
 
-### 6.7 Tracking Error & Correlation to SPY
+### 6.7 Tracking Error & Correlation
 
-**Tracking Error** = how far the stock wanders from the S&P 500 path. High tracking error implies high idiosyncratic risk.
+**Simple explanation — Wandering off the path:**
 
-**Correlation to SPY** = ρ = sign(β) × sqrt(R²), ranges from −1 to +1.
+![Tracking Error Visualized](./plots/tracking_error.png)
+
+- **Tracking Error:** Measures exactly how far the stock wanders away from the S&P 500 path. A high tracking error means the stock is doing its own wild thing (high idiosyncratic risk).
+- **Correlation to SPY:** A simple number from -1 to +1. A +1 means it perfectly mimics the market. A -1 means it does the exact opposite of the market.
 
 ---
 

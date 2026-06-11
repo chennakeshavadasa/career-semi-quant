@@ -1039,12 +1039,19 @@ function calcTailRatio(returns) {
 
 // ==== END ADVANCED QUANT ANALYTICS ====
 
-// Monte Carlo 6-Month Simulation (2000 Iterations)
+// Merton Jump Diffusion Monte Carlo 6-Month Simulation (2000 Iterations)
 function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
   if (!vol || vol === 0) return { median: cur, p10: cur, p90: cur };
   const finalPrices = new Float32Array(iterations);
   const weeklyVol = vol / Math.sqrt(52);
-  const driftAdj = drift - 0.5 * Math.pow(weeklyVol, 2);
+  
+  // Jump parameters (Tech/Semi average tail event estimation)
+  const jumpFreq = 1.2; // Expected jumps per year
+  const jumpMean = -0.04; // Average jump is negative 4%
+  const jumpVol = 0.08; // Volatility of jumps
+  
+  const weeklyJumpFreq = jumpFreq / 52;
+  const driftAdj = drift - 0.5 * Math.pow(weeklyVol, 2) - weeklyJumpFreq * (Math.exp(jumpMean + 0.5 * Math.pow(jumpVol,2)) - 1);
   
   for(let i=0; i<iterations; i++) {
     let p = cur;
@@ -1053,7 +1060,17 @@ function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
       while(u === 0) u = Math.random();
       while(v === 0) v = Math.random();
       const rand = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
-      p = p * Math.exp(driftAdj + weeklyVol * rand);
+      
+      let jump = 0;
+      if (Math.random() < weeklyJumpFreq) {
+         let u2 = 0, v2 = 0;
+         while(u2 === 0) u2 = Math.random();
+         while(v2 === 0) v2 = Math.random();
+         const randJump = Math.sqrt(-2.0 * Math.log(u2)) * Math.cos(2.0 * Math.PI * v2);
+         jump = jumpMean + jumpVol * randJump;
+      }
+      
+      p = p * Math.exp(driftAdj + weeklyVol * rand + jump);
     }
     finalPrices[i] = p;
   }
@@ -1358,6 +1375,20 @@ function cardHTML(co) {
       <div class="r-box"><span class="r-lbl" style="color:var(--cyan);">AutoCorr (1W)</span><span class="r-val" style="color:var(--cyan);">${d.autoCorr.toFixed(2)}</span></div>
       <div class="r-box"><span class="r-lbl" style="color:var(--orange);">Tail Ratio</span><span class="r-val" style="color:var(--orange);">${d.tailRatio.toFixed(2)}</span></div>
     </div>
+
+    ${d.t === 'SPY' ? '' : `
+    <div class="risk-grid" style="margin-top:-6px; background: rgba(57, 197, 207, 0.03); border-color: rgba(57, 197, 207, 0.15);">
+      <div class="r-box" style="grid-column: span 3; background: transparent; padding: 2px 8px; text-align: center; border-bottom: 1px solid rgba(57, 197, 207, 0.2);">
+        <span style="color:var(--cyan); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase;">S&P 500 Benchmarking</span>
+      </div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Beta vs SPY</span><span class="r-val ${d.beta>1.2?'r':d.beta<0.8?'y':'g'}">${d.beta.toFixed(2)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Ann. Alpha</span><span class="r-val ${d.alpha>0?'g':'r'}">${(d.alpha*100).toFixed(2)}%</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">R-Squared</span><span class="r-val" style="color:var(--cyan);">${d.r2.toFixed(2)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Treynor Ratio</span><span class="r-val ${d.treynor>0.05?'g':'r'}">${d.treynor.toFixed(3)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Up Capture</span><span class="r-val ${d.upCapture>100?'g':'y'}">${d.upCapture.toFixed(0)}%</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Down Capture</span><span class="r-val ${d.downCapture<100?'g':'r'}">${d.downCapture.toFixed(0)}%</span></div>
+    </div>
+    `}
 
     <div class="quant-grid">
       <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val ${scoreColor}">${d.score} / 100</span></div>

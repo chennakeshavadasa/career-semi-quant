@@ -143,21 +143,24 @@ Where `σ(20)` = standard deviation of the last 20 weekly closes.
 
 ### 2.3 MACD (Moving Average Convergence Divergence)
 
-**Simple explanation — The speedometer:**
-MACD doesn't measure *speed* — it measures *acceleration*. Is the stock gaining momentum or losing it? A car going 60 mph but slowing down will stop. A car at 30 mph but accelerating will eventually overtake.
+**Simple explanation — The Rubber Band and the Two Runners:**
 
-**Mathematical definition:**
+Imagine two runners tied together by a giant rubber band running on a track.
+1. **The Fast Runner (12-Week Average):** Represents the stock's most recent, energetic moves.
+2. **The Slow Runner (26-Week Average):** Represents the stock's older, slower trend.
 
-```
-EMA(n, t) = Price[t] × k + EMA[t-1] × (1-k)   where k = 2/(n+1)
+The **MACD Line** is simply the distance between these two runners (the stretch of the rubber band). When the Fast Runner sprints ahead, the distance grows. 
 
-MACD Line    = EMA(12) − EMA(26)     ← short-term minus long-term speed
-Signal Line  = EMA(9) of MACD Line   ← smoothed version of MACD
-Histogram    = MACD Line − Signal Line
-```
+But just knowing the distance isn't enough; we need to know if the Fast Runner is *speeding up* or *getting tired*. So we calculate one more thing:
+- **The Signal Line:** This is the *average* distance between the runners over the last 9 weeks. It acts as a baseline of what is "normal" momentum.
 
-- **Histogram > 0** → Short-term EMA overtaking long-term → **Bullish momentum** 🟢
-- **Histogram < 0** → Short-term falling behind → **Bearish momentum** 🔴
+Finally, we compare the current stretch (MACD Line) to the average stretch (Signal Line). This difference is drawn as the **MACD Histogram** (the colored bars you see at the bottom of the chart):
+
+- **Histogram > 0 (Bars going up) 🟢:** The Fast Runner is pulling away *faster* than average. Momentum is surging. This is a **Bullish** signal!
+- **Histogram < 0 (Bars going down) 🔴:** The Fast Runner is getting tired and falling back toward the Slow Runner. Momentum is fading. This is a **Bearish** signal!
+
+**Why it matters:**
+Stock prices can sometimes still be going up while the MACD Histogram starts going down. This is an early warning that the stock is "running out of gas" *before* the price actually falls!
 
 ---
 

@@ -197,6 +197,53 @@ In addition to the seven charts, the detail modal displays:
 
 ---
 
+## Advanced Factor & Volatility Analytics
+
+A second analytics layer extends the tear sheet with the volatility-modeling and factor-decomposition tools used on institutional quant desks. A **second benchmark, SOXX** (the PHLX/iShares Semiconductor index), is fetched alongside SPY so every stock can be decomposed against both the broad market *and* its own sector.
+
+### New Detail-Modal Charts
+
+| Chart | Description |
+|---|---|
+| **GARCH(1,1) Conditional Volatility + 12-Week Forecast** | A GARCH(1,1) model is fit by grid-search maximum likelihood over the return series. The chart plots the realized conditional volatility path, the forward 12-week variance forecast (which mean-reverts toward the long-run level at rate α+β), and the unconditional long-run σ. Volatility *persistence* (α+β near 1) indicates shocks decay slowly. |
+| **Growth of $1 — Stock vs SPY vs SOXX** | All three series are rebased to 1.0 at the start of the trailing year, showing relative wealth creation. Reveals whether a stock is leading or lagging both the market and the semiconductor sector. |
+| **Normal Q–Q Plot** | Standardized empirical return quantiles plotted against theoretical normal quantiles. Points bending below the reference line in the left tail and above it in the right tail are the signature of fat tails — quantifying the tail risk that a single volatility number hides. |
+| **Monthly Return Seasonality** | A 12-cell heatmap of average weekly return bucketed by calendar month, color-graded green/red by sign and intensity. Surfaces recurring seasonal patterns in the price series. |
+
+### New Metrics
+
+| Metric | Description |
+|---|---|
+| **CAGR (1Y)** | Compound annual growth rate over the displayed window. |
+| **EWMA Volatility (λ=0.94)** | Exponentially-weighted volatility per the JP Morgan RiskMetrics methodology — weights recent observations more heavily than equal-weight historical vol. |
+| **GARCH Vol (now)** | Current one-step-ahead conditional volatility from the fitted GARCH(1,1) model. |
+| **GARCH Persistence** | α+β. Values near 1.0 mean volatility shocks are highly persistent; flagged when above 0.95. |
+| **Probabilistic Sharpe Ratio** | The probability (per López de Prado) that the *true* Sharpe ratio exceeds zero, correcting the point estimate for skewness, kurtosis, and sample length. A high raw Sharpe on short, fat-tailed data can still have a low PSR. |
+| **Parametric VaR (95% / 99%)** | Variance-covariance (Gaussian) Value at Risk, complementing the historical and Cornish-Fisher VaR already computed. |
+| **Sector β (SOXX)** | Single-factor beta against the semiconductor sector index. |
+| **Pure Market β / Pure Sector β** | Coefficients from a two-factor OLS regression on SPY and SOXX jointly — isolating broad-market exposure from incremental sector exposure. |
+| **Idiosyncratic Volatility** | Annualized standard deviation of the two-factor regression residual — the stock-specific risk not explained by market or sector factors. |
+| **2-Factor R²** | Share of return variance explained jointly by the market and sector factors. |
+| **Bull Beta / Bear Beta** | Asymmetric beta estimated separately on up-market and down-market weeks. A bear beta materially above the bull beta indicates the stock participates more in market declines than in rallies. |
+| **β Asymmetry** | Bear β minus Bull β — a single measure of downside-capture skew. |
+
+---
+
+## Portfolio Optimizer — Markowitz Efficient Frontier
+
+A universe-level tool (**⚖ OPTIMIZER**) that runs mean–variance optimization across the loaded tickers entirely in the browser. It samples **12,000 random long-only portfolios** on the return/risk simplex (Dirichlet sampling via exponential variates), annualizes returns and the covariance matrix from weekly data, and plots the resulting efficient-frontier cloud. Four reference portfolios are computed and highlighted on the frontier with full weight breakdowns:
+
+| Portfolio | Definition |
+|---|---|
+| **Max Sharpe (Tangency)** | Highest risk-adjusted return — the tangency portfolio against the 4.5% risk-free rate. |
+| **Min Variance** | Lowest achievable portfolio volatility. |
+| **Risk Parity (Inverse-Vol)** | Weights proportional to inverse asset volatility, equalizing each asset's standalone risk contribution. |
+| **Equal Weight (1/N)** | The naïve diversification benchmark. |
+
+The optimization universe can be filtered to the full set, Tier-A only, or specific sectors (Analog, SerDes, AI/GPU, Equipment). Individual assets are overlaid as points so you can see which names sit on or inside the frontier. As with every other module, this is research tooling only — historical covariance is not a forecast of future co-movement.
+
+---
+
 ## Covered Companies
 
 All companies in the dashboard are publicly traded. The private/pre-IPO section present in earlier versions has been removed.
@@ -269,7 +316,7 @@ This tool is for educational and informational purposes only. It is not financia
 | **Application structure** | Single `index.html` file — zero build step, zero dependencies to install |
 | **Styling** | Vanilla CSS with CSS custom properties, glassmorphism, and a fully dark theme |
 | **Typography** | [Outfit](https://fonts.google.com/specimen/Outfit) for UI text; [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono) for all numeric data |
-| **Quantitative math engine** | Pure JavaScript — RSI, Stochastic, MACD, Bollinger Bands, Sharpe, Sortino, VaR, CVaR, Max Drawdown, Beta, Alpha, R-Squared, Treynor, Information Ratio, Kelly Criterion, Fibonacci, GBM Monte Carlo |
+| **Quantitative math engine** | Pure JavaScript — RSI, Stochastic, MACD, Bollinger Bands, Sharpe, Sortino, Calmar, VaR, CVaR, Parametric & Cornish-Fisher VaR, Max Drawdown, Beta, Alpha, R-Squared, Treynor, Information Ratio, Kelly Criterion, Fibonacci, GBM Monte Carlo, EWMA & GARCH(1,1) volatility, Probabilistic Sharpe, two-factor (SPY+SOXX) regression, asymmetric beta, Markowitz frontier optimization |
 | **Dashboard sparklines** | Inline SVG with gradient fills and area charts |
 | **Detail modal charts** | [Chart.js](https://www.chartjs.org/) — 7 interactive canvas-based plots with custom tooltips |
 | **Data sources** | Yahoo Finance (via CORS proxies) with optional Polygon.io, Alpha Vantage, and Finnhub as fallback levels |

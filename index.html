@@ -131,11 +131,32 @@ body {
   font-family: var(--sans);
   min-height: 100vh;
   transition: background 0.35s, color 0.35s;
+  position: relative;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 0%, var(--bg-r1) 0%, transparent 38%),
+    radial-gradient(circle at 0% 60%, var(--bg-r2) 0%, transparent 42%),
+    radial-gradient(circle at 100% 40%, var(--bg-r1) 0%, transparent 42%);
+  opacity: 0.9;
+  animation: ambientDrift 26s ease-in-out infinite alternate;
+}
+@keyframes ambientDrift {
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(2%, -1.5%, 0) scale(1.06); }
+  100% { transform: translate3d(-2%, 1.5%, 0) scale(1.03); }
 }
 
-::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.13); border-radius: 4px; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(var(--border-hover), var(--accent));
+  border-radius: 6px; border: 2px solid transparent; background-clip: padding-box;
+  opacity: 0.5;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--accent); background-clip: padding-box; }
+* { scrollbar-width: thin; scrollbar-color: var(--border-hover) transparent; }
 
 .container { max-width: 1680px; margin: 0 auto; padding: 0 24px 48px; }
 
@@ -495,6 +516,45 @@ body {
   border-radius: 6px;
   padding: 6px 8px;
 }
+
+/* ============================================================
+   AESTHETIC POLISH (added)
+   ============================================================ */
+.sec-divider {
+  display: flex; align-items: center; gap: 12px;
+  margin: 22px 0 6px; flex-shrink: 0;
+}
+.sec-divider::before { content: ""; width: 3px; height: 14px; border-radius: 3px;
+  background: linear-gradient(var(--accent), var(--purple)); box-shadow: 0 0 10px var(--border-hover); }
+.sec-divider span {
+  font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--text-main);
+}
+.sec-divider::after { content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--border) 0%, transparent 100%); }
+
+.h-title { position: relative; }
+.h-title::after {
+  content: ""; position: absolute; left: 0; bottom: -5px; height: 2px; width: 46px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--purple), transparent);
+  box-shadow: 0 0 12px var(--border-hover);
+}
+
+.q-box {
+  border-radius: 8px;
+  border-left: 2px solid transparent;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+}
+.q-box:hover { border-left-color: var(--accent); transform: translateY(-1px); }
+
+.card { transition: transform 0.22s cubic-bezier(.2,.7,.3,1), box-shadow 0.22s, border-color 0.22s; }
+.card:hover { transform: translateY(-4px); }
+
+.btn { transition: all 0.16s ease; }
+.btn:hover { transform: translateY(-1px); }
+
+.stat { transition: transform 0.18s; }
+.stat:hover { transform: translateY(-2px); }
 </style>
 </head>
 <body>
@@ -503,7 +563,7 @@ body {
   <header>
     <div>
       <div class="h-title">Career Semi Quant Terminal</div>
-      <div class="h-sub">RSI · MACD · Bollinger Bands · Sortino · VaR/CVaR · Beta/Alpha · Calmar · Monte Carlo GBM · Kelly Criterion</div>
+      <div class="h-sub">RSI · MACD · Bollinger · Sortino · VaR/CVaR · Beta/Alpha · GARCH · 2-Factor (SPY+SOXX) · Prob. Sharpe · Monte Carlo · Kelly · Efficient Frontier</div>
       <div class="h-ts" id="ts-line">Data freshness: loading...</div>
     </div>
     <div class="controls">
@@ -512,6 +572,7 @@ body {
       <button class="btn" onclick="toggleSettings()" style="border-color:var(--accent);color:var(--accent);">⚙ API KEYS</button>
       <button class="btn" onclick="toggleRiskMap()" style="border-color:var(--cyan);color:var(--cyan);">📊 RISK MAP</button>
       <button class="btn" onclick="toggleCorrelation()" style="border-color:var(--purple);color:var(--purple);">📉 CORRELATION</button>
+      <button class="btn" onclick="togglePortfolio()" style="border-color:var(--green-bright,var(--green));color:var(--green-bright,var(--green));">⚖ OPTIMIZER</button>
       <div class="theme-switcher" title="Switch theme">
         <div class="theme-dot active" data-theme="midnight" onclick="setTheme('midnight')" title="Midnight"></div>
         <div class="theme-dot" data-theme="obsidian" onclick="setTheme('obsidian')" title="Obsidian"></div>
@@ -639,8 +700,42 @@ body {
           </div>
         </div>
       </div>
-      
-      <div class="quant-grid" id="det-grid" style="margin-top:20px; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:12px;"></div>
+
+      <div class="sec-divider"><span>Advanced Factor &amp; Volatility Analytics</span></div>
+
+      <div style="display:flex; gap:12px; margin-top:4px;">
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">GARCH(1,1) Conditional Volatility &amp; 12-Wk Forecast</h3>
+          <div style="height:170px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-garch-chart"></canvas>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Growth of $1 — Stock vs S&amp;P 500 vs Semis (SOXX)</h3>
+          <div style="height:170px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-rel-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Normal Q–Q Plot (Fat-Tail Diagnostic)</h3>
+          <div style="height:200px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-qq-chart"></canvas>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Monthly Return Seasonality (Avg Weekly Return)</h3>
+          <div style="height:200px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px; overflow:hidden;">
+            <div id="det-season-grid" style="display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(3,1fr); gap:6px; height:100%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-divider"><span>Quant Metrics</span></div>
+
+      <div class="quant-grid" id="det-grid" style="margin-top:4px; grid-template-columns: repeat(5, 1fr); gap:8px; margin-bottom:12px;"></div>
     </div>
   </div>
 </div>
@@ -685,6 +780,33 @@ body {
     </div>
     <div class="modal-actions" style="margin-top: 15px;">
       <button class="btn" onclick="toggleCorrelation()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Portfolio Optimizer Modal -->
+<div class="modal-bg" id="portfolio-modal">
+  <div class="modal-box" style="width: 1180px; max-width: 96vw; height: 92vh; display: flex; flex-direction: column; padding:24px;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-shrink:0;">
+      <div>
+        <h3 style="margin-bottom:4px;">Markowitz Portfolio Optimizer · Efficient Frontier</h3>
+        <p style="margin-bottom:0;">Mean–variance optimization over the loaded universe. 12,000 random long-only portfolios are simulated on the return/risk simplex; the Max-Sharpe (tangency), Min-Variance, Risk-Parity (inverse-vol) and Equal-Weight portfolios are highlighted. Annualized from weekly log-returns, risk-free 4.5%.</p>
+      </div>
+      <button class="btn" onclick="togglePortfolio()">✕ CLOSE</button>
+    </div>
+    <div style="display:flex; gap:8px; margin:12px 0 6px; flex-wrap:wrap; flex-shrink:0;" id="pf-filterbar">
+      <button class="btn on" id="pf-f-all" onclick="setPfUniverse('all')">FULL UNIVERSE</button>
+      <button class="btn" id="pf-f-a" onclick="setPfUniverse('a')">TIER-A ONLY</button>
+      <button class="btn" id="pf-f-analog" onclick="setPfUniverse('Analog')">ANALOG</button>
+      <button class="btn" id="pf-f-serdes" onclick="setPfUniverse('SerDes')">SERDES</button>
+      <button class="btn" id="pf-f-ai" onclick="setPfUniverse('AI')">AI/GPU</button>
+      <button class="btn" id="pf-f-equip" onclick="setPfUniverse('Equipment')">EQUIPMENT</button>
+    </div>
+    <div style="flex:1; display:flex; gap:16px; min-height:0;">
+      <div style="flex:1.35; min-width:0; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:12px;">
+        <canvas id="pf-frontier-canvas"></canvas>
+      </div>
+      <div style="flex:1; min-width:0; overflow-y:auto;" id="pf-results"></div>
     </div>
   </div>
 </div>
@@ -768,6 +890,7 @@ function setTheme(name) {
 
 let D = {}, activeFilter = 'all', searchQ = '', sortKey = '';
 let SPY_CLOSES = [];
+let SOXX_CLOSES = [];   // sector benchmark (PHLX Semiconductor) for factor decomposition
 const PUB = COS.filter(c => c.pub);
 
 // ============================
@@ -1182,6 +1305,100 @@ function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
   };
 }
 
+// ============================================================
+//  ADVANCED FACTOR / VOL / TAIL ANALYTICS  (added module)
+// ============================================================
+function _rets(a){const r=[];for(let i=1;i<a.length;i++)r.push((a[i]-a[i-1])/a[i-1]);return r;}
+function _erf(x){const t=1/(1+0.3275911*Math.abs(x));const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return x>=0?y:-y;}
+function normCDF(x){return 0.5*(1+_erf(x/Math.SQRT2));}
+function normInv(p){
+  if(p<=0)return -6; if(p>=1)return 6;
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pl=0.02425,ph=1-pl;let q,r;
+  if(p<pl){q=Math.sqrt(-2*Math.log(p));return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  if(p<=ph){q=p-0.5;r=q*q;return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  q=Math.sqrt(-2*Math.log(1-p));return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+
+// EWMA volatility — JP Morgan RiskMetrics (lambda = 0.94), annualized %
+function calcEWMAVol(prices,lambda=0.94){const r=_rets(prices);if(!r.length)return 0;let v=r.slice(0,Math.min(10,r.length)).reduce((a,b)=>a+b*b,0)/Math.min(10,r.length);for(const x of r)v=lambda*v+(1-lambda)*x*x;return Math.sqrt(v)*Math.sqrt(52)*100;}
+
+// GARCH(1,1) conditional volatility — grid-MLE fit, returns series + multi-step forecast
+function calcGARCH(prices,fw=12){
+  const r=_rets(prices),n=r.length;
+  if(n<20)return{condVol:[],forecast:[],current:0,longRun:0,alpha:0,beta:0,persistence:0};
+  const mean=r.reduce((a,b)=>a+b,0)/n;
+  const uv=r.reduce((a,b)=>a+(b-mean)*(b-mean),0)/n;
+  let best=-Infinity,bA=0.1,bB=0.85;
+  for(const a of [0.05,0.08,0.1,0.12,0.15,0.18])for(const b of [0.75,0.8,0.85,0.88,0.9]){
+    if(a+b>=0.999)continue;const om=uv*(1-a-b);let vt=uv,ll=0,ok=true;
+    for(let i=0;i<n;i++){if(vt<=0){ok=false;break;}const e2=(r[i]-mean)**2;ll+=-0.5*(Math.log(2*Math.PI)+Math.log(vt)+e2/vt);vt=om+a*e2+b*vt;}
+    if(ok&&ll>best){best=ll;bA=a;bB=b;}
+  }
+  const alpha=bA,beta=bB,om=uv*(1-alpha-beta);
+  const condVol=[];let vt=uv;
+  for(let i=0;i<n;i++){condVol.push(Math.sqrt(vt)*Math.sqrt(52)*100);vt=om+alpha*(r[i]-mean)**2+beta*vt;}
+  const forecast=[];let f=vt;for(let h=0;h<fw;h++){forecast.push(Math.sqrt(f)*Math.sqrt(52)*100);f=om+(alpha+beta)*f;}
+  return{condVol,forecast,current:Math.sqrt(vt)*Math.sqrt(52)*100,longRun:Math.sqrt(uv)*Math.sqrt(52)*100,alpha,beta,persistence:alpha+beta};
+}
+
+// Probabilistic Sharpe Ratio (Lopez de Prado) — P(true SR > benchmark) adjusting for skew/kurtosis & sample length
+function calcPSR(returns,benchSR=0){
+  const n=returns.length;if(n<10)return 0.5;
+  const mean=returns.reduce((a,b)=>a+b,0)/n;
+  const sd=Math.sqrt(returns.reduce((a,b)=>a+(b-mean)**2,0)/n);if(sd===0)return 0.5;
+  const sk=returns.reduce((a,b)=>a+((b-mean)/sd)**3,0)/n;
+  const ku=returns.reduce((a,b)=>a+((b-mean)/sd)**4,0)/n;
+  const sr=mean/sd;
+  const denom=Math.sqrt(Math.max(1e-9,1-sk*sr+((ku-1)/4)*sr*sr));
+  return normCDF((sr-benchSR)*Math.sqrt(n-1)/denom);
+}
+
+// Parametric (variance-covariance / Gaussian) VaR, weekly loss %
+function calcParametricVaR(returns,conf=0.95){
+  const n=returns.length;const mean=returns.reduce((a,b)=>a+b,0)/n;
+  const sd=Math.sqrt(returns.reduce((a,b)=>a+(b-mean)**2,0)/n);
+  const z=conf===0.99?2.326:conf===0.95?1.645:1.282;
+  return Math.abs(mean-z*sd)*100;
+}
+
+// Two-factor model: market (SPY) + sector (SOXX) OLS — pure betas, idiosyncratic vol, factor R²
+function calcTwoFactor(prices,spy,sox){
+  if(!spy||!sox||spy.length<30||sox.length<30)return{betaMkt:1,betaSec:0,alpha:0,idioVol:0,r2:0,betaSoxxRaw:1};
+  const len=Math.min(prices.length,spy.length,sox.length);
+  if(len<30)return{betaMkt:1,betaSec:0,alpha:0,idioVol:0,r2:0,betaSoxxRaw:1};
+  const p=_rets(prices.slice(-len)),m=_rets(spy.slice(-len)),s=_rets(sox.slice(-len));
+  const N=p.length;
+  const pm=p.reduce((a,b)=>a+b,0)/N,mm=m.reduce((a,b)=>a+b,0)/N,sm=s.reduce((a,b)=>a+b,0)/N;
+  let Sxx1=0,Sxx2=0,Sx1x2=0,Sx1y=0,Sx2y=0,Syy=0;
+  for(let i=0;i<N;i++){const x1=m[i]-mm,x2=s[i]-sm,y=p[i]-pm;Sxx1+=x1*x1;Sxx2+=x2*x2;Sx1x2+=x1*x2;Sx1y+=x1*y;Sx2y+=x2*y;Syy+=y*y;}
+  const det=Sxx1*Sxx2-Sx1x2*Sx1x2;
+  let b1,b2;if(Math.abs(det)<1e-14){b1=Sx1y/(Sxx1||1);b2=0;}else{b1=(Sxx2*Sx1y-Sx1x2*Sx2y)/det;b2=(Sxx1*Sx2y-Sx1x2*Sx1y)/det;}
+  let ssr=0;for(let i=0;i<N;i++){const pred=b1*(m[i]-mm)+b2*(s[i]-sm);ssr+=(p[i]-pm-pred)**2;}
+  const r2=Syy===0?0:Math.max(0,1-ssr/Syy);
+  const idioVol=Math.sqrt(ssr/N)*Math.sqrt(52)*100;
+  const rf=0.045/52;const alpha=(pm-(rf+b1*(mm-rf)+b2*(sm-mm)))*52;
+  let cov=0,vs=0;for(let i=0;i<N;i++){cov+=(p[i]-pm)*(s[i]-sm);vs+=(s[i]-sm)**2;}
+  const betaSoxxRaw=vs===0?1:cov/vs;
+  return{betaMkt:b1,betaSec:b2,alpha,idioVol,r2,betaSoxxRaw};
+}
+
+// Asymmetric (bull / bear) beta — sensitivity in up vs down market weeks
+function calcAsymBeta(prices,bench){
+  if(!bench||bench.length<30)return{bull:1,bear:1};
+  const len=Math.min(prices.length,bench.length);if(len<30)return{bull:1,bear:1};
+  const p=_rets(prices.slice(-len)),b=_rets(bench.slice(-len));
+  const sub=idx=>{if(idx.length<5)return 1;const bm=idx.reduce((a,i)=>a+b[i],0)/idx.length,pm=idx.reduce((a,i)=>a+p[i],0)/idx.length;let cov=0,vb=0;idx.forEach(i=>{cov+=(p[i]-pm)*(b[i]-bm);vb+=(b[i]-bm)**2;});return vb===0?1:cov/vb;};
+  const up=[],dn=[];for(let i=0;i<b.length;i++)(b[i]>=0?up:dn).push(i);
+  return{bull:sub(up),bear:sub(dn)};
+}
+
+// Compound annual growth rate over the window, %
+function calcCAGR(prices){const yrs=(prices.length-1)/52;if(yrs<=0)return 0;return (Math.pow(prices[prices.length-1]/prices[0],1/yrs)-1)*100;}
+
 function calcFearGreed(rsi, stoch, vol) {
   const volScore = Math.max(0, Math.min(100, 100 - (vol * 100 - 15) * 1.5));
   const fg = (rsi + stoch + volScore) / 3;
@@ -1336,6 +1553,17 @@ async function fetchOne(ticker, isBench = false) {
   const serenity    = calcSerenityRatio(closes);
   const varFull     = calcVaRFull(returns);
 
+  // --- Advanced factor / vol / tail analytics (added) ---
+  const ewmaVol     = calcEWMAVol(closes);
+  const garch       = calcGARCH(closes, 12);
+  const psr         = calcPSR(returns);
+  const paramVaR95  = calcParametricVaR(returns, 0.95);
+  const paramVaR99  = calcParametricVaR(returns, 0.99);
+  const twoFactor   = isBench ? {betaMkt:1,betaSec:0,alpha:0,idioVol:0,r2:1,betaSoxxRaw:1} : calcTwoFactor(closes, SPY_CLOSES, SOXX_CLOSES);
+  const asymBeta    = isBench ? {bull:1,bear:1} : calcAsymBeta(closes, SPY_CLOSES);
+  const cagr        = calcCAGR(closes);
+  const sharpeAnn   = sharpe;
+
   // Momentum State (based strictly on price action — NOT fundamental valuation)
   let momentum = 'NEUTRAL', momCls = 'b';
   if      (cur < bb.lower || (cur < bb.sma && rsi < 30)) { momentum = 'OVERSOLD';   momCls = 'g'; }
@@ -1363,7 +1591,8 @@ async function fetchOne(ticker, isBench = false) {
     macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, trackingError, kellyObj,
     calmar, atrPct, priceZ, upCapture, downCapture,
     momentsJB, cfVaR, hurst, autoCorr, omega, ulcer, tailRatio,
-    gainToPain, painIndex, recoveryF, momFactor, volRegime, ddDuration, serenity, varFull
+    gainToPain, painIndex, recoveryF, momFactor, volRegime, ddDuration, serenity, varFull,
+    ewmaVol, garch, psr, paramVaR95, paramVaR99, twoFactor, asymBeta, cagr, sharpeAnn
   };
 }
 
@@ -1534,7 +1763,7 @@ function cardHTML(co) {
 // ============================
 // DETAIL MODAL & CHART
 // ============================
-let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null, chartInst6 = null, chartInst7 = null, chartInst8 = null, chartInst9 = null;
+let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null, chartInst6 = null, chartInst7 = null, chartInst8 = null, chartInst9 = null, chartInst10 = null, chartInst11 = null, chartInst12 = null;
 function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
 function openDetail(ticker, name) {
   const d = D[ticker];
@@ -1552,6 +1781,9 @@ function openDetail(ticker, name) {
   if (chartInst7) chartInst7.destroy();
   if (chartInst8) chartInst8.destroy();
   if (chartInst9) chartInst9.destroy();
+  if (chartInst10) chartInst10.destroy();
+  if (chartInst11) chartInst11.destroy();
+  if (chartInst12) chartInst12.destroy();
 
   const dates = [], sma40 = [], bbUp = [], bbDn = [], ddData = [], wRets = [];
   let peak = d.prices[0];
@@ -1809,6 +2041,100 @@ function openDetail(ticker, name) {
     }
   });
 
+  // ---- Chart 10: GARCH(1,1) conditional volatility + forward forecast ----
+  const garch = d.garch || {condVol:[], forecast:[], longRun:0};
+  const gCond = garch.condVol.slice(-52);
+  const gLabels = [];
+  for (let i = 0; i < gCond.length; i++) gLabels.push('');
+  const fLabels = garch.forecast.map((_,i)=>'+' + (i+1));
+  const allGLabels = gLabels.concat(fLabels);
+  // pad forecast so it begins where history ends
+  const histPad = gCond.concat(garch.forecast.map(()=>null));
+  const fcastPad = gCond.map(()=>null);
+  if (gCond.length) fcastPad[gCond.length-1] = gCond[gCond.length-1];
+  garch.forecast.forEach(v=>fcastPad.push(v));
+  const lrLine = allGLabels.map(()=>garch.longRun);
+  chartInst10 = new Chart(document.getElementById('det-garch-chart').getContext('2d'), {
+    type: 'line',
+    data: { labels: allGLabels, datasets: [
+      { label: 'Conditional Vol', data: histPad, borderColor: '#e3b341', backgroundColor:'rgba(227,179,65,0.10)', borderWidth: 1.6, pointRadius: 0, fill: true, tension: 0.25 },
+      { label: 'Forecast', data: fcastPad, borderColor: '#bc8cff', borderWidth: 1.8, borderDash:[5,3], pointRadius: 0, fill: false, tension: 0.25 },
+      { label: 'Long-Run σ', data: lrLine, borderColor: 'rgba(255,255,255,0.25)', borderWidth: 1, borderDash:[2,3], pointRadius: 0, fill: false }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false, interaction:{mode:'index',intersect:false},
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.dataset.label+': '+(c.parsed.y==null?'—':c.parsed.y.toFixed(1)+'%')} } },
+      scales: { x: { grid:{display:false}, ticks:{maxTicksLimit:8, font:{size:8}} }, y: { position:'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
+    }
+  });
+
+  // ---- Chart 11: Growth of $1 — Stock vs SPY vs SOXX (rebased relative performance) ----
+  const rebase = (series, n) => { const s = series.slice(-n); if(!s.length) return []; const b = s[0]; return s.map(v => v / b); };
+  const relN = 52;
+  const stockGrowth = rebase(d.prices, relN);
+  const spyGrowth = (SPY_CLOSES && SPY_CLOSES.length) ? rebase(SPY_CLOSES, relN) : [];
+  const soxGrowth = (SOXX_CLOSES && SOXX_CLOSES.length) ? rebase(SOXX_CLOSES, relN) : [];
+  const relLabels = d_dates;
+  const relDatasets = [{ label: ticker, data: stockGrowth, borderColor: '#58a6ff', borderWidth: 2, pointRadius: 0, fill: false, tension: 0.1 }];
+  if (spyGrowth.length) relDatasets.push({ label: 'SPY', data: spyGrowth, borderColor: '#8b949e', borderWidth: 1.4, pointRadius: 0, fill: false, tension: 0.1 });
+  if (soxGrowth.length) relDatasets.push({ label: 'SOXX', data: soxGrowth, borderColor: '#39c5cf', borderWidth: 1.4, borderDash:[4,3], pointRadius: 0, fill: false, tension: 0.1 });
+  chartInst11 = new Chart(document.getElementById('det-rel-chart').getContext('2d'), {
+    type: 'line', data: { labels: relLabels, datasets: relDatasets },
+    options: { responsive: true, maintainAspectRatio: false, interaction:{mode:'index',intersect:false},
+      plugins: { legend: { display: true, labels:{boxWidth:8, font:{size:9}, color:'#a0aab4'} }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.dataset.label+': '+(((c.parsed.y-1)*100).toFixed(1))+'%'} } },
+      scales: { x: { display:false }, y: { position:'right', grid: { color: 'rgba(255,255,255,0.05)' }, ticks:{callback:(v)=>v.toFixed(2)+'x'} } }
+    }
+  });
+
+  // ---- Chart 12: Normal Q–Q plot of weekly returns ----
+  const qret = wRets.map(r=>r/100).slice().sort((a,b)=>a-b);
+  const qn = qret.length;
+  const qMean = qret.reduce((a,b)=>a+b,0)/qn;
+  const qSd = Math.sqrt(qret.reduce((a,b)=>a+(b-qMean)**2,0)/qn) || 1;
+  const qqPts = [];
+  for (let i=0;i<qn;i++){ const p=(i+0.5)/qn; const theo=normInv(p); const emp=(qret[i]-qMean)/qSd; qqPts.push({x:theo,y:emp}); }
+  const qLo = Math.min(qqPts[0].x, qqPts[0].y), qHi = Math.max(qqPts[qn-1].x, qqPts[qn-1].y);
+  chartInst12 = new Chart(document.getElementById('det-qq-chart').getContext('2d'), {
+    type: 'scatter',
+    data: { datasets: [
+      { label:'Sample Quantiles', data: qqPts, backgroundColor:'#bc8cff', pointRadius:2.5, pointHoverRadius:4 },
+      { label:'Normal Reference', type:'line', data:[{x:qLo,y:qLo},{x:qHi,y:qHi}], borderColor:'rgba(255,255,255,0.4)', borderWidth:1.2, borderDash:[5,4], pointRadius:0, fill:false }
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>'theo '+c.parsed.x.toFixed(2)+' / emp '+c.parsed.y.toFixed(2)} } },
+      scales:{ x:{ title:{display:true,text:'Theoretical (Normal)',color:'#6e7681',font:{size:9}}, grid:{color:'rgba(255,255,255,0.05)'} }, y:{ position:'right', title:{display:true,text:'Empirical',color:'#6e7681',font:{size:9}}, grid:{color:'rgba(255,255,255,0.05)'} } }
+    }
+  });
+
+  // ---- Monthly return seasonality grid ----
+  (function(){
+    const monthSum = Array(12).fill(0), monthCnt = Array(12).fill(0);
+    const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    for (let i=1;i<d.prices.length;i++){
+      const dt = new Date(nowMs - (d.prices.length-1-i)*oneWeek);
+      const m = dt.getMonth();
+      monthSum[m] += ((d.prices[i]-d.prices[i-1])/d.prices[i-1])*100;
+      monthCnt[m]++;
+    }
+    const avgs = monthSum.map((s,i)=> monthCnt[i] ? s/monthCnt[i] : null);
+    const valid = avgs.filter(v=>v!=null);
+    const maxAbs = Math.max(0.5, ...valid.map(v=>Math.abs(v)));
+    let html='';
+    for (let i=0;i<12;i++){
+      const v = avgs[i];
+      let bg='rgba(255,255,255,0.03)', col='var(--text-dim)', txt='—';
+      if (v!=null){
+        const inten = Math.min(1, Math.abs(v)/maxAbs);
+        if (v>=0){ bg=`rgba(46,160,67,${0.12+inten*0.5})`; col='#7ee787'; }
+        else { bg=`rgba(248,81,73,${0.12+inten*0.5})`; col='#ffa198'; }
+        txt = (v>=0?'+':'')+v.toFixed(2)+'%';
+      }
+      html += `<div style="background:${bg};border:1px solid var(--border);border-radius:7px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px;">
+        <span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">${mNames[i]}</span>
+        <span style="font-family:var(--mono);font-size:12px;font-weight:800;color:${col};">${txt}</span></div>`;
+    }
+    document.getElementById('det-season-grid').innerHTML = html;
+  })();
+
   document.getElementById('det-grid').innerHTML = `
     <div class="q-box"><span class="q-lbl">Treynor Ratio</span><span class="q-val ${d.treynor>0?'g':'r'}">${d.treynor.toFixed(3)}</span></div>
     <div class="q-box"><span class="q-lbl">Info Ratio</span><span class="q-val ${d.infoRatio>0.5?'g':d.infoRatio<0?'r':''}">${d.infoRatio.toFixed(3)}</span></div>
@@ -1839,6 +2165,24 @@ function openDetail(ticker, name) {
     <div class="q-box"><span class="q-lbl">VaR 90% (Hist.)</span><span class="q-val r">-${varFull.p90.toFixed(2)}%</span></div>
     <div class="q-box"><span class="q-lbl">VaR 99% (Hist.)</span><span class="q-val r">-${varFull.p99.toFixed(2)}%</span></div>
     <div class="q-box"><span class="q-lbl">Downside Capture</span><span class="q-val ${d.downCapture<100?'g':'r'}">${d.downCapture.toFixed(1)}%</span></div>
+
+    <div class="q-box"><span class="q-lbl">CAGR (1Y)</span><span class="q-val ${d.cagr>0?'g':'r'}">${d.cagr.toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">EWMA Vol (λ=.94)</span><span class="q-val y">${d.ewmaVol.toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">GARCH Vol (now)</span><span class="q-val y">${d.garch.current.toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">GARCH Persist.</span><span class="q-val ${d.garch.persistence>0.95?'r':''}">${d.garch.persistence.toFixed(3)}</span></div>
+    <div class="q-box"><span class="q-lbl">Prob. Sharpe</span><span class="q-val ${d.psr>0.95?'g':d.psr<0.5?'r':'y'}">${(d.psr*100).toFixed(1)}%</span></div>
+
+    <div class="q-box"><span class="q-lbl">Param VaR 95%</span><span class="q-val r">-${d.paramVaR95.toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Param VaR 99%</span><span class="q-val r">-${d.paramVaR99.toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Sector β (SOXX)</span><span class="q-val">${d.twoFactor.betaSoxxRaw.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Pure Market β</span><span class="q-val">${d.twoFactor.betaMkt.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Pure Sector β</span><span class="q-val">${d.twoFactor.betaSec.toFixed(2)}</span></div>
+
+    <div class="q-box"><span class="q-lbl">Idiosyncratic Vol</span><span class="q-val ${d.twoFactor.idioVol>30?'r':'y'}">${d.twoFactor.idioVol.toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">2-Factor R²</span><span class="q-val">${(d.twoFactor.r2*100).toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Bull Beta (up)</span><span class="q-val g">${d.asymBeta.bull.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Bear Beta (down)</span><span class="q-val ${d.asymBeta.bear>d.asymBeta.bull?'r':'g'}">${d.asymBeta.bear.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">β Asymmetry</span><span class="q-val ${(d.asymBeta.bear-d.asymBeta.bull)>0.3?'r':''}">${(d.asymBeta.bear-d.asymBeta.bull).toFixed(2)}</span></div>
   `;
   
   document.getElementById('detail-modal').style.display = 'flex';
@@ -1890,6 +2234,12 @@ async function loadAll() {
   try {
     const s = await fetchOne('SPY', true);
     if (s.ok) SPY_CLOSES = s.prices;
+  } catch(e) {}
+
+  setPill('loading', 'FETCHING SOXX SECTOR FACTOR...');
+  try {
+    const sx = await fetchOne('SOXX', true);
+    if (sx.ok) SOXX_CLOSES = sx.prices;
   } catch(e) {}
   
   setPill('loading', 'EXECUTING QUANT MODELS...');
@@ -2155,6 +2505,143 @@ function renderCorrelation() {
       ctx.fillText(v.toFixed(2), x + cellSize/2, y + cellSize/2);
     }
   }
+}
+
+// ============================
+// PORTFOLIO OPTIMIZER (Markowitz Efficient Frontier)
+// ============================
+let pfChartInst = null;
+let pfUniverse = 'all';
+
+function togglePortfolio() {
+  const m = document.getElementById('portfolio-modal');
+  if (m.style.display === 'flex') { m.style.display = 'none'; }
+  else { m.style.display = 'flex'; renderPortfolio(); }
+}
+
+function setPfUniverse(u) {
+  pfUniverse = u;
+  document.querySelectorAll('#pf-filterbar .btn').forEach(b => b.classList.remove('on'));
+  const map = {all:'pf-f-all', a:'pf-f-a', Analog:'pf-f-analog', SerDes:'pf-f-serdes', AI:'pf-f-ai', Equipment:'pf-f-equip'};
+  const btn = document.getElementById(map[u]); if (btn) btn.classList.add('on');
+  renderPortfolio();
+}
+
+function selectPfAssets() {
+  let pool = COS.filter(c => c.pub && c.t !== 'SPY' && D[c.t] && D[c.t].ok && D[c.t].prices && D[c.t].prices.length > 30);
+  if (pfUniverse === 'a') pool = pool.filter(c => c.tier === 'a');
+  else if (pfUniverse !== 'all') pool = pool.filter(c => c.sector === pfUniverse);
+  return pool.slice(0, 28).map(c => ({ t: c.t, n: c.n, sector: c.sector, prices: D[c.t].prices }));
+}
+
+function optimizePortfolio(assets) {
+  const RF = 0.045;
+  const r = a => { const o = []; for (let i = 1; i < a.length; i++) o.push((a[i] - a[i-1]) / a[i-1]); return o; };
+  const series = assets.map(a => r(a.prices));
+  const minLen = Math.min(...series.map(s => s.length));
+  const R = series.map(s => s.slice(-minLen));
+  const n = R.length;
+  const muW = R.map(s => s.reduce((a, b) => a + b, 0) / minLen);
+  const mu = muW.map(m => m * 52);
+  const cov = Array(n).fill(0).map(() => Array(n).fill(0));
+  for (let i = 0; i < n; i++) for (let j = i; j < n; j++) {
+    let c = 0; for (let k = 0; k < minLen; k++) c += (R[i][k] - muW[i]) * (R[j][k] - muW[j]);
+    c = c / minLen * 52; cov[i][j] = c; cov[j][i] = c;
+  }
+  const vol = mu.map((_, i) => Math.sqrt(Math.max(0, cov[i][i])));
+  const pStats = w => {
+    let pr = 0; for (let i = 0; i < n; i++) pr += w[i] * mu[i];
+    let pv = 0; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) pv += w[i] * w[j] * cov[i][j];
+    const sd = Math.sqrt(Math.max(0, pv));
+    return { ret: pr, vol: sd, sharpe: sd === 0 ? 0 : (pr - RF) / sd };
+  };
+  const cloud = [];
+  let maxSh = { sharpe: -Infinity }, minV = { vol: Infinity };
+  for (let it = 0; it < 12000; it++) {
+    let w = Array(n).fill(0).map(() => -Math.log(Math.max(Math.random(), 1e-12)));
+    const s = w.reduce((a, b) => a + b, 0); w = w.map(x => x / s);
+    const st = pStats(w);
+    cloud.push({ x: st.vol * 100, y: st.ret * 100 });
+    if (st.sharpe > maxSh.sharpe) maxSh = { ...st, w };
+    if (st.vol < minV.vol) minV = { ...st, w };
+  }
+  let rp = vol.map(v => v > 0 ? 1 / v : 0); const rs = rp.reduce((a, b) => a + b, 0) || 1; rp = rp.map(x => x / rs);
+  const rpStats = { ...pStats(rp), w: rp };
+  const ew = Array(n).fill(1 / n); const ewStats = { ...pStats(ew), w: ew };
+  const assetPts = assets.map((a, i) => ({ t: a.t, x: vol[i] * 100, y: mu[i] * 100 }));
+  return { n, cloud, maxSh, minV, rp: rpStats, ew: ewStats, assets, assetPts };
+}
+
+function pfWeightTable(title, color, stats, assets) {
+  const rows = stats.w.map((w, i) => ({ t: assets[i].t, w: w * 100 }))
+    .filter(x => x.w > 0.8).sort((a, b) => b.w - a.w).slice(0, 8);
+  let bars = rows.map(x => `
+    <div style="display:flex;align-items:center;gap:8px;margin:3px 0;">
+      <span style="font-family:var(--mono);font-size:10px;width:46px;color:var(--text-muted);">${x.t}</span>
+      <div style="flex:1;height:9px;background:rgba(255,255,255,0.05);border-radius:5px;overflow:hidden;">
+        <div style="height:100%;width:${Math.min(100,x.w)}%;background:${color};"></div></div>
+      <span style="font-family:var(--mono);font-size:10px;width:42px;text-align:right;color:#fff;font-weight:700;">${x.w.toFixed(1)}%</span>
+    </div>`).join('');
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-left:3px solid ${color};border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <span style="font-weight:800;color:${color};font-size:13px;letter-spacing:0.3px;">${title}</span>
+        <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);">Sharpe ${stats.sharpe.toFixed(2)}</span>
+      </div>
+      <div style="display:flex;gap:14px;font-family:var(--mono);font-size:11px;margin-bottom:10px;">
+        <span style="color:var(--text-muted);">Ret <b style="color:#7ee787;">${(stats.ret*100).toFixed(1)}%</b></span>
+        <span style="color:var(--text-muted);">Vol <b style="color:#e3b341;">${(stats.vol*100).toFixed(1)}%</b></span>
+      </div>
+      ${bars}
+    </div>`;
+}
+
+function renderPortfolio() {
+  const results = document.getElementById('pf-results');
+  const assets = selectPfAssets();
+  if (assets.length < 3) {
+    results.innerHTML = "<p style='color:#f85149;font-weight:500;'>Need at least 3 loaded tickers in this universe. Wait for data to finish loading, or pick a broader filter.</p>";
+    if (pfChartInst) { pfChartInst.destroy(); pfChartInst = null; }
+    return;
+  }
+  results.innerHTML = "<p style='color:var(--text-muted);'>Optimizing " + assets.length + " assets across 12,000 portfolios…</p>";
+
+  setTimeout(() => {
+    const o = optimizePortfolio(assets);
+    results.innerHTML =
+      pfWeightTable('★ MAX SHARPE (Tangency)', '#3fb950', o.maxSh, assets) +
+      pfWeightTable('● MIN VARIANCE', '#58a6ff', o.minV, assets) +
+      pfWeightTable('◆ RISK PARITY (Inv-Vol)', '#bc8cff', o.rp, assets) +
+      pfWeightTable('○ EQUAL WEIGHT (1/N)', '#39c5cf', o.ew, assets) +
+      `<p style="font-size:10px;color:var(--text-dim);line-height:1.5;margin-top:4px;">Long-only, fully invested. Frontier cloud = random simplex sampling. Past covariance is not predictive of future co-movement — for research only, not advice.</p>`;
+
+    if (pfChartInst) pfChartInst.destroy();
+    Chart.defaults.color = 'rgba(255,255,255,0.7)';
+    Chart.defaults.font.family = "'JetBrains Mono', monospace";
+    pfChartInst = new Chart(document.getElementById('pf-frontier-canvas').getContext('2d'), {
+      type: 'scatter',
+      data: { datasets: [
+        { label: 'Portfolios', data: o.cloud, backgroundColor: 'rgba(88,166,255,0.13)', pointRadius: 1.6, pointHoverRadius: 2 },
+        { label: 'Assets', data: o.assetPts, backgroundColor: 'rgba(227,179,65,0.9)', pointRadius: 4, pointHoverRadius: 6, pointStyle:'rectRot' },
+        { label: 'Max Sharpe', data: [{ x: o.maxSh.vol*100, y: o.maxSh.ret*100 }], backgroundColor: '#3fb950', pointRadius: 9, pointHoverRadius: 11, pointStyle:'star' },
+        { label: 'Min Variance', data: [{ x: o.minV.vol*100, y: o.minV.ret*100 }], backgroundColor: '#58a6ff', pointRadius: 7, pointHoverRadius: 9, pointStyle:'circle' },
+        { label: 'Risk Parity', data: [{ x: o.rp.vol*100, y: o.rp.ret*100 }], backgroundColor: '#bc8cff', pointRadius: 7, pointHoverRadius: 9, pointStyle:'rect' },
+        { label: 'Equal Weight', data: [{ x: o.ew.vol*100, y: o.ew.ret*100 }], backgroundColor: '#39c5cf', pointRadius: 7, pointHoverRadius: 9, pointStyle:'triangle' }
+      ]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'top', labels: { boxWidth: 8, font: { size: 9 }, color: '#a0aab4', filter: i => i.text !== 'Portfolios' } },
+          tooltip: { backgroundColor: 'rgba(13,17,23,0.92)', titleColor: '#8b949e', bodyColor: '#fff', borderColor: 'rgba(99,102,241,0.8)', borderWidth: 1,
+            callbacks: { label: c => { const t = c.dataset.data[c.dataIndex].t; return (t ? t + ': ' : c.dataset.label + ': ') + 'σ ' + c.parsed.x.toFixed(1) + '% / μ ' + c.parsed.y.toFixed(1) + '%'; } } }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Annualized Volatility (Risk) %', color: '#6e7681', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          y: { title: { display: true, text: 'Annualized Return %', color: '#6e7681', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+        }
+      }
+    });
+  }, 30);
 }
 
 // ============================

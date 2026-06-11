@@ -676,6 +676,8 @@ body {
 
 <script>
 const COS = [
+  // === BENCHMARK ===
+  {n:"S&P 500 ETF",           t:"SPY",   tier:"a", pub:true,  sector:"Market"},
   // === FOUNDRIES ===
   {n:"Taiwan Semi (TSMC)",    t:"TSM",   tier:"a", pub:true,  sector:"Foundry"},
   {n:"GlobalFoundries",       t:"GFS",   tier:"b", pub:true,  sector:"Foundry"},
@@ -879,7 +881,7 @@ function calcBetaAlphaAndMore(prices, benchPrices) {
   const annTrackingError = Math.sqrt(trackingErrorSq) * Math.sqrt(52);
   const infoRatio = annTrackingError === 0 ? 0 : (excessMean * 52) / annTrackingError;
   
-  return { beta, alpha: weeklyAlpha * 52, r2, treynor, infoRatio };
+  return { beta, alpha: weeklyAlpha * 52, r2, treynor, infoRatio, trackingError: annTrackingError };
 }
 
 function calcKelly(prices) {
@@ -1210,7 +1212,7 @@ async function fetchOne(ticker, isBench = false) {
   const mc     = runMonteCarlo(cur, weeklyDrift, vol, 2000, 26);
   const fg     = calcFearGreed(rsi, stoch, vol);
   const tech   = calcTechAndFib(closes);
-  const { beta, alpha, r2, treynor, infoRatio } = isBench ? { beta: 1, alpha: 0, r2: 0, treynor: 0, infoRatio: 0 } : calcBetaAlphaAndMore(closes, SPY_CLOSES);
+  const { beta, alpha, r2, treynor, infoRatio, trackingError } = isBench ? { beta: 1, alpha: 0, r2: 1, treynor: 0, infoRatio: 0, trackingError: 0 } : calcBetaAlphaAndMore(closes, SPY_CLOSES);
   const kellyObj   = calcKelly(closes);
   const calmar     = calcCalmar(closes);
   const atrPct     = calcATR(closes, 14);
@@ -1253,7 +1255,7 @@ async function fetchOne(ticker, isBench = false) {
   return {
     ok: true, source, price: cur, prices: closes,
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, cvar95, maxDD,
-    macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, kellyObj,
+    macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, trackingError, kellyObj,
     calmar, atrPct, priceZ, upCapture, downCapture,
     momentsJB, cfVaR, hurst, autoCorr, omega, ulcer, tailRatio
   };
@@ -1332,6 +1334,13 @@ function cardHTML(co) {
   const u6  = d.chg6m >= 0, u1 = d.chg1y >= 0;
   const scoreColor = d.score >= 70 ? 'g' : d.score < 40 ? 'r' : 'y';
   const cardCls = d.score >= 70 ? 'buy' : d.score < 35 ? 'sell' : '';
+  
+  const spy = D['SPY'] || {};
+  const sMaxDD = spy.ok ? spy.maxDD.toFixed(1) + '%' : '--';
+  const sVar = spy.ok ? spy.var95.toFixed(2) + '%' : '--';
+  const sSort = spy.ok ? spy.sortino.toFixed(2) : '--';
+  const sVol = spy.ok ? (spy.vol * 100).toFixed(1) + '%' : '--';
+  const sShp = spy.ok ? spy.sharpe.toFixed(2) : '--';
 
   return `<div class="card ${cardCls}" id="${id}" onclick="openDetail('${co.t}', '${co.n}')" style="cursor:pointer;"
     data-tier="${co.tier}" data-pub="true"
@@ -1363,9 +1372,9 @@ function cardHTML(co) {
     </div>
 
     <div class="risk-grid">
-      <div class="r-box"><span class="r-lbl">Max Drawdown</span><span class="r-val r">${d.maxDD.toFixed(1)}%</span></div>
-      <div class="r-box"><span class="r-lbl">VaR 95% (Wk)</span><span class="r-val r">${d.var95.toFixed(2)}%</span></div>
-      <div class="r-box"><span class="r-lbl">Sortino Ratio</span><span class="r-val ${d.sortino>1?'g':'r'}">${d.sortino.toFixed(2)}</span></div>
+      <div class="r-box"><span class="r-lbl">Max Drawdown (SPY: ${sMaxDD})</span><span class="r-val r">${d.maxDD.toFixed(1)}%</span></div>
+      <div class="r-box"><span class="r-lbl">VaR 95% (SPY: ${sVar})</span><span class="r-val r">${d.var95.toFixed(2)}%</span></div>
+      <div class="r-box"><span class="r-lbl">Sortino (SPY: ${sSort})</span><span class="r-val ${d.sortino>1?'g':'r'}">${d.sortino.toFixed(2)}</span></div>
       <div class="r-box" style="border-top: 1px solid var(--border); padding-top: 6px; margin-top: 6px; grid-column: span 3;"></div>
       <div class="r-box"><span class="r-lbl" style="color:var(--purple);">CF mVaR 95%</span><span class="r-val" style="color:var(--purple);">${d.cfVaR.toFixed(2)}%</span></div>
       <div class="r-box"><span class="r-lbl" style="color:var(--purple);">Jarque-Bera</span><span class="r-val" style="color:var(--purple);">${d.momentsJB.jb.toFixed(1)}</span></div>
@@ -1387,14 +1396,17 @@ function cardHTML(co) {
       <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Treynor Ratio</span><span class="r-val ${d.treynor>0.05?'g':'r'}">${d.treynor.toFixed(3)}</span></div>
       <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Up Capture</span><span class="r-val ${d.upCapture>100?'g':'y'}">${d.upCapture.toFixed(0)}%</span></div>
       <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Down Capture</span><span class="r-val ${d.downCapture<100?'g':'r'}">${d.downCapture.toFixed(0)}%</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Info Ratio</span><span class="r-val ${d.infoRatio>0.5?'g':'y'}">${d.infoRatio.toFixed(2)}</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Track Error</span><span class="r-val" style="color:var(--cyan);">${(d.trackingError*100).toFixed(1)}%</span></div>
+      <div class="r-box"><span class="r-lbl" style="color:var(--text-main);">Correlation</span><span class="r-val" style="color:var(--cyan);">${(Math.sqrt(d.r2)*(d.beta<0?-1:1)).toFixed(2)}</span></div>
     </div>
     `}
 
     <div class="quant-grid">
       <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val ${scoreColor}">${d.score} / 100</span></div>
       <div class="q-box"><span class="q-lbl">Momentum</span><span class="q-val ${d.momCls}">${d.momentum}</span></div>
-      <div class="q-box"><span class="q-lbl">Ann. Volatility</span><span class="q-val">${(d.vol*100).toFixed(1)}%</span></div>
-      <div class="q-box"><span class="q-lbl">Sharpe Ratio</span><span class="q-val ${d.sharpe>1?'g':d.sharpe>0?'y':'r'}">${d.sharpe.toFixed(2)}</span></div>
+      <div class="q-box"><span class="q-lbl">Ann. Vol (SPY: ${sVol})</span><span class="q-val">${(d.vol*100).toFixed(1)}%</span></div>
+      <div class="q-box"><span class="q-lbl">Sharpe (SPY: ${sShp})</span><span class="q-val ${d.sharpe>1?'g':d.sharpe>0?'y':'r'}">${d.sharpe.toFixed(2)}</span></div>
       <div class="q-box"><span class="q-lbl">Fib 61.8% Sup</span><span class="q-val b">$${d.tech.fib618.toFixed(2)}</span></div>
       <div class="q-box"><span class="q-lbl">Dist 52W High</span><span class="q-val ${d.tech.distHigh<-30?'r':'inherit'}">${d.tech.distHigh.toFixed(1)}%</span></div>
       <div class="q-box"><span class="q-lbl">MC 6M Median</span><span class="q-val ${d.mc.median>d.price?'g':'r'}">$${d.mc.median.toFixed(2)}</span></div>

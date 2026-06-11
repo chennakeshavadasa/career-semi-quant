@@ -463,30 +463,31 @@ Pure momentum! A snowball rolling down a hill just gets bigger and faster. If th
 ### 5.5 Autocorrelation (Lag-1)
 
 **Simple explanation — Does history repeat next week?**
-If last week was +8%, does that predict this week's direction? Autocorrelation at lag-1 measures this exact linear relationship.
+If last week was a great week (+8%), does that tell you anything about *this* week? Autocorrelation measures exactly this "cause and effect" relationship between consecutive weeks.
 
-**Mathematical definition:**
+![Autocorrelation Visualized](./plots/autocorrelation.png)
 
-```
-ρ₁ = Σ[(r[t] − μ)(r[t-1] − μ)] / Σ[(r[t-1] − μ)²]  for t = 2 to n
-```
-
-This is the Pearson correlation between the return series and itself shifted by one week.
+**How to read it:**
+- **> 0 (Positive / Momentum):** If it went up last week, it is mathematically more likely to go up again this week. The trend is your friend.
+- **Around 0 (Random):** Last week tells you absolutely nothing. It's a coin flip.
+- **< 0 (Negative / Reversal):** If it went up last week, it is very likely to drop this week. It bounces back and forth like a rubber band.
 
 ---
 
 ### 5.6 Ulcer Index
 
-**Simple explanation — The chronic pain meter:**
-Max Drawdown tells you *how deep* the worst hole was. Ulcer Index tells you *how long* you suffered. A stock that crashes 20% and recovers in 2 weeks: brief pain. A stock that falls 20% and stays there for 6 months: chronic suffering. Peter Martin (1987) named it perfectly — prolonged drawdowns give investors stomach ulcers.
+**Simple explanation — The Chronic Pain Meter:**
+Max Drawdown (Section 4.1) tells you *how deep* the worst crash was. But it ignores how long you were trapped at the bottom. 
+The **Ulcer Index** measures *how long* you suffered. 
 
-**Mathematical definition:**
+Peter Martin (who invented it in 1987) named it perfectly — it is the prolonged, grinding, multi-month drawdowns that give investors stomach ulcers.
 
-```
-Ulcer Index = sqrt( Σ(D[t]²) / n ) × 100
+![Ulcer Index Visualized](./plots/ulcer_index.png)
 
-where D[t] = (P[t] − Peak[t]) / Peak[t]  (drawdown fraction at time t)
-```
+**Why it matters:**
+Stock A crashes 20% but recovers fully in 2 weeks. (Brief pain, low Ulcer Index).
+Stock B crashes 20% and stays trapped at the bottom for an entire year. (Chronic pain, high Ulcer Index).
+If you only look at Max Drawdown, both stocks look exactly the same (-20%). The Ulcer Index exposes Stock B as the far more painful, psychologically exhausting investment.
 
 ---
 

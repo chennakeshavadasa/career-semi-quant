@@ -493,17 +493,20 @@ If you only look at Max Drawdown, both stocks look exactly the same (-20%). The 
 
 ### 5.7 Tail Ratio
 
-**Simple explanation — Is the upside bigger than the downside?**
-In the BEST 5% of weeks, how much does this stock gain? In the WORST 5% of weeks, how much does it lose? Tail Ratio = best tail / worst tail.
+**Simple explanation — The Battle of the Extremes:**
 
-**Mathematical definition:**
+If you ignore all the "normal" weeks and only look at the most extreme, chaotic weeks of the year: are the massive winning weeks bigger than the massive losing weeks?
 
-```
-Tail Ratio = |P₉₅| / |P₅|
+![Tail Ratio Visualized](./plots/tail_ratio.png)
 
-P₉₅ = 95th percentile of returns (best 5% of weeks)
-P₅  = 5th percentile of returns  (worst 5% of weeks)
-```
+**How it works:**
+1. It takes your worst 5% of weeks (The Red Zone) and finds the average loss. (e.g., -5%).
+2. It takes your best 5% of weeks (The Green Zone) and finds the average gain. (e.g., +10%).
+3. It divides the Green by the Red (`10 / 5 = 2.0`).
+
+**How to read it:**
+- **> 1.0 (Positive Asymmetry):** The stock's massive upside explosions are significantly larger than its massive crashes. (A great sign for volatile tech stocks).
+- **< 1.0 (Negative Asymmetry):** The crashes are much deeper than the rallies. The stock "takes the stairs up, but takes the elevator down."
 
 ---
 

@@ -603,15 +603,22 @@ flowchart TD
 
 ### 7.2 Sharpe Ratio
 
-**Simple explanation — Return per unit of total risk:**
-Sharpe normalizes returns by total volatility experienced.
+**Simple explanation — Is the juice worth the squeeze?**
 
-**Mathematical definition (William Sharpe, Nobel Prize 1990):**
+Imagine two stocks, A and B. Both made a 20% return last year.
+- **Stock A** went up a smooth, steady amount every single week. No stress, you slept great.
+- **Stock B** surged up 50%, crashed down 40%, and then barely crawled back up to finish at 20%. You had three panic attacks.
 
-```
-Sharpe = (Annualized Return − Risk-Free Rate) / Annualized Volatility
-       = (R_p − R_f) / σ_p
-```
+If you only look at the final "Return", they look exactly the same (20%). But Stock A is vastly superior because it gave you the same money for way less "Risk" (stress/bounciness).
+
+The **Sharpe Ratio** (invented by Nobel laureate William Sharpe) measures exactly this. It takes the extra money you made (above what a safe, boring bank savings account would pay) and divides it by the "bounciness" (volatility) of the stock. 
+
+It answers the ultimate question: *Am I actually being compensated for all these heart attacks?*
+
+**How to read it:**
+- **< 0.5 (🔴 Bad):** You are taking on way too much stress for the tiny amount of money you're making.
+- **0.5 – 1.0 (⚪ Average):** Normal market behavior.
+- **> 1.0 (🟢 Excellent):** You are being heavily rewarded for the risk you're taking. (The "juice" is definitely worth the "squeeze"!)
 
 ---
 

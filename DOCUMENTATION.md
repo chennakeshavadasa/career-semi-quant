@@ -436,16 +436,27 @@ Because it doesn't use standard deviations or bell curves, it automatically catc
 
 ### 5.4 Hurst Exponent
 
-**Simple explanation — Does the stock trend or bounce?**
-Flip a fair coin: Heads = up, Tails = down. Each flip is independent — no pattern, no prediction. That's a perfect random walk. Real stocks are *not always* random:
+**Simple explanation — The Rubber Band, The Drunkard, or The Snowball?**
 
-```mermaid
-flowchart LR
-    A[Hurst Exponent H] --> B{H value?}
-    B -->|H < 0.45| C[🔄 MEAN-REVERTING\nBig moves tend to reverse\n'Buy dips, sell rips'\nSmall-cap semiconductors in ranges]
-    B -->|H = 0.45-0.55| D[🎲 RANDOM WALK\nNo predictability\nPure efficient market\nPassive investing optimal]
-    B -->|H > 0.55| E[📈 TRENDING\nMoves tend to CONTINUE\n'Ride the momentum'\nNVDA during AI boom]
-```
+If you flip a fair coin (Heads = stock goes up, Tails = stock goes down), the result of the next flip has absolutely nothing to do with the last flip. That is a pure, unpredictable "Random Walk."
+
+But real stocks are not always random. The **Hurst Exponent (H)** mathematically measures the "memory" of a stock. Does it remember what it did last week, and does that memory make it want to reverse or keep going?
+
+Here are the three types of stocks:
+
+![Hurst Exponent Visualized](./plots/hurst_exponent.png)
+
+**1. H < 0.45 (The Rubber Band / Mean-Reverting):**
+If this stock goes up, it feels stretched and immediately wants to snap back down. If it drops, it snaps back up. It is constantly bouncing and trapped in a range. 
+*Strategy:* Buy the dips, sell the rips. Don't expect a long-term trend.
+
+**2. H around 0.50 (The Drunkard / Random Walk):**
+Like a drunk person stumbling in a field, every step is totally random. The stock has zero memory. Knowing what happened last week tells you absolutely nothing about next week.
+*Strategy:* Passive investing. You cannot predict its next move.
+
+**3. H > 0.55 (The Snowball / Trending):**
+Pure momentum! A snowball rolling down a hill just gets bigger and faster. If this stock went up last week, it is mathematically more likely to go up *again* this week. 
+*Strategy:* Ride the trend. Don't fight it. (Think: NVDA during the massive AI boom).
 
 ---
 

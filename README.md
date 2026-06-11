@@ -1,216 +1,264 @@
-# Career Semi Quant Terminal 📈
+# Career Semi Quant Terminal
 
-> A zero-server, fully client-side quantitative stock analytics dashboard for the global semiconductor industry.  
-> **Live → [chennakeshavadasa.github.io/career-semi-quant](https://chennakeshavadasa.github.io/career-semi-quant/)**
+> A zero-server, fully client-side quantitative stock analytics dashboard for the global semiconductor industry.
+>
+> **Live: [chennakeshavadasa.github.io/career-semi-quant](https://chennakeshavadasa.github.io/career-semi-quant/)**
 
 ![Status](https://img.shields.io/badge/Status-Live-brightgreen)
 ![Architecture](https://img.shields.io/badge/Architecture-100%25_Client--Side-blue)
-![Stocks](https://img.shields.io/badge/Companies-45+-purple)
+![Companies](https://img.shields.io/badge/Companies-40+-purple)
 ![Cost](https://img.shields.io/badge/Cost-Free-green)
 
 ---
 
-## Why This Exists
+## Purpose
 
-When you're a semiconductor engineer evaluating job offers, one of the hardest questions to answer is:
+When evaluating a job offer in the semiconductor industry, one of the most consequential unknowns is the equity component — RSUs, stock options, or ESPPs. Glassdoor does not provide this analysis. LinkedIn does not provide this analysis. A Bloomberg Terminal costs approximately $24,000 per year.
 
-> *"This company is offering me RSUs / stock options. Are they actually worth anything?"*
+**Career Semi Quant Terminal** was built to solve this gap for semiconductor professionals. It gives engineers across analog, ASIC, digital, verification, and layout disciplines a single dashboard where they can:
 
-Glassdoor won't tell you. LinkedIn won't tell you. And Bloomberg Terminal costs $24,000/year.
+1. **Discover** publicly tracked companies across their specific sub-field (SerDes IP, Optical Rx/Tx, Mixed-Signal, AI Accelerators, Foundry, EDA)
+2. **Analyze** each company's stock trajectory using the same quantitative models institutional funds use, computed live in the browser
+3. **Evaluate** whether a prospective employer's equity is trending upward, collapsing, or stagnating — before accepting an offer
 
-**Career Semi Quant Terminal** was built to solve exactly this problem. It gives semiconductor professionals — analog designers, ASIC engineers, layout engineers, verification teams — a single dashboard where they can:
-
-1. **Discover** which companies exist in their specific sub-field (Optical Rx/Tx, SerDes IP, Mixed-Signal, AI accelerators)
-2. **Analyze** each company's stock trajectory using the same mathematical models institutional funds use
-3. **Evaluate** whether a prospective employer's RSUs/ESPPs are trending up, collapsing, or stagnating — *before* accepting an offer
-
-No login. No account. No API key required. Open the page and the data loads.
+No login required. No account required. No API key required for the primary data source. Open the page and the analysis runs.
 
 ---
 
-## What It Calculates
+## Architecture Overview
 
-Every single metric on the dashboard is computed **live in your browser** from real weekly close prices. Nothing is pre-baked, cached, or scraped from a third-party analysis site.
+The entire application is a single `index.html` file. There is no backend, no build step, no database, and no server. All quantitative computation runs natively in the browser's JavaScript engine the moment price data is received.
 
-### Momentum & Trend Indicators
-
-| Indicator | What It Tells You |
-|---|---|
-| **RSI (14-period)** | Whether the stock is overbought (>70) or oversold (<30). Mean-reversion signal. |
-| **Stochastic Oscillator** | Where the current price sits relative to its 14-week range. Complements RSI. |
-| **MACD Histogram** | Whether short-term momentum is accelerating (Bullish) or decelerating (Bearish). |
-| **10/40 SMA Cross** | Whether the 10-week moving average is above or below the 40-week. A Bull Cross means the trend has turned upward; a Death Cross means the opposite. |
-| **Bollinger Band Position** | Whether the price has broken above the upper band (OVERBOUGHT) or below the lower band (OVERSOLD). |
-
-### Risk Metrics
-
-| Metric | What It Tells You |
-|---|---|
-| **Annualized Volatility** | How wildly the stock swings. A 60%+ volatility means your RSU grant could halve in value in a single quarter. |
-| **Sharpe Ratio** | Risk-adjusted return vs. the 10-Year Treasury (~4.5%). Above 1.0 = the stock is compensating you for the risk. Below 0 = you'd be better off in government bonds. |
-| **Sortino Ratio** | Like Sharpe, but only penalizes *downside* volatility. A high Sortino means the stock goes up a lot but doesn't crash often. |
-| **Value at Risk (95%)** | The worst weekly loss you can expect 95% of the time. If VaR is -5.2%, there's a 5% chance any given week could be *worse* than -5.2%. |
-| **Maximum Drawdown** | The largest peak-to-trough drop in the past year. If Max DD is -40%, the stock fell 40% from its high before recovering. |
-
-### Structural Analysis
-
-| Metric | What It Tells You |
-|---|---|
-| **Monte Carlo 6M Target** | A 2,000-iteration Monte Carlo simulation of Geometric Brownian Motion based on historical drift and volatility. Returns a 3-point confidence interval: Median (Base Case), 90th percentile (Bull Case), and 10th percentile (Bear Case). |
-| **Beta (vs SPY)** | Systemic risk measurement. Calculates the stock's covariance against the S&P 500 over 5 years. A Beta > 1 means it is more volatile than the market. |
-| **Annual Alpha** | Risk-adjusted excess return. The exact percentage return the stock generated *beyond* what the broader market (SPY) provided, factoring in the risk-free rate. |
-| **Half-Kelly Size** | The mathematically optimal percentage of your portfolio you should allocate to this stock to maximize compound growth while preventing the risk of ruin, based on its 5-year win/loss ratio. |
-
-### Composite Quant Score (0–100)
-
-A weighted composite of all the above indicators. The score is designed to surface stocks that are:
-- Trending upward (positive 6M and 1Y returns, bullish MACD)
-- In a fear zone (low RSI, low Fear & Greed index)
-- Well-compensating for risk (high Sortino/Sharpe)
-- At a trend inflection point (Bull Cross)
-
-**Score ≥ 70** = Strong momentum, highlighted in green  
-**Score < 40** = Weak or deteriorating, highlighted in red  
-**Between** = Neutral
-
-### Fear & Greed Index
-
-A custom composite of RSI, Stochastic, and Volatility that classifies each stock into one of five emotional states:
-
-`EXTREME FEAR` → `FEAR` → `NEUTRAL` → `GREED` → `EXTREME GREED`
-
-Extreme Fear often signals a buying opportunity. Extreme Greed often signals overextension.
-
----
-
-## Covered Sectors (45+ Companies)
-
-The dashboard covers every major publicly traded company across the semiconductor value chain:
-
-| Sector | Companies |
-|---|---|
-| **Foundries** | TSMC, GlobalFoundries |
-| **EDA & Design IP** | Synopsys, Cadence, ARM |
-| **Fab Equipment** | ASML, Applied Materials, Lam Research, KLA, Tokyo Electron |
-| **Memory** | Micron, Western Digital, Samsung Electronics |
-| **AI / GPU** | NVIDIA, AMD, Super Micro Computer |
-| **High-Speed SerDes** | Broadcom, Marvell, Credo, Astera Labs, Rambus, MaxLinear, Alphawave, Parade |
-| **Optical Rx/Tx** | Coherent Corp, Lumentum, MACOM |
-| **Analog & Mixed-Signal** | Texas Instruments, Analog Devices, Monolithic Power, Cirrus Logic, Microchip, Silicon Labs, onsemi, Synaptics, STMicro |
-| **RF & Wireless** | Qualcomm, Skyworks, Qorvo |
-| **MCU / DSP** | NXP, Renesas, CEVA |
-| **Power & CPU** | Intel, Semtech, Infineon |
-| **Private (Pre-IPO)** | FermionIC, Aura Semi, Steradian, Saankhya Labs, AGNIT |
-
-Private companies are displayed with a `NOT PUBLICLY LISTED` state — they're included so engineers in the Indian semiconductor ecosystem can see the landscape even if the company hasn't IPO'd yet.
-
----
-
-## How the Data Pipeline Works
+### Data Pipeline (4-Level Cascade)
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  YOUR BROWSER                        │
-│                                                      │
-│  ┌──────────────────────────────────────────────┐   │
-│  │ LEVEL 1: Yahoo Finance (via 4 parallel proxies)│   │
-│  │   • Direct fetch                              │   │
-│  │   • AllOrigins proxy                          │   │
-│  │   • CodeTabs proxy                            │   │
-│  │   • CORSProxy.io                              │   │
-│  │   → Promise.any() — fastest wins (9s timeout) │   │
-│  └───────────────────┬──────────────────────────┘   │
-│                      │ if < 25 data points           │
-│  ┌───────────────────▼──────────────────────────┐   │
-│  │ LEVEL 2: Polygon.io  (user API key)           │   │
-│  └───────────────────┬──────────────────────────┘   │
-│                      │ if still < 25 data points     │
-│  ┌───────────────────▼──────────────────────────┐   │
-│  │ LEVEL 3: Alpha Vantage  (user API key)        │   │
-│  └───────────────────┬──────────────────────────┘   │
-│                      │ if still < 25 data points     │
-│  ┌───────────────────▼──────────────────────────┐   │
-│  │ LEVEL 4: Finnhub  (user API key)              │   │
-│  └───────────────────┬──────────────────────────┘   │
-│                      │ if still < 25 data points     │
-│  ┌───────────────────▼──────────────────────────┐   │
-│  │ LEVEL 5: STRICT FAIL                          │   │
-│  │   → "DATA UNAVAILABLE" (no fake/simulated     │   │
-│  │      data is ever generated)                  │   │
-│  └──────────────────────────────────────────────┘   │
-│                                                      │
-│  Once data is obtained:                              │
-│  → Run RSI, Stoch, Vol, Sharpe, Sortino, VaR,       │
-│    MaxDD, MACD, Bollinger, Fibonacci, Monte Carlo,   │
-│    Beta, Alpha, Kelly Criterion, Composite Score     │
-│  → Render card and interactive 5-Year charting       │
-│                                                      │
-└─────────────────────────────────────────────────────┘
+LEVEL 1: Yahoo Finance  (via 4 parallel CORS proxies — Promise.any, 9s timeout)
+            |
+            | if < 25 data points
+            v
+LEVEL 2: Polygon.io  (user-supplied API key, optional)
+            |
+            | if < 25 data points
+            v
+LEVEL 3: Alpha Vantage  (user-supplied API key, optional)
+            |
+            | if < 25 data points
+            v
+LEVEL 4: Finnhub  (user-supplied API key, optional)
+            |
+            | if < 25 data points
+            v
+LEVEL 5: STRICT FAIL — card displays "DATA UNAVAILABLE"
+          No synthetic or simulated fallback data is ever shown.
 ```
 
-### Why No Simulated Data?
+The system fetches **1.5 years** of weekly closing prices per ticker. This extended window is used exclusively as a mathematical warm-up buffer, ensuring the 40-week SMA and 26-week rolling indicators have sufficient historical data to compute a continuous, gap-free output. The **visual display is always clamped to exactly the trailing 52 weeks (1 year)**, on both the dashboard sparklines and all charts inside the detail modal.
 
-Earlier versions of this tool included a Geometric Brownian Motion fallback that generated synthetic price data when all APIs failed. **We removed it entirely.** Every number on this dashboard comes from a verified market data source. If data can't be fetched, the card explicitly shows `DATA UNAVAILABLE` — because showing fake numbers to professionals making career decisions is unacceptable.
+### Why No Simulated Fallback Data?
+
+An earlier prototype included a Geometric Brownian Motion fallback that generated synthetic prices when all APIs failed. That feature was removed. Every number displayed on this dashboard is derived from a verified market data source. Displaying synthetic data to professionals making career decisions is unacceptable.
 
 ### Why Client-Side Only?
 
-- **Privacy**: Your API keys never leave your browser. They're stored in `localStorage`, not sent to any server.
-- **Cost**: GitHub Pages hosting is free. No backend to maintain, no database to pay for.
-- **Speed**: No server round-trip. The math runs natively in your browser's JavaScript engine.
-- **Portability**: Works on any device with a browser. Bookmark it on your phone.
+- **Privacy**: API keys are stored in `localStorage` and never transmitted to any server.
+- **Cost**: Hosted on GitHub Pages at zero cost with no backend infrastructure.
+- **Speed**: Eliminates any server round-trip. Computation runs directly in the browser.
+- **Portability**: Works on any device with a modern browser.
 
 ---
 
-## Features
+## Dashboard — Company Card View
 
-- **Sort** by Quant Score, RSI, 6M/1Y Return, or Volatility (ascending or descending)
-- **Filter** by Tier-A, Tier-B, Strong Buys (≥70), or Extreme Fear
-- **Search** by company name or ticker symbol
-- **Sector tags** on every card for at-a-glance classification
-- **Gradient area sparklines** showing 52-week price trajectory
-- **Data freshness timestamp** so you always know when the data was last pulled
-- **Live progress bar** showing which stocks are loading in real-time
-- **Responsive grid** that adapts from mobile to ultrawide monitors
+Each company is rendered as a card that loads in parallel. The dashboard supports sorting, filtering, and search.
+
+### Card-Level Metrics
+
+Every card computes and displays the following from raw weekly close prices:
+
+| Metric | Computation |
+|---|---|
+| **Current Price** | Most recent weekly close |
+| **6M / 1Y Return** | Percentage change from 26-week and 52-week lookback |
+| **RSI (14-period)** | Relative Strength Index. Values above 70 indicate overbought conditions; below 30 indicate oversold. |
+| **Stochastic Oscillator** | Position of current price within the 14-week high/low range. |
+| **MACD Histogram** | Difference between 12-week and 26-week exponential moving averages, smoothed by a 9-week signal line. Positive histogram = bullish momentum; negative = bearish. |
+| **10 / 40 SMA Cross** | Bull Cross when the 10-week SMA crosses above the 40-week SMA; Death Cross when it crosses below. |
+| **Bollinger Band Position** | Classifies the price relative to the 2-standard-deviation band around the 20-week SMA. |
+| **Annualized Volatility** | Standard deviation of weekly log-returns scaled by sqrt(52). |
+| **Sharpe Ratio** | Annualized excess return over the risk-free rate (4.5%) divided by annualized volatility. |
+| **Sortino Ratio** | Like Sharpe, but the denominator uses only downside deviation — weeks with negative returns. |
+| **Value at Risk (95%)** | The 5th-percentile weekly return from the empirical return distribution. Represents the threshold below which losses occur with 5% probability. |
+| **Max Drawdown** | The largest peak-to-trough percentage decline observed across the trailing 52 weeks. |
+| **Beta (vs SPY)** | Covariance of weekly stock returns with SPY returns, divided by the variance of SPY returns. Measures systemic market sensitivity. |
+| **Annual Alpha** | Excess annualized return beyond what CAPM predicts, given the stock's beta and the market's return. |
+| **Monte Carlo 6M Median / Bull / Bear** | Summary statistics from a 2,000-path Geometric Brownian Motion simulation projecting 26 weeks forward (see detail below). |
+| **Fibonacci 61.8% Support** | Retracement level computed from the 52-week high and low. Used as a structural support reference. |
+| **Distance from 52W High** | Percentage gap between the current price and the 52-week high. |
+| **Half-Kelly Position Size** | Kelly Criterion applied to the weekly win/loss ratio, halved for practical risk management. Returns the recommended portfolio allocation percentage. |
+| **Fear and Greed Index** | A composite of RSI, Stochastic, and inverted Volatility, producing a 0–100 score classified as: Extreme Fear, Fear, Neutral, Greed, Extreme Greed. |
+| **Composite Quant Score (0–100)** | A weighted heuristic aggregating momentum, risk-adjusted return, trend state, alpha, and sentiment signals into a single actionable ranking. |
+
+### Quant Score Interpretation
+
+| Score Range | Classification |
+|---|---|
+| >= 70 | Strong momentum — card highlighted in green |
+| 40 – 69 | Neutral — no highlight |
+| < 40 | Weak or deteriorating — card highlighted in red |
+
+### Dashboard Controls
+
+- **Filter buttons**: ALL, TIER-A, TIER-B, STRONG BUYS (>=70), EXTREME FEAR
+- **Sort dropdown**: Quant Score, RSI, 6M Return, 1Y Return, Volatility (ascending/descending)
+- **Search**: Live-filtering by company name or ticker symbol
+- **Sparklines**: Gradient-filled SVG area charts rendering the trailing 52-week price trajectory
+- **Progress bar**: Real-time loading indicator as tickers fetch in parallel
+- **Data source tag**: Each card shows which API provider returned the data (Yahoo, Polygon, etc.)
 
 ---
 
-## Setup & Deployment
+## Detail Modal — Institutional Tear Sheet
 
-### Option 1: Just Use It
-Visit **[chennakeshavadasa.github.io/career-semi-quant](https://chennakeshavadasa.github.io/career-semi-quant/)** — no setup needed.
+Clicking any company card opens a full-screen detail modal containing seven interactive quantitative charts and an extended set of computed metrics. This is where the deeper institutional-grade analysis lives.
 
-### Option 2: Fork & Deploy Your Own
-1. Fork this repository
-2. Go to **Settings → Pages → Deploy from branch** → select `master` → Save
-3. Your copy will be live at `https://<your-username>.github.io/career-semi-quant/`
+### Interactive Chart 1 — Price Action with Trend Overlays
 
-### Option 3: Run Locally
+Displays the trailing 52-week weekly closing price alongside two overlay series:
+
+- **40-Week Simple Moving Average (SMA)**: The primary long-term trend baseline. Price consistently above SMA indicates an established uptrend.
+- **Bollinger Bands (20-week, 2-sigma)**: The shaded region between the upper and lower band represents the statistical range within which price is expected to trade 95% of the time under a normal distribution assumption. Band expansion signals increasing volatility regimes; band contraction (squeeze) often precedes a large directional move.
+
+Hovering over the chart displays the exact close price, SMA value, and both Bollinger levels at that specific week.
+
+### Interactive Chart 2 — Underwater Drawdown
+
+The drawdown curve tracks the percentage decline from the rolling peak price at every point in time. When the line is at 0%, the stock is at an all-time high for the displayed period. When it is at -30%, the stock is 30% below its most recent peak.
+
+The area under the curve (filled in red) represents the total "pain" a holder of the stock experienced over the year. This is the visual representation of Max Drawdown and is standard in institutional performance attribution reports.
+
+### Interactive Chart 3 — Weekly Returns Distribution with Normal PDF Overlay
+
+A histogram of all observed weekly returns over the trailing 52 weeks, binned in 2-percentage-point intervals from -20% to +20%. A theoretical Normal Distribution PDF curve (white line) is overlaid using the stock's computed mean weekly return and weekly standard deviation.
+
+The visual gap between the empirical histogram bars and the theoretical curve reveals **fat tails** and **skewness** — the degree to which the stock's return distribution departs from what standard models assume. Stocks with large bars in the extreme left tail carry significantly more tail risk than their Sharpe Ratio alone would suggest.
+
+### Interactive Chart 4 — 26-Week Rolling Volatility (Annualized)
+
+Volatility is not a static number. This chart computes a sliding 26-week window of annualized volatility at every weekly point in the 52-week display period. The result is a time series showing how the stock's risk regime has evolved.
+
+Volatility compression (the line declining toward a low) is often observed before major price breakouts. Volatility expansion (sudden spikes) indicates a shift to a high-risk regime, typically following earnings surprises, macro shocks, or sector-wide rotation events.
+
+### Interactive Chart 5 — 26-Week Rolling Beta (vs SPY)
+
+Beta is typically reported as a single number, but it changes over time. This chart computes the covariance of the stock's weekly returns with SPY's weekly returns inside a 26-week rolling window, producing a time series of beta values.
+
+**Decoupling events** — periods where the rolling beta drops sharply — indicate the stock is temporarily disconnecting from broad market movements and trading on its own idiosyncratic fundamentals (earnings, product cycles, analyst upgrades). These are the periods of greatest alpha opportunity for sector-specific analysis.
+
+### Interactive Chart 6 — 26-Week Rolling Sharpe Ratio
+
+The rolling Sharpe Ratio shows whether the stock has been compensating investors for the risk they are taking, and whether that compensation has been consistent or eroding. A declining Sharpe over the trailing six months, even if the annual Sharpe remains positive, is an early warning signal that the risk/return tradeoff is deteriorating.
+
+A sustained Sharpe above 1.0 in the rolling window indicates the stock has been generating meaningful risk-adjusted outperformance in the recent period.
+
+### Interactive Chart 7 — Monte Carlo Simulation (Geometric Brownian Motion)
+
+Fifteen independent price path simulations are generated forward over 26 weeks (6 months) using **Geometric Brownian Motion (GBM)**, the same stochastic process used in the Black-Scholes option pricing model. Each path is computed as:
+
+```
+S(t+1) = S(t) * exp( (mu - sigma^2 / 2) * dt + sigma * sqrt(dt) * Z )
+```
+
+Where:
+- `mu` is the mean weekly log-return derived from historical data (converted to decimal form)
+- `sigma` is the weekly volatility (annualized volatility divided by sqrt(52))
+- `Z` is a standard normal random variable generated via the Box-Muller transform
+- `dt` is one week (1/52 of a year)
+
+The 15 simulated paths form a **probability cone** — a visual representation of the distribution of plausible futures given the stock's historical behavior. The cone is not a forecast. It is a model of uncertainty. Wider cones indicate higher-volatility stocks with more dispersed outcomes. Narrower cones indicate lower-volatility stocks with tighter projected ranges.
+
+Hovering anywhere within the cone snaps the tooltip to the nearest simulated path and displays the projected price at that specific week.
+
+The primary Monte Carlo engine used for the card-level summary statistics runs 2,000 iterations and returns the 10th percentile (Bear Case), 50th percentile (Base Case / Median), and 90th percentile (Bull Case) terminal prices.
+
+### Extended Quant Metrics Grid (Detail Modal)
+
+In addition to the seven charts, the detail modal displays:
+
+| Metric | Description |
+|---|---|
+| **Treynor Ratio** | Annualized excess return per unit of market (systematic) risk. Complements Sharpe by isolating the contribution of beta to returns. |
+| **Information Ratio** | Annualized excess return over SPY divided by the annualized tracking error. Measures the consistency and skill of outperformance. |
+| **R-Squared** | The proportion of the stock's variance that is explained by SPY's variance. High R-squared stocks move almost entirely with the market; low R-squared stocks have significant idiosyncratic return components. |
+| **CVaR (95%)** | Conditional Value at Risk — the expected loss in the worst 5% of weeks. Unlike VaR, which only gives a threshold, CVaR gives the average severity of tail losses. |
+| **10-Week SMA** | Current 10-week simple moving average. Used alongside the 40-week for trend cross detection. |
+| **40-Week SMA** | Current 40-week simple moving average. The primary long-term trend baseline overlaid on the price chart. |
+| **Half-Kelly Size** | Mathematically optimal portfolio allocation percentage based on the stock's historical weekly win rate and win/loss magnitude ratio. |
+| **Annual Alpha** | Jensen's Alpha — the return attributable to manager/stock-specific skill rather than passive market exposure. |
+
+---
+
+## Covered Companies
+
+All companies in the dashboard are publicly traded. The private/pre-IPO section present in earlier versions has been removed.
+
+| Sector | Companies |
+|---|---|
+| **Foundry** | TSMC, GlobalFoundries |
+| **EDA and Design IP** | Synopsys, Cadence, ARM |
+| **Fab Equipment** | ASML, Applied Materials, Lam Research, KLA, Tokyo Electron |
+| **Memory** | Micron, Western Digital, Samsung Electronics |
+| **AI / GPU** | NVIDIA, AMD, Super Micro Computer |
+| **High-Speed SerDes** | Broadcom, Marvell, Credo, Astera Labs, Rambus, MaxLinear, Parade Technologies |
+| **Optical Rx/Tx** | Coherent Corp, Lumentum, MACOM |
+| **Analog and Mixed-Signal** | Texas Instruments, Analog Devices, Monolithic Power, Cirrus Logic, Microchip Technology, Silicon Laboratories, onsemi, Synaptics, STMicroelectronics |
+| **RF and Wireless** | Qualcomm, Skyworks Solutions, Qorvo |
+| **MCU / DSP / Embedded** | NXP Semiconductors, Renesas Electronics, CEVA |
+| **Power and Connectivity** | Intel, Semtech, Infineon Technologies |
+
+---
+
+## Setup and Deployment
+
+### Option 1 — Use the Live Version
+
+Visit **[chennakeshavadasa.github.io/career-semi-quant](https://chennakeshavadasa.github.io/career-semi-quant/)** directly. No setup required.
+
+### Option 2 — Fork and Deploy Your Own Instance
+
+1. Fork this repository on GitHub
+2. Navigate to **Settings → Pages → Deploy from branch**, select `master`, and save
+3. Your personal instance will be live at `https://<your-username>.github.io/career-semi-quant/`
+
+### Option 3 — Run Locally
+
 ```bash
 git clone https://github.com/chennakeshavadasa/career-semi-quant.git
 cd career-semi-quant
 python3 -m http.server 8000
-# Open http://localhost:8000
+# Open http://localhost:8000 in a browser
 ```
 
-### Adding API Keys (Optional)
-Click the **⚙ API KEYS** button on the dashboard and paste your free keys from:
-- [Polygon.io](https://polygon.io/) — best for US equities
-- [Alpha Vantage](https://www.alphavantage.co/) — good international coverage
-- [Finnhub](https://finnhub.io/) — solid free tier
+### Optional API Keys
 
-Keys are stored locally in your browser. They help fetch data for international stocks (Samsung, Infineon, etc.) that free proxies sometimes block.
+The dashboard functions without any API keys via Yahoo Finance through CORS proxies. For improved reliability on international tickers (Samsung, Infineon, STMicro, Renesas), optional keys from the following providers can be added via the API KEYS button on the dashboard:
+
+- [Polygon.io](https://polygon.io/) — Best coverage for US equities with a generous free tier
+- [Alpha Vantage](https://www.alphavantage.co/) — Strong international coverage
+- [Finnhub](https://finnhub.io/) — Reliable free tier with broad ticker support
+
+API keys are stored exclusively in the browser's `localStorage` and are never transmitted to any external service.
 
 ---
 
-## Limitations & Disclaimers
+## Limitations and Disclaimers
 
-> **This tool is for educational and informational purposes only. It is NOT financial advice.**
+This tool is for educational and informational purposes only. It is not financial advice.
 
-- The **Monte Carlo Simulation** generates mathematical probabilities based on historical volatility. It cannot predict market crashes, earnings misses, or macroeconomic shocks.
-- The **Quant Score** is a composite heuristic, not a trading signal. It surfaces interesting stocks — it doesn't tell you to buy or sell.
-- **Momentum states** (Overbought/Oversold) are technical indicators based on price action. They are not fundamental valuations (P/E, DCF, etc.).
-- Data depends on free proxy availability. Some international tickers may show `DATA UNAVAILABLE` if all proxies are blocked.
-- Weekly resolution means intraday moves are not captured.
+- The Monte Carlo Simulation generates probabilistic outcomes based solely on historical price behavior. It cannot account for earnings surprises, macroeconomic shocks, regulatory changes, or structural breaks in the time series.
+- The Composite Quant Score is a heuristic signal, not a trading recommendation. It is designed to surface stocks worth deeper investigation, not to direct buy or sell decisions.
+- All computation uses weekly closing prices. Intraday volatility, options market data, and fundamental metrics (P/E, DCF, revenue growth) are outside the scope of this tool.
+- International tickers may return DATA UNAVAILABLE if all four data source levels are blocked by CORS or geo-restriction. This is a network limitation, not a data quality issue.
+- Past volatility and past returns are not reliable predictors of future performance.
 
 ---
 
@@ -218,32 +266,39 @@ Keys are stored locally in your browser. They help fetch data for international 
 
 | Layer | Technology |
 |---|---|
-| **Structure** | Single `index.html` file — zero build step |
-| **Styling** | Vanilla CSS with CSS custom properties (dark theme) |
-| **Typography** | [Outfit](https://fonts.google.com/specimen/Outfit) (headings) + [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono) (data) |
-| **Math Engine** | Pure JavaScript — no external libraries |
-| **Charts** | Inline SVG sparklines with gradient fills |
-| **Hosting** | GitHub Pages (free) |
-| **Data** | Yahoo Finance (via CORS proxies) + optional Polygon / Alpha Vantage / Finnhub |
+| **Application structure** | Single `index.html` file — zero build step, zero dependencies to install |
+| **Styling** | Vanilla CSS with CSS custom properties, glassmorphism, and a fully dark theme |
+| **Typography** | [Outfit](https://fonts.google.com/specimen/Outfit) for UI text; [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono) for all numeric data |
+| **Quantitative math engine** | Pure JavaScript — RSI, Stochastic, MACD, Bollinger Bands, Sharpe, Sortino, VaR, CVaR, Max Drawdown, Beta, Alpha, R-Squared, Treynor, Information Ratio, Kelly Criterion, Fibonacci, GBM Monte Carlo |
+| **Dashboard sparklines** | Inline SVG with gradient fills and area charts |
+| **Detail modal charts** | [Chart.js](https://www.chartjs.org/) — 7 interactive canvas-based plots with custom tooltips |
+| **Data sources** | Yahoo Finance (via CORS proxies) with optional Polygon.io, Alpha Vantage, and Finnhub as fallback levels |
+| **Hosting** | GitHub Pages |
 
 ---
 
 ## Contributing
 
-Want to add more companies, improve the math, or fix a bug? PRs are welcome.
+Contributions are welcome. The entire application lives in a single file (`index.html`), which makes the contribution surface minimal.
 
 ```bash
-# Clone
+# Clone the repository
 git clone https://github.com/chennakeshavadasa/career-semi-quant.git
 
-# Edit index.html — that's the entire app
+# Make changes to index.html
 
-# Test locally
+# Test locally before pushing
 python3 -m http.server 8000
 
-# Push
-git add . && git commit -m "your change" && git push
+# Commit and push
+git add index.html
+git commit -m "description of change"
+git push
 ```
+
+When adding companies, use the `COS` array in the data section of `index.html`. All entries require a valid public ticker symbol. Private or pre-IPO companies should not be added as the system requires real market price data.
+
+When modifying quantitative indicators, ensure that changes to calculation functions are reflected consistently across both the card-level summary and the detail modal chart logic.
 
 ---
 

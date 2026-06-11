@@ -131,6 +131,14 @@ Where `σ(20)` = standard deviation of the last 20 weekly closes.
 | **Bands squeezing** | **Volatility compressing** | **⚡ Large move imminent — direction unknown** |
 | Price rides upper band for weeks | Very strong uptrend | Don't sell just because it looks "expensive" |
 
+**In-Depth Explanation of Bollinger Band Scenarios:**
+
+1. **Touches the Upper Band (Statistically Expensive):** The upper band is placed 2 standard deviations above the average. Statistically, 95% of the time, the price should stay *below* this line. When it touches or crosses it, the stock has gone up unusually fast. It might be exhausted and ready to pull back down to the average (a reversal).
+2. **Touches the Lower Band (Statistically Cheap):** The opposite scenario. The stock has fallen unusually fast and is sitting at the bottom of its statistical range. Fear might be overblown here, making it a "contrarian" buy opportunity because a bounce back up to the average is statistically very likely.
+3. **Bands Expanding (Volatility Increasing):** The bands widen when the stock starts making huge, wild swings. This means the market is suddenly very uncertain about the company's true value (often happens around earnings reports or major news). Big, unpredictable moves are actively happening.
+4. **Bands Squeezing (Volatility Compressing):** This happens when the stock has been trading flat in a very tight, boring range for a long time. The bands get extremely narrow. Think of a coiled spring being pushed down tightly. Eventually, the pressure has to release. A "squeeze" warns you that a massive, explosive move is coming very soon (though it doesn't tell you if it will explode up or down).
+5. **Price Rides Upper Band for Weeks:** Usually, touching the upper band means the stock is "too expensive" and will fall. But sometimes, in incredibly powerful bull markets (like NVDA during the AI boom), the price just locks onto the upper band and keeps riding it higher week after week. If the stock is riding the upper band *while* the band itself is pointing sharply upward, it means momentum is overwhelmingly strong. Selling here just because it "looks high" is a common mistake that makes you miss out on massive gains.
+
 ---
 
 ### 2.3 MACD (Moving Average Convergence Divergence)

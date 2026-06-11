@@ -309,26 +309,20 @@ Stocks like NVDA or AMD have massive upside explosions. The Sharpe Ratio makes t
 
 ### 4.4 RSI (Relative Strength Index) — shown in tech bar
 
-**Simple explanation — The tired runner:**
-A sprinter running at full speed for 10 minutes can't sustain it — they'll slow down. RSI applies "fatigue" to stock prices. A stock that has surged every week for months is "tired" and statistically likely to slow or reverse.
+**Simple explanation — The Tug of War:**
+Imagine a massive tug of war between Bulls (buyers) and Bears (sellers). 
+Every week the stock goes up, the Bulls pull the rope towards their side. Every week it goes down, the Bears pull it back.
 
-**Mathematical definition:**
+RSI simply measures who is winning this tug of war over the last 14 weeks, and by how much, on a scale from 0 to 100.
+- If the stock goes up almost every week, the Bulls have pulled the rope all the way to their side. The RSI will be near 100. But the Bulls are now exhausted ("Overbought"), and the Bears will easily pull it back.
+- If the stock crashes week after week, the Bears have the rope near 0. But they are exhausted ("Oversold"), and the Bulls are ready to take over.
 
-```
-RSI = 100 − 100 / (1 + RS)
-
-RS = Average Up-Week Gain / Average Down-Week Loss  (over last 14 weeks)
-```
-
-**RSI quick reference:**
-
-| RSI | Signal | Meaning | Trading implication |
-|-----|--------|---------|---------------------|
-| < 30 | 🟢 Oversold | Stock fell too fast | Contrarian: watch for bounce |
-| 30–45 | Mild oversold | Possible opportunity | Monitor closely |
-| 45–55 | Neutral | No strong signal | Hold existing positions |
-| 55–75 | Bullish | Uptrend in progress | Ride the trend |
-| > 75 | 🔴 Overbought | Stock rose too fast | Take profits / caution |
+**How to read it:**
+- **> 75 (🔴 Overbought):** Bulls are exhausted. The stock rose too fast and is due for a pullback. Take profits or use caution.
+- **55–75 (🟢 Bullish):** Strong, healthy uptrend. Ride the momentum.
+- **45–55 (⚪ Neutral):** The tug of war is perfectly tied. No clear trend.
+- **30–45 (🟡 Weak):** Bears are in control. Wait for a signal.
+- **< 30 (🟢 Oversold):** Bears are completely exhausted. The stock fell too fast. Watch closely for a "contrarian" bounce back up!
 
 ---
 
@@ -343,6 +337,8 @@ Imagine you are tracking the price of a house over the last 14 weeks.
 If the house sells today for **$900,000**, where does that sit between the floor and the ceiling? It is 80% of the way up.
 
 The **Stochastic Oscillator** does exactly this for stocks. It skips all the complicated averages and math. It simply finds the highest peak and the lowest valley of the last 14 weeks, and tells you exactly where today's price sits on a scale of 0 to 100.
+
+![Stochastic Oscillator Visualized](./plots/stochastic.png)
 
 **How to read it:**
 - **> 80 (Overbought / Too Hot):** The stock is pushing right against its 14-week ceiling. Buyers are usually exhausted here, and the price is statistically likely to bounce back down.
@@ -571,24 +567,20 @@ Treynor Ratio = (Annualized Return − Risk-Free Rate) / Beta
 
 ### 6.5 Upside / Downside Capture Ratios
 
-**Simple explanation — Asymmetric participation:**
-- **Upside Capture = 150%** → When S&P 500 goes UP, this stock captures 150% of that gain
-- **Downside Capture = 60%** → When S&P 500 goes DOWN, this stock falls only 60% as much
+**Simple explanation — The Fair-Weather Friend vs The Shield:**
+How does this stock act when the overall market is having a great week vs a terrible week?
+- **Upside Capture = 150%** → When the S&P 500 goes UP 1%, this stock zooms up 1.5%. (Great!)
+- **Downside Capture = 60%** → When the S&P 500 goes DOWN 1%, this stock only falls 0.6%. (A perfect shield!)
 
-```mermaid
-quadrantChart
-    title Upside vs Downside Capture Ratio
-    x-axis Low Upside Capture --> High Upside Capture
-    y-axis Low Downside Capture --> High Downside Capture
-    quadrant-1 ⚡ VOLATILE: More of everything
-    quadrant-2 ⭐ IDEAL: Win more, lose less
-    quadrant-3 🛡️ DEFENSIVE: Conservative
-    quadrant-4 🔴 WORST: Miss gains, amplify losses
-    TSMC: [0.60, 0.35]
-    COHR: [0.80, 0.27]
-    NVDA: [0.72, 0.55]
-    GFS: [0.35, 0.65]
-```
+When evaluating an RSU or a stock, you want to map it into one of four quadrants:
+
+![Capture Ratios Visualized](./plots/capture_ratio.png)
+
+**The 4 Quadrants of Stocks:**
+1. **IDEAL (High Up / Low Down):** The holy grail. It captures massive gains during bull markets, but shields you from losses during crashes. 
+2. **DEFENSIVE (Low Up / Low Down):** Safe and boring. Won't make you rich in a bull market, but protects your money in a crash.
+3. **VOLATILE (High Up / High Down):** A wild ride. Great in bull markets, but will obliterate your portfolio in a crash. (Many semi-cap tech stocks live here).
+4. **TERRIBLE (Low Up / High Down):** The absolute worst. It misses out on market gains, but still crashes harder than the market. Sell immediately.
 
 ---
 

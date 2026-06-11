@@ -228,7 +228,7 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
   <header>
     <div>
       <div class="h-title">Career Semi Quant Terminal</div>
-      <div class="h-sub">RSI · MACD · Bollinger · Sortino/VaR · Fib · Monte Carlo 6M Target</div>
+      <div class="h-sub">RSI · MACD · Bollinger Bands · Sortino · VaR/CVaR · Beta/Alpha · Calmar · Monte Carlo GBM · Kelly Criterion</div>
       <div class="h-ts" id="ts-line">Data freshness: loading...</div>
     </div>
     <div class="controls">
@@ -274,6 +274,10 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
 
   <div class="grid" id="grid"></div>
 </div>
+
+<footer style="text-align:center; padding:24px 0 32px; font-family:var(--mono); font-size:10px; color:var(--text-muted); opacity:0.55; border-top:1px solid rgba(255,255,255,0.04); margin-top:20px;">
+  Copyright &copy; 2025 Chennakeshava Dasa &nbsp;&middot;&nbsp; Career Semi Quant Terminal &nbsp;&middot;&nbsp; MIT License &nbsp;&middot;&nbsp; For educational purposes only. Not financial advice.
+</footer>
 
 <!-- Detail Modal -->
 <div class="modal-bg" id="detail-modal" style="padding:20px;">
@@ -346,7 +350,7 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
 <!-- Settings Modal -->
 <div class="modal-bg" id="settings-modal">
   <div class="modal-box">
-    <h3>📡 API Key Configuration</h3>
+    <h3>API Key Configuration</h3>
     <p>The terminal tries Yahoo Finance via 4 proxy layers automatically (no key needed). If those fail, it falls back to these APIs in order. For international stocks (Samsung, Infineon etc.), a premium key is recommended.</p>
     <label class="modal-label">Polygon.io Key</label>
     <input type="text" id="key-poly" class="search modal-input" placeholder="Optional — polygon.io/dashboard">
@@ -576,6 +580,49 @@ function calcKelly(prices) {
   };
 }
 
+// Calmar Ratio = Annualized Return / |Max Drawdown|
+function calcCalmar(prices) {
+  const annRet = ((prices[prices.length-1] - prices[0]) / prices[0]) * (52 / Math.max(prices.length - 1, 1));
+  const mdd = calcMaxDD(prices);
+  if (mdd === 0) return 0;
+  return annRet / Math.abs(mdd / 100);
+}
+
+// ATR (14-week, close-to-close approximation) expressed as % of current price
+function calcATR(prices, period = 14) {
+  if (prices.length < period + 1) return 0;
+  const trs = [];
+  for (let i = 1; i < prices.length; i++) trs.push(Math.abs(prices[i] - prices[i-1]));
+  const atr = trs.slice(-period).reduce((a,b) => a+b, 0) / period;
+  return (atr / prices[prices.length-1]) * 100;
+}
+
+// Price Z-Score = (current price - 52W mean) / 52W std
+function calcPriceZScore(prices) {
+  const mean = prices.reduce((a,b) => a+b, 0) / prices.length;
+  const std = Math.sqrt(prices.reduce((a,b) => a + Math.pow(b-mean,2), 0) / prices.length);
+  if (std === 0) return 0;
+  return (prices[prices.length-1] - mean) / std;
+}
+
+// Upside/Downside Capture Ratios vs benchmark
+function calcCaptureRatios(prices, benchPrices) {
+  if (!benchPrices || benchPrices.length < 20 || prices.length < 20) return { upCapture: 100, downCapture: 100 };
+  const len = Math.min(prices.length, benchPrices.length);
+  const pS = prices.slice(-len), bS = benchPrices.slice(-len);
+  let upP = 0, upB = 0, downP = 0, downB = 0;
+  for (let i = 1; i < len; i++) {
+    const bRet = (bS[i] - bS[i-1]) / bS[i-1];
+    const pRet = (pS[i] - pS[i-1]) / pS[i-1];
+    if (bRet > 0) { upP += pRet; upB += bRet; }
+    else if (bRet < 0) { downP += pRet; downB += bRet; }
+  }
+  return {
+    upCapture:   upB   === 0 ? 100 : (upP   / upB)   * 100,
+    downCapture: downB === 0 ? 100 : (downP / downB) * 100
+  };
+}
+
 // Monte Carlo 6-Month Simulation (2000 Iterations)
 function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
   if (!vol || vol === 0) return { median: cur, p10: cur, p90: cur };
@@ -731,7 +778,11 @@ async function fetchOne(ticker, isBench = false) {
   const fg     = calcFearGreed(rsi, stoch, vol);
   const tech   = calcTechAndFib(closes);
   const { beta, alpha, r2, treynor, infoRatio } = isBench ? { beta: 1, alpha: 0, r2: 0, treynor: 0, infoRatio: 0 } : calcBetaAlphaAndMore(closes, SPY_CLOSES);
-  const kellyObj  = calcKelly(closes);
+  const kellyObj   = calcKelly(closes);
+  const calmar     = calcCalmar(closes);
+  const atrPct     = calcATR(closes, 14);
+  const priceZ     = calcPriceZScore(closes);
+  const { upCapture, downCapture } = isBench ? { upCapture: 100, downCapture: 100 } : calcCaptureRatios(closes, SPY_CLOSES);
 
   // Momentum State (based strictly on price action — NOT fundamental valuation)
   let momentum = 'NEUTRAL', momCls = 'b';
@@ -757,7 +808,8 @@ async function fetchOne(ticker, isBench = false) {
   return {
     ok: true, source, price: cur, prices: closes,
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, cvar95, maxDD,
-    macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, kellyObj
+    macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, kellyObj,
+    calmar, atrPct, priceZ, upCapture, downCapture
   };
 }
 
@@ -1135,17 +1187,24 @@ function openDetail(ticker, name) {
   });
 
   document.getElementById('det-grid').innerHTML = `
-    <div class="q-box"><span class="q-lbl">Treynor Ratio</span><span class="q-val">${d.treynor.toFixed(3)}</span></div>
-    <div class="q-box"><span class="q-lbl">Info Ratio</span><span class="q-val">${d.infoRatio.toFixed(3)}</span></div>
+    <div class="q-box"><span class="q-lbl">Treynor Ratio</span><span class="q-val ${d.treynor>0?'g':'r'}">${d.treynor.toFixed(3)}</span></div>
+    <div class="q-box"><span class="q-lbl">Info Ratio</span><span class="q-val ${d.infoRatio>0.5?'g':d.infoRatio<0?'r':''}">${d.infoRatio.toFixed(3)}</span></div>
     <div class="q-box"><span class="q-lbl">R-Squared</span><span class="q-val">${(d.r2*100).toFixed(1)}%</span></div>
     <div class="q-box"><span class="q-lbl">CVaR (95%)</span><span class="q-val r">${d.cvar95.toFixed(2)}%</span></div>
     <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val">${d.score}/100</span></div>
-    
+
     <div class="q-box"><span class="q-lbl">Beta (vs SPY)</span><span class="q-val">${d.beta.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">Annual Alpha</span><span class="q-val ${d.alpha>0?'g':'r'}">${(d.alpha*100).toFixed(2)}%</span></div>
     <div class="q-box"><span class="q-lbl">Half-Kelly Size</span><span class="q-val b">${d.kellyObj.size.toFixed(1)}%</span></div>
     <div class="q-box"><span class="q-lbl">10-Wk SMA</span><span class="q-val">$${d.tech.sma10.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">40-Wk SMA</span><span class="q-val">$${d.tech.sma40.toFixed(2)}</span></div>
+
+    <div class="q-box"><span class="q-lbl">Calmar Ratio</span><span class="q-val ${d.calmar>1?'g':d.calmar<0?'r':'y'}">${d.calmar.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">ATR (14-Wk %)</span><span class="q-val y">${d.atrPct.toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Price Z-Score</span><span class="q-val ${d.priceZ>1.5?'r':d.priceZ<-1.5?'g':''}">${d.priceZ.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Win Rate (Wk)</span><span class="q-val ${d.kellyObj.winRate>0.55?'g':d.kellyObj.winRate<0.45?'r':''}">${(d.kellyObj.winRate*100).toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Upside Capture</span><span class="q-val ${d.upCapture>100?'g':'r'}">${d.upCapture.toFixed(1)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Downside Capture</span><span class="q-val ${d.downCapture<100?'g':'r'}">${d.downCapture.toFixed(1)}%</span></div>
   `;
   
   document.getElementById('detail-modal').style.display = 'flex';

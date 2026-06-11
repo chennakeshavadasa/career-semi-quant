@@ -78,12 +78,17 @@ SMA(n) at time t = (P[t] + P[t-1] + ... + P[t-n+1]) / n
 
 Where `P[t]` is the closing price at week `t`, and `n` is the window size.
 
-**The two SMAs and their roles:**
+**The Two SMAs: The Speedboat and the Ocean Liner**
 
-| SMA | Window | Speed | Purpose |
-|-----|--------|-------|---------|
-| SMA10 | 10 weeks | Fast — reacts quickly | Short-term trend direction |
-| SMA40 | 40 weeks | Slow — smooths noise | Long-term trend / support level |
+To understand why we use two different moving averages, imagine two boats navigating a winding river:
+
+- 🚤 **SMA10 (10-Week / The Speedboat):** This only averages the last 10 weeks of prices. Because it carries very little historical "weight", it is incredibly agile. When the stock's price changes direction, the SMA10 turns very quickly to follow it. It tells you exactly what momentum is doing *right now*.
+- 🚢 **SMA40 (40-Week / The Ocean Liner):** This averages the last 40 weeks (almost a full year). Because it carries so much historical data, it turns very slowly. It completely ignores short-term noise and weekly panics. It tells you the *long-term, structural trend* of the stock.
+
+**Why do we care when they cross?**
+When the stock price starts going up, the agile speedboat (SMA10) catches the uptrend immediately and begins rising. The massive ocean liner (SMA40) takes much longer to react. 
+
+When the SMA10 finally crosses *above* the SMA40, it serves as mathematically confirmed proof that the new trend is strong enough to actually turn the ocean liner around. This is a massive signal!
 
 **Bull/Bear Cross Signal — how it works:**
 

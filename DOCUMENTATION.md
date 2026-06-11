@@ -297,6 +297,8 @@ It is a simple fraction: **Reward ÷ Bad Risk**. Here are the two ingredients:
    - If the stock went **DOWN** that week, the formula takes that percentage loss, *squares it* (which mathematically punishes massive crashes much, much harder than tiny dips), and throws it into a "Penalty Pile".
    - It then divides that Penalty Pile by the *total* number of weeks to find your average "Downside Risk".
 
+![Sortino Ratio Visualized](./plots/sortino_ratio.png)
+
 **Why it's better for tech/semiconductor stocks:**
 Stocks like NVDA or AMD have massive upside explosions. The Sharpe Ratio makes them look artificially risky. Sortino correctly rewards them for making you money, while only measuring the actual pain of their crashes.
 

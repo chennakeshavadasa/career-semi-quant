@@ -618,9 +618,24 @@ body {
           </div>
         </div>
         <div style="flex:1;">
-          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Monte Carlo Simulation (Geometric Brownian Motion)</h3>
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Merton Jump-Diffusion Monte Carlo (2000 paths)</h3>
           <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
             <canvas id="det-mc-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:12px; margin-top:16px;">
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">26-Wk Rolling Correlation vs S&amp;P 500</h3>
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-corr-chart"></canvas>
+          </div>
+        </div>
+        <div style="flex:1;">
+          <h3 style="margin-bottom:8px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:600;">Historical VaR Stress Test (Weekly, Per Confidence Level)</h3>
+          <div style="height:150px; position:relative; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:10px;">
+            <canvas id="det-var-chart"></canvas>
           </div>
         </div>
       </div>
@@ -1041,6 +1056,88 @@ function calcTailRatio(returns) {
 
 // ==== END ADVANCED QUANT ANALYTICS ====
 
+// ==== INSTITUTIONAL QUANT RATIOS ====
+
+// Gain-to-Pain Ratio = sum(gains) / sum(|losses|)
+function calcGainToPain(returns) {
+  let gains = 0, losses = 0;
+  for (const r of returns) {
+    if (r > 0) gains += r;
+    else losses += Math.abs(r);
+  }
+  return losses === 0 ? 99 : gains / losses;
+}
+
+// Pain Index = time-average of all underwater depths (%)
+function calcPainIndex(prices) {
+  if (prices.length < 2) return 0;
+  let peak = prices[0], sumDD = 0;
+  for (const p of prices) {
+    if (p > peak) peak = p;
+    sumDD += Math.abs((p - peak) / peak) * 100;
+  }
+  return sumDD / prices.length;
+}
+
+// Recovery Factor = |total return| / |max drawdown|
+function calcRecoveryFactor(prices) {
+  const totalRet = ((prices[prices.length-1] - prices[0]) / prices[0]) * 100;
+  const mdd = Math.abs(calcMaxDD(prices));
+  return mdd === 0 ? 99 : totalRet / mdd;
+}
+
+// 12-1 Month Momentum Factor (Fama-French, annualized in %)
+function calcMomentumFactor(prices) {
+  if (prices.length < 52) return 0;
+  const p12 = prices[prices.length - 52];
+  const p1  = prices[prices.length - 4]; // exclude last 1 month
+  return ((p1 - p12) / p12) * 100;
+}
+
+// Volatility Regime = EWMA Vol / Historical Vol (>1 = vol expanding)
+function calcVolRegime(returns) {
+  if (returns.length < 13) return 1;
+  const histVar = returns.reduce((a,b) => a + b*b, 0) / returns.length;
+  const histVol = Math.sqrt(histVar * 52);
+  const decay = 0.94;
+  let ewmaVar = histVar;
+  for (const r of returns.slice(-26)) ewmaVar = decay * ewmaVar + (1 - decay) * r * r;
+  const ewmaVol = Math.sqrt(ewmaVar * 52);
+  return histVol === 0 ? 1 : ewmaVol / histVol;
+}
+
+// Max Drawdown Duration (longest time underwater, in weeks)
+function calcDrawdownDuration(prices) {
+  let peak = prices[0], maxDur = 0, curDur = 0;
+  for (const p of prices) {
+    if (p >= peak) { peak = p; maxDur = Math.max(maxDur, curDur); curDur = 0; }
+    else curDur++;
+  }
+  return Math.max(maxDur, curDur);
+}
+
+// Serenity Ratio = (Ann.Return - Rf) / Pain Index
+function calcSerenityRatio(prices) {
+  const painIdx = calcPainIndex(prices);
+  if (painIdx === 0) return 0;
+  const annRet = ((prices[prices.length-1] - prices[0]) / prices[0]) * (52 / Math.max(prices.length-1, 1));
+  return (annRet - 0.045) / (painIdx / 100);
+}
+
+// Historical VaR at 90%, 95%, 99% confidence (weekly, %)
+function calcVaRFull(returns) {
+  if (returns.length < 10) return { p90: 0, p95: 0, p99: 0 };
+  const sorted = [...returns].sort((a,b) => a-b);
+  const n = sorted.length;
+  return {
+    p90: Math.abs(sorted[Math.max(0, Math.floor(n * 0.10))] * 100),
+    p95: Math.abs(sorted[Math.max(0, Math.floor(n * 0.05))] * 100),
+    p99: Math.abs(sorted[Math.max(0, Math.floor(n * 0.01))] * 100)
+  };
+}
+
+// ==== END INSTITUTIONAL QUANT RATIOS ====
+
 // Merton Jump Diffusion Monte Carlo 6-Month Simulation (2000 Iterations)
 function runMonteCarlo(cur, drift, vol, iterations=2000, weeks=26) {
   if (!vol || vol === 0) return { median: cur, p10: cur, p90: cur };
@@ -1229,7 +1326,15 @@ async function fetchOne(ticker, isBench = false) {
   const autoCorr = calcAutocorrelation(returns);
   const omega = calcOmegaRatio(returns);
   const ulcer = calcUlcerIndex(closes);
-  const tailRatio = calcTailRatio(returns);
+  const tailRatio   = calcTailRatio(returns);
+  const gainToPain  = calcGainToPain(returns);
+  const painIndex   = calcPainIndex(closes);
+  const recoveryF   = calcRecoveryFactor(closes);
+  const momFactor   = calcMomentumFactor(closes);
+  const volRegime   = calcVolRegime(returns);
+  const ddDuration  = calcDrawdownDuration(closes);
+  const serenity    = calcSerenityRatio(closes);
+  const varFull     = calcVaRFull(returns);
 
   // Momentum State (based strictly on price action — NOT fundamental valuation)
   let momentum = 'NEUTRAL', momCls = 'b';
@@ -1257,7 +1362,8 @@ async function fetchOne(ticker, isBench = false) {
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, cvar95, maxDD,
     macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, trackingError, kellyObj,
     calmar, atrPct, priceZ, upCapture, downCapture,
-    momentsJB, cfVaR, hurst, autoCorr, omega, ulcer, tailRatio
+    momentsJB, cfVaR, hurst, autoCorr, omega, ulcer, tailRatio,
+    gainToPain, painIndex, recoveryF, momFactor, volRegime, ddDuration, serenity, varFull
   };
 }
 
@@ -1428,7 +1534,7 @@ function cardHTML(co) {
 // ============================
 // DETAIL MODAL & CHART
 // ============================
-let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null, chartInst6 = null, chartInst7 = null;
+let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null, chartInst6 = null, chartInst7 = null, chartInst8 = null, chartInst9 = null;
 function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
 function openDetail(ticker, name) {
   const d = D[ticker];
@@ -1444,6 +1550,8 @@ function openDetail(ticker, name) {
   if (chartInst5) chartInst5.destroy();
   if (chartInst6) chartInst6.destroy();
   if (chartInst7) chartInst7.destroy();
+  if (chartInst8) chartInst8.destroy();
+  if (chartInst9) chartInst9.destroy();
 
   const dates = [], sma40 = [], bbUp = [], bbDn = [], ddData = [], wRets = [];
   let peak = d.prices[0];
@@ -1493,12 +1601,10 @@ function openDetail(ticker, name) {
     normalCurve.push(pdf * wRets.length * 0.02);
   }
 
-  const rollingVol = [], rollingBeta = [], rollingSharpe = [];
+  const rollingVol = [], rollingBeta = [], rollingSharpe = [], rollingCorr = [];
   for (let i = 0; i < d.prices.length; i++) {
     if (i < 26) {
-      rollingVol.push(null);
-      rollingBeta.push(null);
-      rollingSharpe.push(null);
+      rollingVol.push(null); rollingBeta.push(null); rollingSharpe.push(null); rollingCorr.push(null);
     } else {
       const windowPrices = d.prices.slice(i-26, i+1);
       const wR = [];
@@ -1507,7 +1613,6 @@ function openDetail(ticker, name) {
       const variance = wR.reduce((a,b)=>a+Math.pow(b-mean,2),0)/26;
       const rVol = Math.sqrt(variance) * Math.sqrt(52);
       rollingVol.push(rVol * 100);
-      
       const rSharpe = rVol === 0 ? 0 : (mean * 52 - 0.045) / rVol;
       rollingSharpe.push(rSharpe);
       
@@ -1517,19 +1622,20 @@ function openDetail(ticker, name) {
           const bWindow = SPY_CLOSES.slice(bIndexEnd - 26, bIndexEnd + 1);
           const bR = [];
           for (let j = 1; j < bWindow.length; j++) bR.push((bWindow[j] - bWindow[j-1]) / bWindow[j-1]);
-          const bMean = bR.reduce((a,b)=>a+b,0)/26;
-          
-          let cov = 0, varB = 0;
+          const bMean = bR.reduce((a,b)=>a+b,0)/bR.length;
+          let cov = 0, varB = 0, varP = 0;
           for (let k = 0; k < 26; k++) {
-            cov += (wR[k] - mean) * (bR[k] - bMean);
+            cov  += (wR[k] - mean)  * (bR[k] - bMean);
             varB += Math.pow(bR[k] - bMean, 2);
+            varP += Math.pow(wR[k] - mean,  2);
           }
           rollingBeta.push(varB === 0 ? 1 : cov / varB);
+          rollingCorr.push((varP === 0 || varB === 0) ? 0 : cov / Math.sqrt(varP * varB));
         } else {
-          rollingBeta.push(null);
+          rollingBeta.push(null); rollingCorr.push(null);
         }
       } else {
-        rollingBeta.push(null);
+        rollingBeta.push(null); rollingCorr.push(null);
       }
     }
   }
@@ -1557,6 +1663,7 @@ function openDetail(ticker, name) {
   const d_rollingVol = rollingVol.slice(-52);
   const d_rollingBeta = rollingBeta.slice(-52);
   const d_rollingSharpe = rollingSharpe.slice(-52);
+  const d_rollingCorr = rollingCorr.slice(-52);
 
   Chart.defaults.color = 'rgba(255,255,255,0.7)';
   Chart.defaults.font.family = "'JetBrains Mono', monospace";
@@ -1654,10 +1761,7 @@ function openDetail(ticker, name) {
 
   chartInst7 = new Chart(document.getElementById('det-mc-chart').getContext('2d'), {
     type: 'line',
-    data: {
-      labels: mcLabels,
-      datasets: mcPaths
-    },
+    data: { labels: mcLabels, datasets: mcPaths },
     options: {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'nearest', intersect: false },
@@ -1666,11 +1770,50 @@ function openDetail(ticker, name) {
     }
   });
 
+  // Chart 8: Rolling Correlation to SPY
+  chartInst8 = new Chart(document.getElementById('det-corr-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: d_dates,
+      datasets: [
+        { label: 'Correlation', data: d_rollingCorr, borderColor: '#39c5cf', borderWidth: 1.5, pointRadius: 0, fill: false },
+        { label: 'Zero', data: d_dates.map(()=>0), borderColor: 'rgba(255,255,255,0.2)', borderDash:[4,4], borderWidth:1, pointRadius:0, fill:false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>c.dataset.label+': '+c.parsed.y.toFixed(2)} } },
+      scales: { x: { display: false }, y: { position:'right', min:-1, max:1, grid: { color: 'rgba(255,255,255,0.05)' } } }
+    }
+  });
+
+  // Chart 9: VaR Stress Test Bar Chart
+  const varFull = d.varFull || {p90:0, p95:0, p99:0};
+  chartInst9 = new Chart(document.getElementById('det-var-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: ['VaR 90% (Hist.)', 'VaR 95% (Hist.)', 'VaR 99% (Hist.)', 'CF mVaR 95%', 'CVaR 95%'],
+      datasets: [{
+        label: 'Loss %',
+        data: [varFull.p90, varFull.p95, varFull.p99, Math.abs(d.cfVaR), Math.abs(d.cvar95)],
+        backgroundColor: ['rgba(88,166,255,0.6)', 'rgba(227,179,65,0.7)', 'rgba(248,81,73,0.7)', 'rgba(188,140,255,0.7)', 'rgba(248,81,73,0.5)'],
+        borderColor:     ['#58a6ff', '#e3b341', '#f85149', '#bc8cff', '#f85149'],
+        borderWidth: 1.5, borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { backgroundColor:'rgba(13,17,23,0.9)', titleColor:'#8b949e', bodyColor:'#fff', borderColor:'rgba(99,102,241,0.8)', borderWidth:1, callbacks:{label:(c)=>'-'+c.parsed.y.toFixed(2)+'%'} } },
+      scales: { x: { grid:{ display:false }, ticks:{ font:{size:9} } }, y: { position:'right', grid: { color: 'rgba(255,255,255,0.05)' } } }
+    }
+  });
+
   document.getElementById('det-grid').innerHTML = `
     <div class="q-box"><span class="q-lbl">Treynor Ratio</span><span class="q-val ${d.treynor>0?'g':'r'}">${d.treynor.toFixed(3)}</span></div>
     <div class="q-box"><span class="q-lbl">Info Ratio</span><span class="q-val ${d.infoRatio>0.5?'g':d.infoRatio<0?'r':''}">${d.infoRatio.toFixed(3)}</span></div>
     <div class="q-box"><span class="q-lbl">R-Squared</span><span class="q-val">${(d.r2*100).toFixed(1)}%</span></div>
-    <div class="q-box"><span class="q-lbl">CVaR (95%)</span><span class="q-val r">${d.cvar95.toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">CVaR 95% (Wk)</span><span class="q-val r">${d.cvar95.toFixed(2)}%</span></div>
     <div class="q-box"><span class="q-lbl">Quant Score</span><span class="q-val">${d.score}/100</span></div>
 
     <div class="q-box"><span class="q-lbl">Beta (vs SPY)</span><span class="q-val">${d.beta.toFixed(2)}</span></div>
@@ -1684,6 +1827,17 @@ function openDetail(ticker, name) {
     <div class="q-box"><span class="q-lbl">Price Z-Score</span><span class="q-val ${d.priceZ>1.5?'r':d.priceZ<-1.5?'g':''}">${d.priceZ.toFixed(2)}</span></div>
     <div class="q-box"><span class="q-lbl">Win Rate (Wk)</span><span class="q-val ${d.kellyObj.winRate>0.55?'g':d.kellyObj.winRate<0.45?'r':''}">${(d.kellyObj.winRate*100).toFixed(1)}%</span></div>
     <div class="q-box"><span class="q-lbl">Upside Capture</span><span class="q-val ${d.upCapture>100?'g':'r'}">${d.upCapture.toFixed(1)}%</span></div>
+
+    <div class="q-box"><span class="q-lbl">Gain-to-Pain</span><span class="q-val ${d.gainToPain>1.5?'g':d.gainToPain<0.8?'r':'y'}">${d.gainToPain.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Pain Index</span><span class="q-val ${d.painIndex<5?'g':d.painIndex>15?'r':'y'}">${d.painIndex.toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">Recovery Factor</span><span class="q-val ${d.recoveryF>1?'g':d.recoveryF<0?'r':'y'}">${d.recoveryF.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">Serenity Ratio</span><span class="q-val ${d.serenity>1?'g':d.serenity<0?'r':'y'}">${d.serenity.toFixed(2)}</span></div>
+    <div class="q-box"><span class="q-lbl">12-1 Momentum</span><span class="q-val ${d.momFactor>0?'g':'r'}">${d.momFactor.toFixed(1)}%</span></div>
+
+    <div class="q-box"><span class="q-lbl">Vol Regime</span><span class="q-val ${d.volRegime>1.2?'r':d.volRegime<0.8?'g':'y'}">${d.volRegime.toFixed(2)}x</span></div>
+    <div class="q-box"><span class="q-lbl">DD Duration (Wk)</span><span class="q-val ${d.ddDuration>26?'r':d.ddDuration<8?'g':'y'}">${d.ddDuration}</span></div>
+    <div class="q-box"><span class="q-lbl">VaR 90% (Hist.)</span><span class="q-val r">-${varFull.p90.toFixed(2)}%</span></div>
+    <div class="q-box"><span class="q-lbl">VaR 99% (Hist.)</span><span class="q-val r">-${varFull.p99.toFixed(2)}%</span></div>
     <div class="q-box"><span class="q-lbl">Downside Capture</span><span class="q-val ${d.downCapture<100?'g':'r'}">${d.downCapture.toFixed(1)}%</span></div>
   `;
   

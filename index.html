@@ -1820,7 +1820,7 @@ function renderRiskMap() {
   
   const data = [];
   for (const c of COS) {
-    const d = c._cache;
+    const d = D[c.t];
     if (d && d.ok) {
       data.push({ x: d.vol * 100, y: d.chg1y, ticker: c.t, r: 6 });
     }
@@ -1868,7 +1868,7 @@ function toggleCorrelation() {
 
 function renderCorrelation() {
   const container = document.getElementById('correlation-matrix-container');
-  const validCos = COS.filter(c => c._cache && c._cache.ok && c._cache.prices);
+  const validCos = COS.filter(c => D[c.t] && D[c.t].ok && D[c.t].prices);
   if (validCos.length < 2) {
     container.innerHTML = "<p>Not enough data</p>";
     return;
@@ -1884,8 +1884,8 @@ function renderCorrelation() {
       if (i === j) {
         matrix[i][j] = 1;
       } else {
-        const cP1 = cos[i]._cache.prices;
-        const cP2 = cos[j]._cache.prices;
+        const cP1 = D[cos[i].t].prices;
+        const cP2 = D[cos[j].t].prices;
         const len = Math.min(cP1.length, cP2.length);
         const r1=[], r2=[];
         for(let k=1; k<len; k++) {

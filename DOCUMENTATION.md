@@ -781,13 +781,23 @@ Compares short-term responsive volatility to long-term historical volatility to 
 
 ## 10. Universe Risk Map
 
-A bubble scatter plot for portfolio-level comparison of all stocks simultaneously based on Annual Volatility (Risk %) vs 1-Year Return (%).
+**Simple explanation — The 4 Quadrants of the Market:**
+This scatter plot looks at every stock in your portfolio at the same time. It puts Risk (Volatility) on the bottom axis, and Reward (1-Year Return) on the side axis.
+
+![Universe Risk Map](./plots/risk_map.png)
+
+You instantly see which stocks are your "Casino" stocks (high risk, high reward) and which are "The Nightmare" (high risk, losing money). It answers: *Where does your portfolio live?*
 
 ---
 
 ## 11. Universe Correlation Heatmap
 
-A symmetric matrix where every cell shows the Pearson correlation of weekly returns between stocks. Deep blue = perfect co-movement. White = independent.
+**Simple explanation — The Contagion Tracker:**
+If one stock crashes, will the others crash with it? 
+
+![Correlation Heatmap](./plots/correlation_heatmap.png)
+
+A dark blue square means two stocks are basically joined at the hip (like NVDA and AMD). If you hold both, you don't actually have diversification. A white square means they move completely independently (like MSFT and Gold).
 
 ---
 
@@ -795,28 +805,14 @@ A symmetric matrix where every cell shows the Pearson correlation of weekly retu
 
 ### The Merton Jump-Diffusion Model
 
-Adds **random jumps** to the standard Black-Scholes model to better represent sudden price shocks (like earnings misses).
+**Simple explanation — Because markets don't always move smoothly:**
+Older mathematical models (like Black-Scholes) assume stock prices bounce around smoothly every day like a slow, random walk ("Diffusion"). 
 
-```mermaid
-flowchart TD
-    A[Start: 2000 simulations\nCurrent price = S₀] --> B[For each simulation]
-    B --> C[For each of 26 weeks\n6 months ahead]
-    C --> D[Step 1: Generate diffusion\nZ = Box-Muller random normal]
-    D --> E{Step 2: Jump check\nRandom < λ/52 = 2.3%?}
-    E -->|Yes ~2.3% of weeks| F[Generate jump magnitude\nJ = μ_J + σ_J × Z₂\n~= sudden -4% to -20% shock]
-    E -->|No ~97.7% of weeks| G[J = 0, no jump]
-    F --> H[Step 3: Update price\np = p × exp adjusted_drift + σ×Z + J]
-    G --> H
-    H --> I{More weeks?}
-    I -->|Yes| C
-    I -->|No — 26 weeks done| J[Record final price]
-    J --> K{More simulations?}
-    K -->|Yes| B
-    K -->|No — 2000 done| L[Sort all 2000 final prices]
-    L --> M[P10 = 10th percentile → Bear scenario]
-    L --> N[P50 = 50th percentile → Median scenario]
-    L --> O[P90 = 90th percentile → Bull scenario]
-```
+But in reality, a CEO gets fired, or an earnings report misses by 50%, and the stock suddenly teleports down 15% overnight. That is a "Jump".
+
+![Merton Jump-Diffusion Model](./plots/merton_jump.png)
+
+The **Merton Jump-Diffusion Model** is an advanced mathematical simulator that combines both the smooth bouncing AND the violent historical crashes of a stock. It runs this simulation 2,000 times into the future to find the absolute worst-case scenarios. It answers the question: *If a sudden disaster strikes, how far could this stock plummet?*
 
 ---
 

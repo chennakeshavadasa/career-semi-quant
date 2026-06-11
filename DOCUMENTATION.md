@@ -407,18 +407,30 @@ When analyzing a stock, check its JB score first to know if you can trust standa
 
 ### 5.3 Omega Ratio
 
-**Simple explanation — The totals ledger:**
-At year end: add every dollar gained in up-weeks. Add every dollar lost in down-weeks. Divide gains by losses. Omega makes **zero distributional assumptions** — it just counts actual money.
+**Simple explanation — The Totals Ledger:**
 
-**Mathematical definition:**
+Every risk metric we've discussed so far (VaR, Sharpe, Sortino) uses complicated statistical math like "standard deviations" or "bell curves".
 
-```
-Ω(τ) = Σ(r_i − τ) for r_i > τ
-        ÷
-        Σ(τ − r_i) for r_i < τ
+The **Omega Ratio** says: *Forget the fancy math. Let's just look at the actual money.*
 
-We use τ = 0 (threshold = "beating doing nothing")
-```
+Imagine keeping a ledger for the entire year:
+1. Every week you make money, you throw those percentage gains into the **Green Bucket**.
+2. Every week you lose money, you throw those percentage losses into the **Red Bucket**.
+
+At the end of the year, you weigh the two buckets against each other.
+
+![Omega Ratio Visualized](./plots/omega_ratio.png)
+
+**The Formula (In Plain English):**
+`Omega Ratio = Total Area of the Green Bucket ÷ Total Area of the Red Bucket`
+
+**Why it is so powerful:**
+Because it doesn't use standard deviations or bell curves, it automatically catches extreme "Fat Tail" crashes. If a stock has a bunch of small winning weeks but one utterly catastrophic crashing week, the Red Bucket will be massive, and the Omega Ratio will be terrible. It cannot be fooled by tricky statistics.
+
+**How to read it:**
+- **< 1.0 (🔴 Losing Money):** Your Red Bucket is heavier than your Green Bucket. 
+- **1.0 – 1.5 (⚪ Average):** You are making more than you lose, but it's a grind.
+- **> 1.5 (🟢 Excellent):** Your Green Bucket is massively outweighing your Red Bucket.
 
 ---
 

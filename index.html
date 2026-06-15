@@ -1075,6 +1075,8 @@ function renderTracker() {
 const F = {};
 async function fetchFundamentals(ticker) {
   if (F[ticker]) return F[ticker];
+  
+  // 1. Primary: Yahoo Finance via Proxies
   const yurl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`;
   const proxies = [
     u => u,
@@ -1093,7 +1095,41 @@ async function fetchFundamentals(ticker) {
       };
       return F[ticker];
     }
-  } catch(e) {}
+  } catch(e) { console.warn("Yahoo fundamentals failed, trying fallbacks..."); }
+
+  // 2. Fallback: Finnhub
+  if (apiKeys.finnhub) {
+    try {
+      const fh = await fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${apiKeys.finnhub}`).then(x => x.json());
+      if (fh && fh.metric && fh.metric.marketCapitalization) {
+        F[ticker] = {
+          pe: fh.metric.peBasicExclExtraTTM || fh.metric.peExclExtraAnnual || null,
+          mcap: fh.metric.marketCapitalization * 1e6, // Finnhub reports in millions
+          eps: fh.metric.epsTTM || null,
+          earnDate: null
+        };
+        return F[ticker];
+      }
+    } catch(e) { console.warn("Finnhub fundamentals failed", e); }
+  }
+
+  // 3. Fallback: Alpha Vantage
+  if (apiKeys.alpha) {
+    try {
+      const av = await fetch(`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${ticker}&apikey=${apiKeys.alpha}`).then(x => x.json());
+      if (av && av.PERatio) {
+        F[ticker] = {
+          pe: parseFloat(av.PERatio) || null,
+          mcap: parseFloat(av.MarketCapitalization) || null,
+          eps: parseFloat(av.EPS) || null,
+          earnDate: null
+        };
+        return F[ticker];
+      }
+    } catch(e) { console.warn("Alpha Vantage fundamentals failed", e); }
+  }
+
+  // All failed
   F[ticker] = { pe: null, mcap: null, eps: null, earnDate: null };
   return F[ticker];
 }

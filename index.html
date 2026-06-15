@@ -568,6 +568,17 @@ body {
     </div>
     <div class="controls">
       <div class="pill loading" id="status-pill">INITIALIZING QUANT ENGINE</div>
+      <select class="search" id="time-range-sel" onchange="changeTimeRange()" style="margin-right:8px; padding:6px; border-radius:6px; font-size:11px;">
+        <option value="0.0833">1 Month</option>
+        <option value="0.25">3 Months</option>
+        <option value="0.5">6 Months</option>
+        <option value="1">1 Year</option>
+        <option value="1.5" selected>1.5 Years</option>
+        <option value="2">2 Years</option>
+        <option value="3">3 Years</option>
+        <option value="5">5 Years</option>
+        <option value="10">10 Years</option>
+      </select>
       <button class="btn" onclick="reloadAll()">↻ REFRESH</button>
       <button class="btn" onclick="toggleSettings()" style="border-color:var(--accent);color:var(--accent);">⚙ API KEYS</button>
       <button class="btn" onclick="toggleRiskMap()" style="border-color:var(--cyan);color:var(--cyan);">📊 RISK MAP</button>
@@ -888,6 +899,7 @@ function setTheme(name) {
   setTheme(saved);
 })();
 
+let timeRangeYears = 1.5;
 let D = {}, activeFilter = 'all', searchQ = '', sortKey = '';
 let SPY_CLOSES = [];
 let SOXX_CLOSES = [];   // sector benchmark (PHLX Semiconductor) for factor decomposition
@@ -964,8 +976,9 @@ function calcMACD(prices) {
 
 function calcBollinger(prices, period = 20) {
   const slice = prices.slice(-period);
-  const sma   = slice.reduce((a, b) => a + b, 0) / period;
-  const std   = Math.sqrt(slice.reduce((a, b) => a + Math.pow(b - sma, 2), 0) / period);
+  const p = slice.length || 1;
+  const sma   = slice.reduce((a, b) => a + b, 0) / p;
+  const std   = Math.sqrt(slice.reduce((a, b) => a + Math.pow(b - sma, 2), 0) / p);
   return { sma, upper: sma + std * 2, lower: sma - std * 2 };
 }
 
@@ -1444,7 +1457,7 @@ function saveKeys() {
 // ============================
 async function fetchOne(ticker, isBench = false) {
   const now   = Math.floor(Date.now() / 1000);
-  const from1Y = now - 1.5 * 31536000;
+  const from1Y = now - Math.floor(timeRangeYears * 31536000);
   let closes = [], source = 'Unknown';
 
   const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&period1=${from1Y}&period2=${now}`;
@@ -1467,49 +1480,50 @@ async function fetchOne(ticker, isBench = false) {
         const j  = await r.json();
         const p  = j?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
         const clean = (p || []).filter(v => v != null && v > 0);
-        if (clean.length > 25) res(clean); else rej(new Error('sparse'));
+        if (clean.length > 2) res(clean); else rej(new Error('sparse'));
       } catch(e) { rej(e); }
     })));
     source = 'Yahoo Finance';
   } catch (_) {}
 
   // LEVEL 2: Polygon.io
-  if (closes.length < 25 && apiKeys.poly) {
+  if (closes.length < 3 && apiKeys.poly) {
     try {
       const fmt  = d => d.toISOString().split('T')[0];
-      const dNow = new Date(), dFrom = new Date(Date.now() - 1.5 * 31536000000);
+      const dNow = new Date(), dFrom = new Date(Date.now() - timeRangeYears * 31536000000);
       const c = new AbortController(); const t = setTimeout(() => c.abort(), 9000);
       const r = await fetch(`https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/week/${fmt(dFrom)}/${fmt(dNow)}?adjusted=true&apiKey=${apiKeys.poly}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
-      if (r.results?.length > 25) { closes = r.results.map(x => x.c); source = 'Polygon.io'; }
+      if (r.results?.length > 2) { closes = r.results.map(x => x.c); source = 'Polygon.io'; }
     } catch(_) {}
   }
 
   // LEVEL 3: Alpha Vantage
-  if (closes.length < 25 && apiKeys.alpha) {
+  if (closes.length < 3 && apiKeys.alpha) {
     try {
       const c = new AbortController(); const t = setTimeout(() => c.abort(), 9000);
       const r = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_WEEKLY&symbol=${ticker}&apikey=${apiKeys.alpha}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
       if (r['Weekly Time Series']) {
-        const vals = Object.values(r['Weekly Time Series']).slice(0, 78).reverse().map(x => parseFloat(x['4. close']));
-        if (vals.length > 25) { closes = vals; source = 'Alpha Vantage'; }
+        const weeks = Math.max(4, Math.ceil(timeRangeYears * 52));
+        const vals = Object.values(r['Weekly Time Series']).slice(0, weeks).reverse().map(x => parseFloat(x['4. close']));
+        if (vals.length > 2) { closes = vals; source = 'Alpha Vantage'; }
       }
     } catch(_) {}
   }
 
   // LEVEL 4: Finnhub
-  if (closes.length < 25 && apiKeys.finnhub) {
+  if (closes.length < 3 && apiKeys.finnhub) {
     try {
       const c = new AbortController(); const t = setTimeout(() => c.abort(), 9000);
       const r = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${ticker}&resolution=W&from=${from1Y}&to=${now}&token=${apiKeys.finnhub}`, { signal: c.signal }).then(x => x.json());
       clearTimeout(t);
-      if (r.s === 'ok' && r.c?.length > 25) { closes = r.c; source = 'Finnhub'; }
+      if (r.s === 'ok' && r.c?.length > 2) { closes = r.c; source = 'Finnhub'; }
     } catch(_) {}
   }
 
   // LEVEL 5: No data — strict error, no simulation
-  if (closes.length < 25) return { ok: false, source: 'No data — proxy blocked or ticker unavailable' };
+  if (closes.length < 3) return { ok: false, source: 'No data — proxy blocked or ticker unavailable' };
 
   const cur   = closes[closes.length - 1];
   const idx6M = Math.max(0, closes.length - 26);
@@ -2277,6 +2291,11 @@ async function loadAll() {
 }
 
 function reloadAll() { D = {}; loadAll(); }
+
+function changeTimeRange() {
+  timeRangeYears = parseFloat(document.getElementById('time-range-sel').value);
+  reloadAll();
+}
 
 function setFilter(f) {
   activeFilter = f;

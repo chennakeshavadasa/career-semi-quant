@@ -1743,19 +1743,6 @@ async function fetchOne(ticker, isBench = false) {
   const chg1y = ((cur - closes[idx1Y]) / closes[idx1Y]) * 100;
 
   
-  let fund = { pe: null, mcap: null, earnDate: null };
-  try {
-    const rF = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent('https://query1.finance.yahoo.com/v7/finance/quote?symbols='+ticker)}`).then(x => x.json());
-    const res = rF?.quoteResponse?.result?.[0];
-    if (res) {
-      fund = {
-        pe: res.trailingPE || res.forwardPE,
-        mcap: res.marketCap,
-        earnDate: res.earningsTimestamp ? new Date(res.earningsTimestamp * 1000) : null
-      };
-    }
-  } catch(e) {}
-  
   const rsi   = calcRSI(closes, 14);
 
   const stoch = calcStoch(closes, 14);
@@ -1826,7 +1813,7 @@ async function fetchOne(ticker, isBench = false) {
   score = Math.max(5, Math.min(99, Math.round(score)));
 
   return {
-    fund, ok: true, source, price: cur, prices: closes,
+    ok: true, source, price: cur, prices: closes,
     chg6m, chg1y, rsi, stoch, vol, sharpe, sortino, var95, cvar95, maxDD,
     macd, mc, momentum, momCls, score, fg, tech, beta, alpha, r2, treynor, infoRatio, trackingError, kellyObj,
     calmar, atrPct, priceZ, upCapture, downCapture,
@@ -2529,6 +2516,29 @@ async function loadAll() {
       updateStats(loadedCount);
     }));
   }
+
+
+  // Batch fetch fundamentals for earnings tags (1 API call instead of 40)
+  try {
+    const allTickers = PUB.map(c => c.t).join(',');
+    const yurl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${allTickers}`;
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yurl)}`;
+    const rF = await fetch(proxyUrl).then(x => x.json());
+    if (rF && rF.quoteResponse && rF.quoteResponse.result) {
+      rF.quoteResponse.result.forEach(res => {
+        const t = res.symbol;
+        if (D[t]) {
+          D[t].fund = {
+            pe: res.trailingPE || res.forwardPE,
+            mcap: res.marketCap,
+            earnDate: res.earningsTimestamp ? new Date(res.earningsTimestamp * 1000) : null
+          };
+          const co = COS.find(c => c.t === t);
+          if (co) refreshCard(co);
+        }
+      });
+    }
+  } catch(e) { console.warn("Batched fundamental fetch failed", e); }
 
   COS.filter(c => !c.pub).forEach(co => refreshCard(co));
 

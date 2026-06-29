@@ -427,6 +427,52 @@ svg.spark { width: 100%; height: 100%; overflow: visible; }
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
+/* ============================================================
+   SKELETON CARDS (progressive loading)
+   ============================================================ */
+.skeleton { pointer-events: none; }
+.skel-line {
+  height: 12px; border-radius: 4px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.09) 50%,
+    rgba(255,255,255,0.04) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  margin-bottom: 6px;
+}
+.skel-sparkline {
+  height: 60px; margin-top: 10px; border-radius: 6px;
+  background: rgba(255,255,255,0.04);
+  animation: shimmer 1.4s infinite 0.2s;
+}
+.skel-w40 { width: 40%; }
+.skel-w60 { width: 60%; }
+.skel-w80 { width: 80%; }
+.skel-w50 { width: 50%; }
+
+/* Error card */
+.error-card { cursor: default !important; }
+
+/* Cache status badge */
+#cache-status { font-size: 11px; color: var(--text-muted); font-family: var(--mono); margin-left: 4px; }
+
+/* Clear cache button */
+.ctrl-sm-btn {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  padding: 7px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-main);
+  cursor: pointer; transition: all 0.18s ease;
+  letter-spacing: 0.3px;
+}
+.ctrl-sm-btn:hover {
+  background: rgba(255,255,255,0.09);
+  border-color: var(--border-hover);
+  color: #fff;
+}
+
 .pvt-state {
   min-height: 60px; margin: 12px 0; border: 1px dashed rgba(255,255,255,0.12); border-radius: var(--radius-sm);
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -557,6 +603,10 @@ body {
 .stat { transition: transform 0.18s; }
 .stat:hover { transform: translateY(-2px); }
 </style>
+<!-- Fixed top loading progress bar -->
+<div id="progress-bar-wrap" style="position:fixed;top:0;left:0;right:0;z-index:999;height:3px;background:rgba(255,255,255,0.05);transition:opacity 0.6s ease;">
+  <div id="progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4A9EFF,#A78BFA);transition:width 0.3s ease;"></div>
+</div>
 </head>
 <body>
 
@@ -580,7 +630,8 @@ body {
         <option value="5">5 Years</option>
         <option value="10">10 Years</option>
       </select>
-      <button class="btn" onclick="reloadAll()">↻ REFRESH</button>
+      <button id="clear-cache-btn" class="btn ctrl-sm-btn" title="Clear cached data and reload">⟳ Refresh Data</button>
+      <span id="cache-status"></span>
       <button class="btn" onclick="toggleSettings()" style="border-color:var(--accent);color:var(--accent);">⚙ API KEYS</button>
       <button class="btn" onclick="toggleRiskMap()" style="border-color:var(--cyan);color:var(--cyan);">📊 RISK MAP</button>
       <button class="btn" onclick="toggleCorrelation()" style="border-color:var(--purple);color:var(--purple);">📉 CORRELATION</button>
@@ -748,6 +799,13 @@ body {
             <div id="det-season-grid" style="display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(3,1fr); gap:6px; height:100%;"></div>
           </div>
         </div>
+      </div>
+
+      <div class="sec-divider"><span>Score Validation</span></div>
+
+      <div id="det-score-validation" style="margin-top:4px; margin-bottom:16px; padding:14px 16px; background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px;">
+        <div style="font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1px; font-weight:700; margin-bottom:10px;">Historical Signal Accuracy (score ≥ 55, 4-week forward)</div>
+        <div id="det-score-validation-content" style="font-family:var(--mono); font-size:12px; color:var(--text-muted);">Computing…</div>
       </div>
 
       <div class="sec-divider"><span>Quant Metrics</span></div>
@@ -1155,6 +1213,210 @@ let D = {}, activeFilter = 'all', searchQ = '', sortKey = '';
 let SPY_CLOSES = [];
 let SOXX_CLOSES = [];   // sector benchmark (PHLX Semiconductor) for factor decomposition
 const PUB = COS.filter(c => c.pub);
+
+// ── Shared SPY data, fetched exactly once ─────────────────────────────────
+let _spyPrices  = null;   // array of weekly close prices
+let _spyFetched = false;
+let _spyPromise = null;
+
+async function getSpyPrices() {
+  if (_spyPrices !== null) return _spyPrices;
+  if (_spyPromise)         return _spyPromise;
+
+  _spyPromise = (async () => {
+    try {
+      const data = await fetchOne('SPY', true);
+      _spyPrices  = data.ok ? data.prices : [];
+      _spyFetched = true;
+      return _spyPrices;
+    } catch {
+      _spyPrices = [];
+      return [];
+    }
+  })();
+  return _spyPromise;
+}
+
+// ── localStorage cache with 4-hour TTL ───────────────────────────────────
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000;   // 4 hours
+const CACHE_PREFIX = 'csq_v2_';             // version prefix
+
+function cacheSet(ticker, data) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + ticker, JSON.stringify({
+      ts:   Date.now(),
+      data: data,
+    }));
+  } catch { /* localStorage quota exceeded — ignore */ }
+}
+
+function cacheGet(ticker) {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + ticker);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL_MS) {
+      localStorage.removeItem(CACHE_PREFIX + ticker);
+      return null;
+    }
+    return data;
+  } catch { return null; }
+}
+
+async function fetchStockDataCached(ticker, isBench) {
+  const cached = cacheGet(ticker);
+  if (cached) {
+    console.debug(`[cache hit] ${ticker}`);
+    return cached;
+  }
+  const fresh = await fetchOne(ticker, isBench);
+  if (fresh && fresh.ok && fresh.prices && fresh.prices.length >= 25) {
+    cacheSet(ticker, fresh);
+  }
+  return fresh;
+}
+
+// ── URL state persistence ─────────────────────────────────────────────────
+let currentUrlState = { filter: 'all', sort: 'score', sort_dir: 'desc', q: '', company: '' };
+
+function getUrlState() {
+  const p = new URLSearchParams(location.search);
+  return {
+    filter:   p.get('filter')   || 'all',
+    sort:     p.get('sort')     || 'score',
+    sort_dir: p.get('sort_dir') || 'desc',
+    q:        p.get('q')        || '',
+    company:  p.get('company')  || '',
+  };
+}
+
+function pushUrlState(state) {
+  Object.assign(currentUrlState, state);
+  const p = new URLSearchParams();
+  if (currentUrlState.filter   && currentUrlState.filter   !== 'all')   p.set('filter',   currentUrlState.filter);
+  if (currentUrlState.sort     && currentUrlState.sort     !== 'score')  p.set('sort',     currentUrlState.sort);
+  if (currentUrlState.sort_dir && currentUrlState.sort_dir !== 'desc')   p.set('sort_dir', currentUrlState.sort_dir);
+  if (currentUrlState.q)                                                  p.set('q',        currentUrlState.q);
+  if (currentUrlState.company)                                            p.set('company',  currentUrlState.company);
+  const qs = p.toString();
+  history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+}
+
+// ── Batched loader ────────────────────────────────────────────────────────
+const BATCH_SIZE  = 8;
+const BATCH_DELAY = 400;   // ms between batches
+
+let loadedCount = 0;
+let totalCount  = 0;
+let cacheHitCount = 0;
+
+function onTickerLoaded(fromCache) {
+  loadedCount++;
+  if (fromCache) cacheHitCount++;
+  const pct = (loadedCount / totalCount) * 100;
+  const pb = document.getElementById('progress-bar');
+  if (pb) pb.style.width = pct + '%';
+  if (loadedCount >= totalCount) {
+    setTimeout(() => {
+      const pbw = document.getElementById('progress-bar-wrap');
+      if (pbw) pbw.style.opacity = '0';
+    }, 600);
+    // Update cache status badge after all loaded
+    const cs = document.getElementById('cache-status');
+    if (cs) cs.textContent = cacheHitCount > 0 ? `${cacheHitCount} from cache` : 'Live data';
+  }
+}
+
+async function loadOneTicker(co) {
+  const wasCached = !!cacheGet(co.t);
+  try {
+    const d = await fetchStockDataCached(co.t, false);
+    D[co.t] = d;
+  } catch(err) {
+    console.warn(`[${co.t}] fetch threw:`, err);
+    D[co.t] = { ok: false, source: 'Unexpected error' };
+  }
+  // Replace skeleton card with real content
+  refreshCard(co);
+  // Increment counter first, then update stats
+  onTickerLoaded(wasCached);
+  updateStats(loadedCount);
+}
+
+async function loadAllTickers(companies) {
+  for (let i = 0; i < companies.length; i += BATCH_SIZE) {
+    const batch = companies.slice(i, i + BATCH_SIZE);
+    // Fire batch in parallel
+    await Promise.allSettled(batch.map(company => loadOneTicker(company)));
+    // Wait before next batch (skip delay after last batch)
+    if (i + BATCH_SIZE < companies.length) {
+      await new Promise(r => setTimeout(r, BATCH_DELAY));
+    }
+  }
+}
+
+// ── Score Validation (Feature 2) ──────────────────────────────────────────
+function computeCompositeScore(closes) {
+  // Re-uses the same logic as in fetchOne but on a rolling window
+  if (!closes || closes.length < 15) return 50;
+  const chg6m = closes.length >= 26 ? ((closes[closes.length-1] - closes[closes.length-26]) / closes[closes.length-26]) * 100 : 0;
+  const chg1y = closes.length >= 52 ? ((closes[closes.length-1] - closes[closes.length-52]) / closes[closes.length-52]) * 100 : 0;
+  const rsi = calcRSI(closes, 14);
+  const stoch = calcStoch(closes, 14);
+  const { vol, sharpe, sortino } = calcVolAndRisk(closes);
+  const macd = calcMACD(closes);
+  const bb = calcBollinger(closes, 20);
+  const cur = closes[closes.length-1];
+  let momentum = 'NEUTRAL';
+  if (cur < bb.lower || (cur < bb.sma && rsi < 30)) momentum = 'OVERSOLD';
+  else if (cur > bb.upper || rsi > 75) momentum = 'OVERBOUGHT';
+  const tech = calcTechAndFib(closes);
+  const fg = calcFearGreed(rsi, stoch, vol);
+  // alpha is 0 in slice context (no SPY available easily) — use 0
+  let score = 50;
+  if (chg6m > 0) score += 8;
+  if (chg1y > 0) score += 8;
+  if (macd.hist > 0) score += 12;
+  if (momentum === 'OVERSOLD') score += 18;
+  if (momentum === 'OVERBOUGHT') score -= 18;
+  if (fg.val < 30) score += 8;
+  if (fg.val > 80) score -= 12;
+  if (sortino > 1.5) score += 8;
+  if (sharpe > 1.0) score += 6;
+  if (tech.cross === 'BULL CROSS') score += 5;
+  return Math.max(5, Math.min(99, Math.round(score)));
+}
+
+function computeScoreHitRate(weeklyCloses, threshold = 55) {
+  /**
+   * For each week where score was above threshold,
+   * check if price was higher 4 weeks later.
+   * Returns { hitRate: float 0–1, sampleSize: int, avgGain: float }
+   */
+  if (!weeklyCloses || weeklyCloses.length < 8) {
+    return { hitRate: null, sampleSize: 0, avgGain: null };
+  }
+
+  let hits = 0, total = 0, totalGain = 0;
+  const n = weeklyCloses.length;
+  for (let i = 0; i < n - 4; i++) {
+    const slice = weeklyCloses.slice(0, i + 1);
+    if (slice.length < 15) continue;
+    const score = computeCompositeScore(slice);
+    if (score >= threshold) {
+      const fwdReturn = (weeklyCloses[i + 4] - weeklyCloses[i]) / weeklyCloses[i];
+      if (fwdReturn > 0) hits++;
+      totalGain += fwdReturn;
+      total++;
+    }
+  }
+  if (total === 0) return { hitRate: null, sampleSize: 0, avgGain: null };
+  return {
+    hitRate:    hits / total,
+    sampleSize: total,
+    avgGain:    totalGain / total,
+  };
+}
 
 // ============================
 // QUANT MATH ENGINE
@@ -1922,17 +2184,20 @@ function cardHTML(co) {
     <div class="pvt-state">◆ NOT PUBLICLY LISTED</div>
   </div>`;
 
-  // Data unavailable
-  if (d && !d.ok) return `<div class="card" id="${id}" data-tier="${co.tier}" data-pub="true" data-score="0" data-fg="50" data-rsi="50" data-chg6m="0" data-chg1y="0" data-vol="0">
+  // Data unavailable — enhanced error card
+  if (d && !d.ok) return `<div class="company-card card error-card" id="${id}" data-tier="${co.tier}" data-pub="true" data-score="0" data-fg="50" data-rsi="50" data-chg6m="0" data-chg1y="0" data-vol="0" style="opacity:0.55">
     <div class="c-top">
       <div><div class="c-name">${co.n}</div><div class="c-tkr">${co.t}</div></div>
-      <div class="badges">${sectorB}${tierB}</div>
+      <div class="badges">
+        ${sectorB}${tierB}
+        <span class="badge" style="background:rgba(255,71,87,0.15);color:#FF4757;border:1px solid rgba(255,71,87,0.3);">DATA UNAVAILABLE</span>
+      </div>
     </div>
-    ${d && d.fund && d.fund.earnDate && (d.fund.earnDate.getTime() - Date.now() > 0 && d.fund.earnDate.getTime() - Date.now() < 14*86400000) ? `<div style="font-size:9px; background:rgba(255,165,0,0.2); color:orange; border-radius:4px; padding:2px 6px; display:inline-block; margin-top:4px;">⚠️ Earnings in ${Math.ceil((d.fund.earnDate.getTime() - Date.now())/86400000)} days</div>` : ''}
-    <div class="pvt-state" style="color:var(--red);border-color:rgba(248,81,73,0.2);">
-      <span>⚠ DATA UNAVAILABLE</span>
-      <span style="font-size:9px;color:var(--text-muted);text-align:center;padding:0 12px;">${d.source}</span>
-    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">
+      All data sources failed for this ticker.<br>
+      <a href="https://finance.yahoo.com/quote/${co.t}" target="_blank" rel="noopener"
+         style="color:#4A9EFF;">Check on Yahoo Finance ↗</a>
+    </p>
   </div>`;
 
   const u6  = d.chg6m >= 0, u1 = d.chg1y >= 0;
@@ -2033,7 +2298,7 @@ function cardHTML(co) {
 // DETAIL MODAL & CHART
 // ============================
 let chartInst = null, chartInst2 = null, chartInst3 = null, chartInst4 = null, chartInst5 = null, chartInst6 = null, chartInst7 = null, chartInst8 = null, chartInst9 = null, chartInst10 = null, chartInst11 = null, chartInst12 = null;
-function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; }
+function closeDetail() { document.getElementById('detail-modal').style.display = 'none'; pushUrlState({ company: '' }); }
 function openDetail(ticker, name) {
   const d = D[ticker];
   if (!d || !d.ok) return;
@@ -2510,6 +2775,39 @@ function openDetail(ticker, name) {
   `;
   
   document.getElementById('detail-modal').style.display = 'flex';
+  // Update URL state
+  pushUrlState({ company: ticker });
+
+  // Deferred Score Validation — setTimeout to avoid blocking UI
+  const svEl = document.getElementById('det-score-validation-content');
+  if (svEl) {
+    svEl.textContent = 'Computing…';
+    setTimeout(() => {
+      try {
+        const sv = computeScoreHitRate(d.prices);
+        if (sv.sampleSize < 10) {
+          svEl.innerHTML = `<span style="color:var(--text-muted);">Insufficient data (${sv.sampleSize} signals)</span>`;
+        } else {
+          const hrPct = (sv.hitRate * 100).toFixed(1);
+          const hrColor = sv.hitRate >= 0.60 ? 'var(--green-bright, var(--green))'
+                        : sv.hitRate >= 0.45 ? 'var(--text-muted)'
+                        : 'var(--red)';
+          const gainSign = sv.avgGain >= 0 ? '+' : '';
+          svEl.innerHTML = `
+            <span>Hit Rate: <strong style="color:${hrColor};">${hrPct}%</strong>
+              <span style="color:var(--text-dim);"> (${Math.round(sv.hitRate * sv.sampleSize)} of ${sv.sampleSize} signals, trailing ${d.prices.length} weeks)</span>
+            </span>
+            &nbsp;&nbsp;
+            <span>Avg Gain: <strong style="color:${sv.avgGain >= 0 ? 'var(--green-bright, var(--green))' : 'var(--red)'};">${gainSign}${(sv.avgGain * 100).toFixed(2)}%</strong>
+              <span style="color:var(--text-dim);"> when signal fired</span>
+            </span>
+          `;
+        }
+      } catch(e) {
+        if (svEl) svEl.textContent = 'Computation error';
+      }
+    }, 0);
+  }
 }
 
 // ============================
@@ -2530,11 +2828,11 @@ function refreshCard(co) {
   applyFS();
 }
 
-function updateStats(loadedCount) {
+function updateStats(cnt) {
   const vals = Object.values(D).filter(d => d.ok);
-  document.getElementById('s-loaded').textContent  = loadedCount;
-  document.getElementById('s-fear').textContent    = vals.filter(d => d.fg.val < 25).length;
-  document.getElementById('s-greed').textContent   = vals.filter(d => d.fg.val > 75).length;
+  document.getElementById('s-loaded').textContent  = typeof cnt !== 'undefined' ? cnt : loadedCount;
+  document.getElementById('s-fear').textContent    = vals.filter(d => d.fg && d.fg.val < 25).length;
+  document.getElementById('s-greed').textContent   = vals.filter(d => d.fg && d.fg.val > 75).length;
   document.getElementById('s-buy').textContent     = vals.filter(d => d.momentum === 'OVERSOLD').length;
   const avg = vals.reduce((a, b) => a + b.score, 0) / (vals.length || 1);
   document.getElementById('s-score').textContent   = vals.length ? avg.toFixed(0) : '—';
@@ -2548,45 +2846,67 @@ function setPill(cls, txt) {
 
 async function loadAll() {
   const total = PUB.length;
-  let loadedCount = 0;
+  totalCount = total;
+  loadedCount = 0;
+  cacheHitCount = 0;
   document.getElementById('s-total').textContent = total;
   document.getElementById('s-loaded').textContent = 0;
   document.getElementById('prog').style.width = '0%';
+  // Reset the fixed top progress bar
+  const pb = document.getElementById('progress-bar');
+  const pbw = document.getElementById('progress-bar-wrap');
+  if (pb) pb.style.width = '0%';
+  if (pbw) pbw.style.opacity = '1';
+
   D = {};
+
+  // ── Step 1: Fire-and-forget SPY fetch (shared across all tickers) ─────
+  // Reset SPY promise so new load always fetches fresh if needed
+  _spyPrices = null; _spyPromise = null; _spyFetched = false;
   
   setPill('loading', 'FETCHING SPY BENCHMARK...');
   try {
-    const s = await fetchOne('SPY', true);
-    if (s.ok) SPY_CLOSES = s.prices;
+    const s = await fetchStockDataCached('SPY', true);
+    if (s && s.ok) { SPY_CLOSES = s.prices; _spyPrices = s.prices; _spyFetched = true; }
   } catch(e) {}
 
   setPill('loading', 'FETCHING SOXX SECTOR FACTOR...');
   try {
-    const sx = await fetchOne('SOXX', true);
-    if (sx.ok) SOXX_CLOSES = sx.prices;
+    const sx = await fetchStockDataCached('SOXX', true);
+    if (sx && sx.ok) SOXX_CLOSES = sx.prices;
   } catch(e) {}
-  
-  setPill('loading', 'EXECUTING QUANT MODELS...');
-  renderAll();
 
-  for (let i = 0; i < total; i += 4) {
-    const batch = PUB.slice(i, i + 4);
-    await Promise.all(batch.map(async co => {
-      try {
-        D[co.t] = await fetchOne(co.t);
-      } catch(err) {
-        console.warn(`[${co.t}] fetch threw:`, err);
-        D[co.t] = { ok: false, source: 'Unexpected error' };
-      }
-      loadedCount++;
-      document.getElementById('prog').style.width = `${Math.round(loadedCount / total * 100)}%`;
-      refreshCard(co);
-      updateStats(loadedCount);
-    }));
+  // ── Step 2: Render skeleton cards immediately ─────────────────────────
+  setPill('loading', 'EXECUTING QUANT MODELS...');
+  // Inject skeleton placeholder cards
+  const grid = document.getElementById('grid');
+  if (grid) {
+    grid.innerHTML = PUB.map((co, idx) => {
+      const id = `c${(co.t || co.n).replace(/[^a-z0-9]/gi,'_')}`;
+      return `<div class="card skeleton" id="${id}" data-tier="${co.tier}" data-pub="true" data-score="0" data-fg="50" data-rsi="50" data-chg6m="0" data-chg1y="0" data-vol="0" style="animation-delay:${idx * 30}ms">
+        <div class="skel-line skel-w60"></div>
+        <div class="skel-line skel-w40"></div>
+        <div class="skel-sparkline"></div>
+        <div class="skel-line skel-w80" style="margin-top:10px"></div>
+        <div class="skel-line skel-w50"></div>
+      </div>`;
+    }).join('') + COS.filter(c => !c.pub).map(co => {
+      // Non-public companies — render immediately (no data fetch)
+      const id = `c${(co.t || co.n).replace(/[^a-z0-9]/gi,'_')}`;
+      const tierB = `<span class="badge ${co.tier === 'a' ? 'b-a' : 'b-b'}">TIER-${co.tier.toUpperCase()}</span>`;
+      const sectorB = `<span class="badge" style="background:rgba(88,166,255,0.08);color:var(--blue);border:1px solid rgba(88,166,255,0.2);font-size:8px;">${co.sector}</span>`;
+      return `<div class="card" id="${id}" data-tier="${co.tier}" data-pub="false" data-score="0" data-fg="50" data-rsi="50" data-chg6m="0" data-chg1y="0" data-vol="0">
+        <div class="c-top"><div><div class="c-name">${co.n}</div><div class="c-tkr" style="color:var(--purple)">PRIVATE · PRE-IPO</div></div>
+        <div class="badges">${sectorB}${tierB}</div></div>
+        <div class="pvt-state">◆ NOT PUBLICLY LISTED</div>
+      </div>`;
+    }).join('');
   }
 
+  // ── Step 3: Batched ticker loading (max 8 simultaneous requests) ──────
+  await loadAllTickers(PUB);
 
-  // Batch fetch fundamentals for earnings tags (1 API call instead of 40)
+  // ── Step 4: Batch fetch fundamentals for earnings tags ────────────────
   try {
     const allTickers = PUB.map(c => c.t).join(',');
     const yurl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${allTickers}`;
@@ -2608,8 +2928,6 @@ async function loadAll() {
     }
   } catch(e) { console.warn("Batched fundamental fetch failed", e); }
 
-  COS.filter(c => !c.pub).forEach(co => refreshCard(co));
-
   const failCount = Object.values(D).filter(d => !d.ok).length;
   if (failCount === 0) {
     setPill('ok', `✓ ALL ${total} MODELS LIVE`);
@@ -2623,7 +2941,12 @@ async function loadAll() {
     `Data refreshed: ${now.toLocaleDateString()} ${now.toLocaleTimeString()} (local) · Weekly close prices`;
 }
 
-function reloadAll() { D = {}; loadAll(); }
+function reloadAll() {
+  // Clear cache state
+  loadedCount = 0; cacheHitCount = 0;
+  D = {};
+  loadAll();
+}
 
 function changeTimeRange() {
   timeRangeYears = parseFloat(document.getElementById('time-range-sel').value);
@@ -2635,9 +2958,10 @@ function setFilter(f) {
   ['all','a','b','buy','fear'].forEach(x =>
     document.getElementById(`f-${x}`)?.classList.toggle('on', x === f));
   applyFS();
+  pushUrlState({ filter: f });
 }
 
-function doSearch(q) { searchQ = q.toLowerCase().trim(); applyFS(); }
+function doSearch(q) { searchQ = q.toLowerCase().trim(); applyFS(); pushUrlState({ q }); }
 
 function doSort(key) {
   sortKey = key;
@@ -2652,6 +2976,7 @@ function doSort(key) {
     return dir === 'd' ? bv - av : av - bv;
   });
   cards.forEach(c => grid.appendChild(c));
+  pushUrlState({ sort: field, sort_dir: dir === 'd' ? 'desc' : 'asc' });
 }
 
 function applyFS() {
@@ -3000,7 +3325,58 @@ function renderPortfolio() {
 // BOOT
 // ============================
 document.getElementById('s-total').textContent = PUB.length;
-loadAll();
+
+// ── Wire the clear-cache button ──────────────────────────────────────────
+document.getElementById('clear-cache-btn').addEventListener('click', () => {
+  Object.keys(localStorage)
+    .filter(k => k.startsWith(CACHE_PREFIX))
+    .forEach(k => localStorage.removeItem(k));
+  location.reload();
+});
+
+// ── Apply URL state then start loading ──────────────────────────────────
+(async function boot() {
+  const initialState = getUrlState();
+  currentUrlState = { ...initialState };
+
+  // Apply filter from URL
+  if (initialState.filter && initialState.filter !== 'all') {
+    activeFilter = initialState.filter;
+    ['all','a','b','buy','fear'].forEach(x =>
+      document.getElementById(`f-${x}`)?.classList.toggle('on', x === initialState.filter));
+  }
+
+  // Apply sort from URL
+  if (initialState.sort && initialState.sort !== 'score') {
+    const dir = initialState.sort_dir === 'asc' ? 'a' : 'd';
+    const sortSel = document.getElementById('sort-sel');
+    const key = `${initialState.sort}-${dir}`;
+    if (sortSel) {
+      // Try to set the select option
+      for (const opt of sortSel.options) {
+        if (opt.value === key) { sortSel.value = key; break; }
+      }
+    }
+  }
+
+  // Apply search from URL
+  if (initialState.q) {
+    searchQ = initialState.q.toLowerCase().trim();
+    const srch = document.getElementById('srch');
+    if (srch) srch.value = initialState.q;
+  }
+
+  // Start loading all tickers
+  await loadAll();
+
+  // Auto-open modal from URL if specified (after data is loaded)
+  if (initialState.company) {
+    const co = COS.find(c => c.t === initialState.company);
+    if (co && D[initialState.company] && D[initialState.company].ok) {
+      openDetail(initialState.company, co.n);
+    }
+  }
+})();
 </script>
 </body>
 </html>

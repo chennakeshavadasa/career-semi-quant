@@ -1133,6 +1133,10 @@ function renderTracker() {
 const F = {};
 async function fetchFundamentals(ticker) {
   if (F[ticker]) return F[ticker];
+  if (window._preloadedData && window._preloadedData[ticker] && window._preloadedData[ticker].fund) {
+    F[ticker] = window._preloadedData[ticker].fund;
+    return F[ticker];
+  }
   
   // 1. Primary: Yahoo Finance via Proxies
   const yurl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ticker}`;
@@ -1976,6 +1980,24 @@ async function fetchOne(ticker, isBench = false) {
   let closes = [], source = 'Unknown';
 
   const yurl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1wk&period1=${from1Y}&period2=${now}`;
+  
+  // LEVEL 0: GitHub Actions Cache (market_data.json)
+  try {
+    if (!window._preloadedData) {
+      window._preloadedData = await fetch('market_data.json').then(r => r.json()).catch(() => ({}));
+    }
+    if (window._preloadedData[ticker]) {
+      const allCloses = window._preloadedData[ticker].closes;
+      const weeks = Math.max(4, Math.ceil(timeRangeYears * 52));
+      closes = allCloses.slice(-weeks);
+      if (closes.length > 2) {
+        source = 'GH Actions Cache';
+      } else {
+        closes = []; // fallback to proxies if too sparse
+      }
+    }
+  } catch(e) {}
+
   const proxies = [
     u => u,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
@@ -1985,6 +2007,7 @@ async function fetchOne(ticker, isBench = false) {
   ];
 
   // LEVEL 1: Parallel Proxy Race — Yahoo Finance
+  if (closes.length < 3) {
   try {
     closes = await Promise.any(proxies.map(mkP => new Promise(async (res, rej) => {
       try {
@@ -2001,7 +2024,7 @@ async function fetchOne(ticker, isBench = false) {
     })));
     source = 'Yahoo Finance';
   } catch (_) {}
-
+  }
   // LEVEL 2: Polygon.io
   if (closes.length < 3 && apiKeys.poly) {
     try {
@@ -2199,9 +2222,7 @@ function cardHTML(co) {
     <p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">
       All data sources failed for this ticker.<br>
       <a href="https://finance.yahoo.com/quote/${co.t}" target="_blank" rel="noopener"
-         style="color:#4A9EFF;">Check on Yahoo Finance ↗</a><br>
-      <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" rel="noopener"
-         style="color:#FFB86C; margin-top:4px; display:inline-block;">Unlock Proxy & Refresh ↗</a>
+         style="color:#4A9EFF;">Check on Yahoo Finance ↗</a>
     </p>
   </div>`;
 
@@ -2913,6 +2934,16 @@ async function loadAll() {
 
   // ── Step 4: Batch fetch fundamentals for earnings tags ────────────────
   try {
+    if (window._preloadedData) {
+      Object.keys(window._preloadedData).forEach(t => {
+        if (D[t] && window._preloadedData[t].fund) {
+          D[t].fund = window._preloadedData[t].fund;
+          const co = COS.find(c => c.t === t);
+          if (co) refreshCard(co);
+        }
+      });
+    }
+
     const allTickers = PUB.map(c => c.t).join(',');
     const yurl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${allTickers}`;
     const proxies = [

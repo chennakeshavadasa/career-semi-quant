@@ -1139,7 +1139,9 @@ async function fetchFundamentals(ticker) {
   const proxies = [
     u => u,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u => `https://cors-anywhere.herokuapp.com/${u}`
   ];
   try {
     const r = await Promise.any(proxies.map(mkP => fetch(mkP(yurl)).then(x => { if(!x.ok) throw new Error(); return x.json(); })));
@@ -1978,7 +1980,8 @@ async function fetchOne(ticker, isBench = false) {
     u => u,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://cors-anywhere.herokuapp.com/${u}`
   ];
 
   // LEVEL 1: Parallel Proxy Race — Yahoo Finance
@@ -2196,7 +2199,9 @@ function cardHTML(co) {
     <p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">
       All data sources failed for this ticker.<br>
       <a href="https://finance.yahoo.com/quote/${co.t}" target="_blank" rel="noopener"
-         style="color:#4A9EFF;">Check on Yahoo Finance ↗</a>
+         style="color:#4A9EFF;">Check on Yahoo Finance ↗</a><br>
+      <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank" rel="noopener"
+         style="color:#FFB86C; margin-top:4px; display:inline-block;">Unlock Proxy & Refresh ↗</a>
     </p>
   </div>`;
 
@@ -2910,8 +2915,14 @@ async function loadAll() {
   try {
     const allTickers = PUB.map(c => c.t).join(',');
     const yurl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${allTickers}`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(yurl)}`;
-    const rF = await fetch(proxyUrl).then(x => x.json());
+    const proxies = [
+      u => u,
+      u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+      u => `https://cors-anywhere.herokuapp.com/${u}`
+    ];
+    const rF = await Promise.any(proxies.map(mkP => fetch(mkP(yurl)).then(x => { if(!x.ok) throw new Error(); return x.json(); })));
     if (rF && rF.quoteResponse && rF.quoteResponse.result) {
       rF.quoteResponse.result.forEach(res => {
         const t = res.symbol;

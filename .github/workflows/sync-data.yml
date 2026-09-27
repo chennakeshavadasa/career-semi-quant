@@ -1,7 +1,7 @@
 name: Pull market data from site
 
 # The portfolio site's data bot is the only thing that fetches prices. This
-# copies its latest market_data.json back here so both repos hold identical
+# copies its latest market_data.json and daily/ files back here so both repos hold identical
 # files. Code flows the other way (site pulls tested code from this repo).
 
 on:
@@ -25,11 +25,11 @@ jobs:
       - name: Download and validate
         run: |
           set -euo pipefail
-          curl -fsSL --retry 3 -o /tmp/md.json \
-            https://raw.githubusercontent.com/NithinPuru/nithinpuru.github.io/main/public/quant-terminal/market_data.json
+          git clone --quiet --depth 1 --filter=blob:none --sparse https://github.com/NithinPuru/nithinpuru.github.io.git /tmp/site
+          git -C /tmp/site sparse-checkout set public/quant-terminal
           python3 - <<'PY'
           import json, sys
-          new = json.load(open("/tmp/md.json"))
+          new = json.load(open("/tmp/site/public/quant-terminal/market_data.json"))
           n = len(new.get("tickers", {}))
           if n < 40:
               sys.exit(f"refusing: only {n} tickers in site data")
@@ -41,12 +41,16 @@ jobs:
               pass
           print(f"ok: {n} tickers, generated {new['meta']['generated_at']}")
           PY
-          cp /tmp/md.json public/quant-terminal/market_data.json
+          cp /tmp/site/public/quant-terminal/market_data.json public/quant-terminal/market_data.json
+          if [ -d /tmp/site/public/quant-terminal/daily ]; then
+            mkdir -p public/quant-terminal/daily
+            rsync -a --delete /tmp/site/public/quant-terminal/daily/ public/quant-terminal/daily/
+          fi
       - name: Commit
         run: |
           git config user.name "quant-terminal[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/quant-terminal/market_data.json
+          git add public/quant-terminal/market_data.json public/quant-terminal/daily
           if git diff --cached --quiet; then echo "Already up to date."; exit 0; fi
           git commit -m "Market data from site $(date -u +%F)"
           for i in 1 2 3 4 5; do

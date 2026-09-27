@@ -16,6 +16,7 @@ const PUBLIC = path.resolve(HERE, '../../public');
 const args = process.argv.slice(2);
 const argVal = k => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : null; };
 const SHOTS = argVal('--shots');
+if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 let BASE = argVal('--url');
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };

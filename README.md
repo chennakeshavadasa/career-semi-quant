@@ -29,30 +29,34 @@ No login required. No account required. No API key required for the primary data
 
 The entire application is a single `index.html` file. There is no backend, no build step, no database, and no server. All quantitative computation runs natively in the browser's JavaScript engine the moment price data is received.
 
-### Data Pipeline (4-Level Cascade)
+### Data Pipeline
+
+Browsers can no longer call Yahoo Finance directly: it blocks cross-origin requests and rate-limits (HTTP 429) non-browser clients, and the free public CORS proxies are gone. So prices are fetched server-side on a schedule and published as a static file:
 
 ```
-LEVEL 1: Yahoo Finance  (via 4 parallel CORS proxies — Promise.any, 9s timeout)
-            |
-            | if < 25 data points
-            v
-LEVEL 2: Polygon.io  (user-supplied API key, optional)
-            |
-            | if < 25 data points
-            v
-LEVEL 3: Alpha Vantage  (user-supplied API key, optional)
-            |
-            | if < 25 data points
-            v
-LEVEL 4: Finnhub  (user-supplied API key, optional)
-            |
-            | if < 25 data points
-            v
-LEVEL 5: STRICT FAIL — card displays "DATA UNAVAILABLE"
-          No synthetic or simulated fallback data is ever shown.
+GitHub Action (.github/workflows/update_data.yml)
+  runs update_data.py  — 21:30 UTC Mon–Fri + 09:00 UTC daily
+      |  yfinance (latest) → 10 years of weekly closes + fundamentals for every ticker in index.html
+      |  - failed tickers keep their previous data (flagged stale)
+      |  - illiquid / flat series are flagged in the log
+      |  - if < 60% of tickers succeed, the run fails and nothing is written
+      v
+market_data.json  (committed to the repo, served by GitHub Pages)
+      |
+      v
+index.html  — loads the file once, computes every metric in the browser
+      |
+      |  ticker missing from the file?
+      v
+Optional user API keys: Polygon.io → Alpha Vantage → Finnhub
+      |
+      v
+Clear "no data" card. No synthetic or simulated data is ever shown.
 ```
 
-The system fetches **1.5 years** of weekly closing prices per ticker. This extended window is used exclusively as a mathematical warm-up buffer, ensuring the 40-week SMA and 26-week rolling indicators have sufficient historical data to compute a continuous, gap-free output. The **visual display is always clamped to exactly the trailing 52 weeks (1 year)**, on both the dashboard sparklines and all charts inside the detail modal.
+The ticker universe is read straight from the `COS` list in `index.html`, so adding a company there is all it takes. The next workflow run (or a manual **Run workflow**) fetches it. International listings (Samsung `005930.KS`, SK Hynix `000660.KS`, Tokyo Electron `8035.T`, etc.) are shown in their home currency.
+
+The **Range** selector (3M–10Y) sets the look-back window for every metric. Benchmarks (SPY, SOXX) are aligned to each stock by date, so beta, alpha and the factor model compare the same weeks.
 
 ### Why No Simulated Fallback Data?
 
@@ -287,7 +291,7 @@ python3 -m http.server 8000
 
 ### Optional API Keys
 
-The dashboard functions without any API keys via Yahoo Finance through CORS proxies. For improved reliability on international tickers (Samsung, Infineon, STMicro, Renesas), optional keys from the following providers can be added via the API KEYS button on the dashboard:
+The dashboard needs no API keys: prices come from `market_data.json`. Optional keys (⚙ in the header) are only used for a ticker that's missing from that file:
 
 - [Polygon.io](https://polygon.io/) — Best coverage for US equities with a generous free tier
 - [Alpha Vantage](https://www.alphavantage.co/) — Strong international coverage
@@ -304,7 +308,7 @@ This tool is for educational and informational purposes only. It is not financia
 - The Monte Carlo Simulation generates probabilistic outcomes based solely on historical price behavior. It cannot account for earnings surprises, macroeconomic shocks, regulatory changes, or structural breaks in the time series.
 - The Composite Quant Score is a heuristic signal, not a trading recommendation. It is designed to surface stocks worth deeper investigation, not to direct buy or sell decisions.
 - All computation uses weekly closing prices. Intraday volatility, options market data, and fundamental metrics (P/E, DCF, revenue growth) are outside the scope of this tool.
-- International tickers may return DATA UNAVAILABLE if all four data source levels are blocked by CORS or geo-restriction. This is a network limitation, not a data quality issue.
+- Prices are weekly closes refreshed twice a day, not real-time quotes. The header shows how fresh the data is, and a banner warns if the scheduled sync has stopped.
 - Past volatility and past returns are not reliable predictors of future performance.
 
 ---
@@ -319,7 +323,7 @@ This tool is for educational and informational purposes only. It is not financia
 | **Quantitative math engine** | Pure JavaScript — RSI, Stochastic, MACD, Bollinger Bands, Sharpe, Sortino, Calmar, VaR, CVaR, Parametric & Cornish-Fisher VaR, Max Drawdown, Beta, Alpha, R-Squared, Treynor, Information Ratio, Kelly Criterion, Fibonacci, GBM Monte Carlo, EWMA & GARCH(1,1) volatility, Probabilistic Sharpe, two-factor (SPY+SOXX) regression, asymmetric beta, Markowitz frontier optimization |
 | **Dashboard sparklines** | Inline SVG with gradient fills and area charts |
 | **Detail modal charts** | [Chart.js](https://www.chartjs.org/) — 7 interactive canvas-based plots with custom tooltips |
-| **Data sources** | Yahoo Finance (via CORS proxies) with optional Polygon.io, Alpha Vantage, and Finnhub as fallback levels |
+| **Data sources** | Yahoo Finance via `yfinance` in a scheduled GitHub Action → `market_data.json`; optional Polygon.io, Alpha Vantage and Finnhub keys as fallbacks |
 | **Hosting** | GitHub Pages |
 
 ---

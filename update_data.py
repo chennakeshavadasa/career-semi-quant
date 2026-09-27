@@ -12,6 +12,7 @@ Safety rules:
     non-zero WITHOUT writing, so the workflow fails loudly instead of
     silently committing an empty file.
 """
+import argparse
 import json
 import math
 import os
@@ -23,7 +24,9 @@ from datetime import datetime, timezone
 import pandas as pd
 import yfinance as yf
 
-OUT = "market_data.json"
+HERE = os.path.dirname(os.path.abspath(__file__))
+# The web app (index.html + market_data.json) lives in the site's public/ folder.
+DEFAULT_WEB_DIR = os.path.normpath(os.path.join(HERE, "..", "public", "quant-terminal"))
 PERIOD = "10y"
 INTERVAL = "1wk"
 MIN_OK_RATIO = 0.6
@@ -36,10 +39,9 @@ FLAT_WARN = 0.3
 EXTRA = ["SPY", "SOXX"]
 
 
-def load_tickers():
+def load_tickers(web_dir):
     """Read the ticker universe straight from index.html so the two never drift."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(here, "index.html"), encoding="utf-8") as f:
+    with open(os.path.join(web_dir, "index.html"), encoding="utf-8") as f:
         html = f.read()
     block = re.search(r"const COS = \[(.*?)\];", html, re.S).group(1)
     found = re.findall(r't:"([^"]+)"[^}]*pub:true', block)
@@ -107,16 +109,52 @@ def fetch_fund(t):
     return None
 
 
+def expand(payload):
+    """Return {ticker: entry} with explicit per-ticker dates (handles compact files)."""
+    if not isinstance(payload, dict):
+        return {}
+    grid = payload.get("dates") or []
+    out = {}
+    for t, e in (payload.get("tickers") or {}).items():
+        e = dict(e)
+        if not e.get("dates") and "offset" in e:
+            e["dates"] = grid[e["offset"]:e["offset"] + len(e.get("closes", []))]
+        e.pop("offset", None)
+        out[t] = e
+    return out
+
+
+def compact(result):
+    """Store the shared weekly calendar once; each series keeps an offset into it.
+
+    Series whose dates aren't a contiguous slice of the grid keep explicit dates.
+    """
+    grid = sorted({d for e in result.values() for d in e["dates"]})
+    pos = {d: i for i, d in enumerate(grid)}
+    for e in result.values():
+        ds = e["dates"]
+        i = pos[ds[0]]
+        if grid[i:i + len(ds)] == ds:
+            e["offset"] = i
+            del e["dates"]
+    return grid, result
+
+
 def main():
-    tickers = load_tickers()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--web-dir", default=DEFAULT_WEB_DIR, help="folder containing index.html; market_data.json is written here")
+    args = ap.parse_args()
+    out_path = os.path.join(args.web_dir, "market_data.json")
+
+    tickers = load_tickers(args.web_dir)
     print(f"yfinance {yf.__version__} · {len(tickers)} tickers")
 
     try:
-        with open(OUT, encoding="utf-8") as f:
+        with open(out_path, encoding="utf-8") as f:
             prev = json.load(f)
     except (OSError, ValueError):
         prev = {}
-    prev_t = prev.get("tickers", {}) if isinstance(prev, dict) else {}
+    prev_t = expand(prev)
 
     hist = fetch_history(tickers)
     now = datetime.now(timezone.utc)
@@ -154,22 +192,27 @@ def main():
     ratio = len(fresh) / len(tickers)
     print(f"fresh {len(fresh)}/{len(tickers)} · stale {len(stale)} · failed {len(failed)}")
     if ratio < MIN_OK_RATIO:
-        print(f"ERROR: only {ratio:.0%} fresh (< {MIN_OK_RATIO:.0%}); refusing to overwrite {OUT}")
+        print(f"ERROR: only {ratio:.0%} fresh (< {MIN_OK_RATIO:.0%}); refusing to overwrite {out_path}")
         sys.exit(1)
 
+    grid, result = compact(result)
     payload = {
         "meta": {
-            "version": 2,
+            "version": 3,
             "generated_at": now.isoformat(timespec="seconds"),
             "source": f"Yahoo Finance via yfinance {yf.__version__}",
             "interval": INTERVAL,
             "fresh": fresh, "stale": stale, "failed": failed,
         },
+        "dates": grid,
         "tickers": result,
     }
-    with open(OUT, "w", encoding="utf-8") as f:
+    # Write atomically so a crash mid-write can never leave a truncated file.
+    tmp = out_path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(payload, f, separators=(",", ":"))
-    print(f"Saved {OUT} ({os.path.getsize(OUT) / 1024:.0f} KB)")
+    os.replace(tmp, out_path)
+    print(f"Saved {out_path} ({os.path.getsize(out_path) / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,56 @@
+name: Pull market data from site
+
+# The portfolio site's data bot is the only thing that fetches prices. This
+# copies its latest market_data.json back here so both repos hold identical
+# files. Code flows the other way (site pulls tested code from this repo).
+
+on:
+  schedule:
+    - cron: "23 */3 * * *"   # every 3 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-data
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download and validate
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o /tmp/md.json \
+            https://raw.githubusercontent.com/NithinPuru/nithinpuru.github.io/main/public/quant-terminal/market_data.json
+          python3 - <<'PY'
+          import json, sys
+          new = json.load(open("/tmp/md.json"))
+          n = len(new.get("tickers", {}))
+          if n < 40:
+              sys.exit(f"refusing: only {n} tickers in site data")
+          try:
+              old = json.load(open("public/quant-terminal/market_data.json"))
+              if (old.get("meta") or {}).get("generated_at", "") > (new.get("meta") or {}).get("generated_at", ""):
+                  sys.exit("refusing: site data is older than ours")
+          except FileNotFoundError:
+              pass
+          print(f"ok: {n} tickers, generated {new['meta']['generated_at']}")
+          PY
+          cp /tmp/md.json public/quant-terminal/market_data.json
+      - name: Commit
+        run: |
+          git config user.name "quant-terminal[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/quant-terminal/market_data.json
+          if git diff --cached --quiet; then echo "Already up to date."; exit 0; fi
+          git commit -m "Market data from site $(date -u +%F)"
+          for i in 1 2 3 4 5; do
+            git push origin HEAD:master && exit 0
+            sleep $((i * 5)); git pull --rebase origin master
+          done
+          exit 1

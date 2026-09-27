@@ -1,6 +1,14 @@
 {
-  "dependencies": {
-    "jsdom": "^29.1.1",
+  "name": "career-semi-quant",
+  "private": true,
+  "description": "Career Semi Quant Terminal — source of truth; synced to nithinpuru.github.io/quant-terminal",
+  "scripts": {
+    "test:unit": "node --test quant-terminal/tests/*.test.mjs",
+    "test:e2e": "node quant-terminal/tests/e2e.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "serve": "cd public && python3 -m http.server 8000"
+  },
+  "devDependencies": {
     "puppeteer": "^25.1.0"
   }
 }

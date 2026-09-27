@@ -1,0 +1,42 @@
+name: Test
+
+# Unit tests for the quant library + a full headless-browser run of the app.
+# The portfolio site only syncs commits whose run of this workflow succeeded,
+# so a broken change can never reach nithinpuru.github.io/quant-terminal.
+
+on:
+  push:
+    branches: [master]
+    paths: ["public/**", "quant-terminal/**", "package.json", "package-lock.json", ".github/workflows/test.yml"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit tests (quant library)
+        run: npm run test:unit
+      - name: End-to-end browser test
+        run: npm run test:e2e -- --shots e2e-shots
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: e2e-shots/
+          if-no-files-found: ignore

@@ -1476,19 +1476,31 @@ function computeCompositeScore(closes) {
   else if (cur > bb.upper || rsi > 75) momentum = 'OVERBOUGHT';
   const tech = calcTechAndFib(closes);
   const fg = calcFearGreed(rsi, stoch, vol);
-  // alpha is 0 in slice context (no SPY available easily) — use 0
-  let score = 50;
-  if (chg6m > 0) score += 8;
-  if (chg1y > 0) score += 8;
-  if (macd.hist > 0) score += 12;
-  if (momentum === 'OVERSOLD') score += 18;
-  if (momentum === 'OVERBOUGHT') score -= 18;
-  if (fg.val < 30) score += 8;
-  if (fg.val > 80) score -= 12;
-  if (sortino > 1.5) score += 8;
-  if (sharpe > 1.0) score += 6;
-  if (tech.cross === 'BULL CROSS') score += 5;
-  return Math.max(5, Math.min(99, Math.round(score)));
+  // No benchmark in the rolling backtest window, so alpha contributes 0.
+  return quantScore({ chg6m, chg1y, macdHist: macd.hist, price: cur, momentum, fg: fg.val, sortino, sharpe, sma10: tech.sma10, sma40: tech.sma40, alpha: 0 });
+}
+
+// Composite Quant Score (0–100, 50 = no net signal).
+// Same signals and relative weights as the original step-function score, but
+// each one now scales with its strength (a +150% year counts for more than
+// +1%), and the total is squashed with tanh instead of clamped. The old
+// version piled most names up at the 99 cap during rallies.
+const SCORE_K = 40;   // raw points at which the score is ~88 / ~12
+function quantScore(f) {
+  const th = Math.tanh, clamp01 = x => Math.max(0, Math.min(1, x));
+  let raw = 0;
+  raw += 8  * th(f.chg6m / 25);                              // 6M momentum
+  raw += 8  * th(f.chg1y / 40);                              // 1Y momentum
+  raw += 12 * th(f.macdHist / (f.price * 0.02 || 1));        // MACD histogram, price-normalized
+  if (f.momentum === 'OVERSOLD')   raw += 18;                // mean-reversion setup
+  if (f.momentum === 'OVERBOUGHT') raw -= 18;
+  raw += 8  * clamp01((35 - f.fg) / 25);                     // reward fear…
+  raw -= 12 * clamp01((f.fg - 70) / 25);                     // …penalize greed
+  raw += 8  * th(f.sortino / 1.5);
+  raw += 6  * th(f.sharpe);
+  raw += 5  * th((f.sma10 / f.sma40 - 1) / 0.05);            // 10W vs 40W trend
+  raw += 8  * th(f.alpha / 0.1);                             // annualized alpha vs SPY
+  return Math.max(1, Math.min(99, Math.round(50 + 50 * th(raw / SCORE_K))));
 }
 
 function computeScoreHitRate(weeklyCloses, threshold = 55) {
@@ -2296,20 +2308,7 @@ async function fetchOne(ticker, isBench = false) {
   else if (cur > bb.upper || rsi > 75)                    { momentum = 'OVERBOUGHT'; momCls = 'r'; }
 
   // Composite Quant Score (0–100)
-  let score = 50;
-  if (chg6m > 0)           score += 8;
-  if (chg1y > 0)           score += 8;
-  if (macd.hist > 0)       score += 12;
-  if (momentum === 'OVERSOLD')   score += 18;
-  if (momentum === 'OVERBOUGHT') score -= 18;
-  if (fg.val < 30)         score += 8;   // buy into extreme fear
-  if (fg.val > 80)         score -= 12;  // avoid extreme greed
-  if (sortino > 1.5)       score += 8;
-  if (sharpe  > 1.0)       score += 6;
-  if (tech.cross === 'BULL CROSS') score += 5;
-  if (alpha > 0.05)        score += 8;
-  if (alpha < 0)           score -= 8;
-  score = Math.max(5, Math.min(99, Math.round(score)));
+  const score = quantScore({ chg6m, chg1y, macdHist: macd.hist, price: cur, momentum, fg: fg.val, sortino, sharpe, sma10: tech.sma10, sma40: tech.sma40, alpha });
 
   return {
     ok: true, source, price: cur, prices: closes, dates, spyA, soxA,

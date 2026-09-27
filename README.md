@@ -1,3 +1,7 @@
+> [!IMPORTANT]
+> **This project has moved to [nithinpuru.github.io/quant-terminal](https://nithinpuru.github.io/quant-terminal/).**
+> Source, data pipeline and docs now live in [NithinPuru/nithinpuru.github.io](https://github.com/NithinPuru/nithinpuru.github.io/tree/main/quant-terminal). This repository is kept for history, and its old URL redirects to the new page.
+
 # Career Semi Quant Terminal
 
 > A zero-server, fully client-side quantitative stock analytics dashboard for the global semiconductor industry.

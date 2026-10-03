@@ -303,3 +303,59 @@ test('neweyWestT: equals the classical t with no lags and shrinks under autocorr
   const z = normals(400, 232); let a = 0; const ar = z.map(v => (a = 0.8 * a + v) + 0.5);
   assert.ok(QL.neweyWestT(ar, 12) < QL.neweyWestT(ar, 0), 'HAC t-stat is smaller for positively autocorrelated data');
 });
+
+test('factor risk model recovers B and D; active risk decomposes exactly', () => {
+  const T = 1500, f1 = normals(T, 301).map(v => 0.02 * v), f2 = normals(T, 302).map(v => 0.01 * v);
+  const Btrue = [[1.2, 0.5], [0.8, -0.3], [1.0, 1.0]], dTrue = [0.01, 0.02, 0.015];
+  const R = Btrue.map((b, i) => { const e = normals(T, 310 + i); return f1.map((_, t) => b[0] * f1[t] + b[1] * f2[t] + dTrue[i] * e[t]); });
+  R[1][5] = null;
+  const m = QL.factorRiskModel(R, [f1, f2]);
+  m.B.forEach((b, i) => b.forEach((v, j) => close(v, Btrue[i][j], 0.05, `B[${i}][${j}]`)));
+  m.d.forEach((v, i) => close(Math.sqrt(v), dTrue[i], 0.0015, `specific sd ${i}`));
+  const C = QL.riskModelCov(m), a = [0.5, 0.3, -0.8], ar = QL.activeRisk(m, a);
+  const qf = Math.sqrt(QL.dot(a, QL.mv(C, a)));
+  close(ar.sigma, qf, 1e-12, 'sigma = sqrt(a C a)');
+  close(ar.contrib.reduce((s, v) => s + v, 0), ar.sigma, 1e-12, 'asset contributions sum to sigma');
+  close(ar.factorContrib.reduce((s, v) => s + v, 0) + ar.specContrib, ar.sigma, 1e-12, 'factor + specific = sigma');
+  // Sample covariance of the simulated returns should agree with the model covariance.
+  const S = QL.covMatrix(R.map(r => r.map(v => v ?? 0)));
+  close(C[0][2], S[0][2], 0.03 * S[0][2] + 1e-6, 'model vs sample covariance');
+  assert.equal(QL.factorRiskModel([[0.01, 0.02]], [[0.01, 0.0]]).B[0], null, 'too short -> null exposures');
+});
+
+test('biasStat: calibrated forecasts give ~1, under-forecast risk gives > 1', () => {
+  const z = normals(600, 321), b = QL.biasStat(z);
+  assert.ok(b.ok && Math.abs(b.b - 1) < 0.08, `calibrated bias ${b.b}`);
+  const u = QL.biasStat(z.map(v => 1.5 * v));
+  assert.ok(!u.ok && u.b > 1.35, `under-forecast bias ${u.b}`);
+});
+
+test('Fama-MacBeth recovers known premia and is null-robust', () => {
+  // One long stream sliced per period (consecutive LCG seeds give near-identical draws).
+  const periods = [], g1 = 0.01, g2 = -0.005, Z = normals(200 * 180, 401);
+  for (let t = 0; t < 200; t++) {
+    const o = t * 180, x1 = Z.slice(o, o + 60), x2 = Z.slice(o + 60, o + 120), e = Z.slice(o + 120, o + 180);
+    const y = x1.map((v, i) => 0.002 + g1 * v + g2 * x2[i] + 0.02 * e[i]);
+    const X = x1.map((v, i) => [v, x2[i]]); if (t % 7 === 0) { y[3] = null; X[4][1] = null; }
+    periods.push({ y, X });
+  }
+  periods.push({ y: [0.1, 0.2], X: [[1, 2], [3, 4]] });
+  const fm = QL.famaMacBeth(periods);
+  assert.equal(fm.n, 200, 'too-small cross-section skipped');
+  close(fm.mean[1], g1, 0.0008, 'premium 1'); close(fm.mean[2], g2, 0.0008, 'premium 2');
+  assert.ok(fm.t[1] > 10 && fm.t[2] < -5, `t-stats ${fm.t[1]}, ${fm.t[2]}`);
+});
+
+test('minCVaR matches a brute-force grid and avoids fat left tails', () => {
+  const T = 400, z = [normals(T, 501), normals(T, 502), normals(T, 503)];
+  // Asset 2 has the same volatility as asset 0 but a crash-prone left tail.
+  const S = Array.from({ length: T }, (_, t) => [0.03 * z[0][t] + 0.002, 0.02 * z[1][t] + 0.001, (t % 20 === 0 ? -0.12 : 0.0063) + 0.0177 * z[2][t]]);
+  const r = QL.minCVaR(S, 0.95);
+  close(r.w.reduce((s, v) => s + v, 0), 1, 1e-9, 'fully invested'); assert.ok(r.w.every(v => v >= -1e-12), 'long only');
+  let best = Infinity;
+  for (let a = 0; a <= 100; a++) for (let b = 0; a + b <= 100; b++) { const w = [a / 100, b / 100, 1 - (a + b) / 100]; best = Math.min(best, QL.cvarOf(S.map(s => -QL.dot(s, w))).cvar); }
+  assert.ok(r.cvar <= best + 2e-4, `optimizer CVaR ${r.cvar} vs grid ${best}`);
+  close(QL.cvarOf(S.map(s => -QL.dot(s, r.w))).cvar, r.cvar, 1e-12, 'reported CVaR is the realized tail mean');
+  assert.ok(r.w[2] < r.w[0], `crash-prone asset gets less weight (${r.w.map(v => v.toFixed(2))})`);
+  close(QL.cvarOf([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 0.8).cvar, 9.5, 1e-12, 'cvarOf: mean of worst 2 of 10');
+});

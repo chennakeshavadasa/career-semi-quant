@@ -90,7 +90,7 @@
   <div class="tools">
     <div class="tool-group">
       <div class="tg-label">Research</div>
-      <button class="tool" onclick="openTool('factor')"><span class="ti">∑</span><span><b>Factor Model</b><small>Exposures, IC, rolling betas</small></span></button>
+      <button class="tool" onclick="openTool('factor')"><span class="ti">∑</span><span><b>Factor Model</b><small>Exposures, IC, Fama-MacBeth</small></span></button>
       <button class="tool" onclick="openTool('regime')"><span class="ti">≋</span><span><b>Regimes</b><small>Hidden Markov model</small></span></button>
       <button class="tool" onclick="openTool('rrg')"><span class="ti">⟳</span><span><b>Rotation</b><small>Relative strength map</small></span></button>
       <button class="tool" onclick="openTool('pairs')"><span class="ti">⇄</span><span><b>Pairs</b><small>Cointegration screener</small></span></button>
@@ -410,7 +410,7 @@
     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-shrink:0;">
       <div>
         <h3 style="margin-bottom:4px;">Portfolio Optimizer · Efficient Frontier, Risk Parity, HRP &amp; Black-Litterman</h3>
-        <p style="margin-bottom:0;">Exact long-only mean-variance frontier plus four alternative constructions institutions use. Add your own return views to Black-Litterman below the charts on the right.</p>
+        <p style="margin-bottom:0;">Exact long-only mean-variance frontier plus five alternative constructions institutions use, including a minimum-CVaR (expected shortfall) portfolio. Add your own return views to Black-Litterman below the charts on the right.</p>
       </div>
       <button class="btn" onclick="togglePortfolio()">Close</button>
     </div>
@@ -2900,7 +2900,7 @@ function pfWeightTable(key, stats, tickers) {
     <div class="pf-card" style="border-left-color:${color}">
       <div class="pf-head"><span style="color:${color}">${title}</span><span class="pf-sh">Sharpe ${stats.sharpe.toFixed(2)}</span></div>
       <div class="pf-desc">${desc}</div>
-      <div class="pf-stats"><span>Exp. return <b class="up">${(stats.ret*100).toFixed(1)}%</b></span><span>Vol <b>${(stats.vol*100).toFixed(1)}%</b></span><span>${held} holdings</span></div>
+      <div class="pf-stats"><span>Exp. return <b class="up">${(stats.ret*100).toFixed(1)}%</b></span><span>Vol <b>${(stats.vol*100).toFixed(1)}%</b></span>${stats.cvar != null ? `<span title="Average weekly loss in the worst 5% of weeks of the Range window">CVaR 95% (wk) <b>${(stats.cvar*100).toFixed(2)}%</b></span>` : ''}<span>${held} holdings</span></div>
       ${bars}
     </div>`;
 }
@@ -2921,7 +2921,7 @@ function renderPortfolio() {
     const tk = pf.M.tickers;
     results.innerHTML = `<p class="tool-note">Expected returns: historical means over the Range window, shrunk 50% toward the cross-sectional average; covariance shrunk toward constant correlation (25%). Long-only, fully invested, risk-free 4.5%. ${tk.length} assets, ${pf.M.dates.length} weeks. Past covariance isn't predictive of future co-movement — for research only.</p>
       <div id="bl-views"></div>` +
-      ['maxSharpe', 'minVar', 'erc', 'hrp', 'bl', 'ew'].map(k => pfWeightTable(k, pf.ports[k], tk)).join('') +
+      ['maxSharpe', 'minVar', 'erc', 'hrp', 'bl', 'minCVaR', 'ew'].map(k => pfWeightTable(k, pf.ports[k], tk)).join('') +
       `<button class="btn" style="width:100%;margin-top:4px" onclick="togglePortfolio();openTool('lab')">Stress-test these portfolios in Risk &amp; Stress →</button>`;
     blViewsUI(document.getElementById('bl-views'), pf, renderPortfolio);
 
@@ -2945,7 +2945,7 @@ function renderPortfolio() {
         { label: 'Random portfolios', data: cloud, backgroundColor: CA('--accent', 0.10), pointRadius: 1.4, pointHoverRadius: 1.4 },
         { label: 'Efficient frontier', data: pf.frontier, showLine: true, borderColor: cv('--green-bright'), borderWidth: 2, pointRadius: 0, fill: false },
         { label: 'Assets', data: assetPts, backgroundColor: CA('--warn', 0.85), pointRadius: 3.5, pointHoverRadius: 6, pointStyle: 'rectRot' },
-        pt('maxSharpe', 'star', 10), pt('minVar', 'circle', 7), pt('erc', 'rect', 7), pt('hrp', 'rectRounded', 7), pt('bl', 'triangle', 8), pt('ew', 'crossRot', 8),
+        pt('maxSharpe', 'star', 10), pt('minVar', 'circle', 7), pt('erc', 'rect', 7), pt('hrp', 'rectRounded', 7), pt('bl', 'triangle', 8), pt('minCVaR', 'triangle', 8), pt('ew', 'crossRot', 8),
       ]},
       options: {
         responsive: true, maintainAspectRatio: false,

@@ -22,6 +22,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js"></script>
 <script src="js/quant-lib.js"></script>
+<script src="js/quant-ext.js"></script>
 
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1117'/%3E%3Cpath d='M6 22 L12 15 L17 19 L26 9' stroke='%2358a6ff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
@@ -94,6 +95,8 @@
       <button class="tool" onclick="openTool('rrg')"><span class="ti">⟳</span><span><b>Rotation</b><small>Relative strength map</small></span></button>
       <button class="tool" onclick="openTool('pairs')"><span class="ti">⇄</span><span><b>Pairs</b><small>Cointegration screener</small></span></button>
       <button class="tool" onclick="openTool('earnings')"><span class="ti">◷</span><span><b>Earnings</b><small>Event study, post-earnings drift</small></span></button>
+      <button class="tool" onclick="openTool('vol')"><span class="ti">σ</span><span><b>Volatility &amp; Tail Risk</b><small>GARCH, EVT, VaR backtests</small></span></button>
+      <button class="tool" onclick="openTool('struct')"><span class="ti">◈</span><span><b>Market Structure</b><small>PCA, denoising, Kalman beta</small></span></button>
       <button class="tool" onclick="toggleCorrelation()"><span class="ti">▦</span><span><b>Correlation</b><small>Who moves together</small></span></button>
       <button class="tool" onclick="toggleRiskMap()"><span class="ti">◉</span><span><b>Risk Map</b><small>Return vs volatility</small></span></button>
     </div>
@@ -106,6 +109,7 @@
     <div class="tool-group">
       <div class="tg-label">Signals &amp; data</div>
       <button class="tool" onclick="openTool('backtest')"><span class="ti">↻</span><span><b>Backtest</b><small>Walk-forward, with costs</small></span></button>
+      <button class="tool" onclick="openTool('validate')"><span class="ti">✓</span><span><b>Strategy Validation</b><small>Deflated Sharpe, bootstrap CIs</small></span></button>
       <button class="tool" onclick="openTool('replay')"><span class="ti">⏮</span><span><b>Timeline Replay</b><small>Past signals &amp; information coefficient</small></span></button>
       <button class="tool" onclick="exportCSV()"><span class="ti">⤓</span><span><b>Export</b><small>Download CSV</small></span></button>
     </div>
@@ -1257,20 +1261,20 @@ function normInv(p){
 // EWMA volatility — JP Morgan RiskMetrics (lambda = 0.94), annualized %
 function calcEWMAVol(prices,lambda=0.94){const r=_rets(prices);if(!r.length)return 0;let v=r.slice(0,Math.min(10,r.length)).reduce((a,b)=>a+b*b,0)/Math.min(10,r.length);for(const x of r)v=lambda*v+(1-lambda)*x*x;return Math.sqrt(v)*Math.sqrt(52)*100;}
 
-// GJR-GARCH(1,1) conditional volatility (QL.gjrGarch: MLE, leverage LR test), annualized %.
-// Also the vol term structure (realized vs GJR forecast) and the news impact curve.
+// GJR-GARCH(1,1) conditional volatility (QL.fitGARCH, quant-ext.js), annualized %, with a
+// likelihood-ratio test of the leverage term against symmetric GARCH, the vol term structure
+// (realized vs forecast) and the news impact curve.
 const VOL_TERMS = [4, 8, 13, 26, 52];
 function calcGARCH(prices,fw=12){
-  const r=_rets(prices), g=QL.gjrGarch(r,{fw:52});
-  const term=VOL_TERMS.map(h=>({h, realized:null, forecast:null}));
-  if(!g)return{condVol:[],forecast:[],current:0,longRun:0,alpha:0,gamma:0,beta:0,persistence:0,halfLife:0,pLR:1,term,slope:null,nic:[]};
+  const r=_rets(prices), A=Math.sqrt(52)*100, term=VOL_TERMS.map(h=>({h, realized:null, forecast:null}));
+  const g=QL.fitGARCH(r,{gjr:true}), s=g&&QL.fitGARCH(r);
+  if(!g||!s)return{condVol:[],forecast:[],current:0,longRun:0,alpha:0,gamma:0,beta:0,persistence:0,halfLife:0,pLR:1,term,slope:null,nic:[]};
   const ts=QL.volTermStructure(r,VOL_TERMS);
   ts.pts.forEach((p,i)=>{term[i].realized=p.vol==null?null:p.vol*100;term[i].forecast=QL.forecastTermVol(g,p.h)*100;});
-  const sd=Math.sqrt(g.uv), eps=Array.from({length:41},(_,i)=>(i-20)/5*sd);
-  const nic=QL.newsImpact(g,eps).map(p=>({x:p.eps*100,gjr:p.gjr*100,garch:p.garch*100}));
-  const pc=v=>v*100;
-  return{condVol:g.condVol.map(pc),forecast:g.forecast.slice(0,fw).map(pc),current:pc(g.current),longRun:pc(g.longRun),
-    alpha:g.alpha,gamma:g.gamma,beta:g.beta,persistence:g.persistence,halfLife:g.halfLife,pLR:g.pLR,garchCurrent:pc(g.garch.current),
+  const sd=Math.sqrt(g.uncondVar), eps=Array.from({length:41},(_,i)=>(i-20)/5*sd);
+  const nic=QL.newsImpact(g,s,eps).map(p=>({x:p.eps*100,gjr:p.gjr*100,garch:p.garch*100}));
+  return{condVol:g.sigma.map(v=>v*A),forecast:g.forecast(fw).map(v=>v*A),current:g.next*A,longRun:g.uncondVol*100,
+    alpha:g.alpha,gamma:g.gamma,beta:g.beta,persistence:g.persistence,halfLife:g.halfLife,pLR:QL.garchLR(g,s).p,
     term,slope:ts.slope,nic};
 }
 function calcCDaR(prices,alpha=0.95){const c=QL.cdar(_rets(prices),alpha);return c?{cdar:c.cdar*100,dar:c.dar*100,avgDD:c.avgDD*100}:{cdar:0,dar:0,avgDD:0};}
@@ -3033,6 +3037,7 @@ document.getElementById('clear-cache-btn').addEventListener('click', async () =>
 })();
 </script>
 <script src="js/tools.js"></script>
+<script src="js/tools2.js"></script>
 <script>
 // Visit analytics (nithinpuru.github.io/np.js) - loaded only on the live site,
 // so local runs and tests don't request it.

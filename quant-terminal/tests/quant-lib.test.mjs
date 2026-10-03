@@ -251,27 +251,23 @@ function simGJR(n, { omega, alpha, gamma, beta }, seed) {
   return r;
 }
 
-test('nelderMead minimizes the Rosenbrock function', () => {
-  const nm = QL.nelderMead(([x, y]) => (1 - x) ** 2 + 100 * (y - x * x) ** 2, [-1.2, 1], { iters: 2000, tol: 1e-14 });
-  close(nm.x[0], 1, 1e-3, 'x'); close(nm.x[1], 1, 2e-3, 'y');
-});
-
-test('GJR-GARCH recovers the leverage effect and rejects it when absent', () => {
-  const lev = QL.gjrGarch(simGJR(4000, { omega: 2e-5, alpha: 0.03, gamma: 0.15, beta: 0.85 }, 201), { fw: 26 });
-  close(lev.gamma, 0.15, 0.06, 'gamma'); close(lev.beta, 0.85, 0.06, 'beta'); close(lev.alpha, 0.03, 0.04, 'alpha');
-  close(lev.persistence, 0.955, 0.03, 'persistence');
-  assert.ok(lev.pLR < 0.001, `leverage LR test rejects gamma = 0 (p = ${lev.pLR})`);
-  assert.ok(lev.ll >= lev.garch.ll - 1e-6, 'GJR nests GARCH, so its likelihood is at least as high');
-  // Forecasts mean-revert monotonically toward the long-run vol.
-  const gap = lev.forecast.map(s => Math.abs(s - lev.longRun));
-  for (let h = 1; h < gap.length; h++) assert.ok(gap[h] <= gap[h - 1] + 1e-12, 'forecast converges');
-  const sym = QL.gjrGarch(simGJR(4000, { omega: 2e-5, alpha: 0.1, gamma: 0, beta: 0.85 }, 202));
-  assert.ok(sym.gamma < 0.05 && sym.pLR > 0.01, `symmetric data: gamma ${sym.gamma.toFixed(3)}, p ${sym.pLR.toFixed(3)}`);
-  const nic = QL.newsImpact(lev, [-0.05, 0.05]);
-  assert.ok(nic[0].gjr > nic[1].gjr, 'news impact: a -5% week raises vol more than a +5% week');
-  close(nic[0].garch, nic[1].garch, 1e-12, 'symmetric GARCH news impact is symmetric');
-  close(QL.forecastTermVol(lev, 1), lev.forecast[0], 1e-12, 'one-week term vol = first forecast');
-  assert.equal(QL.gjrGarch([0.01, -0.02]), null, 'too little data returns null');
+test('GARCH helpers: leverage LR test, news impact and forecast term vol on fitGARCH fits', () => {
+  const QX = createRequire(import.meta.url)('../../public/quant-terminal/js/quant-ext.js');
+  const r = simGJR(4000, { omega: 2e-5, alpha: 0.03, gamma: 0.15, beta: 0.85 }, 201);
+  const g = QX.fitGARCH(r, { gjr: true }), s = QX.fitGARCH(r);
+  assert.ok(QL.garchLR(g, s).p < 0.001, `LR test rejects gamma = 0 on leveraged data (p = ${QL.garchLR(g, s).p})`);
+  const r0 = simGJR(4000, { omega: 2e-5, alpha: 0.1, gamma: 0, beta: 0.85 }, 202);
+  assert.ok(QL.garchLR(QX.fitGARCH(r0, { gjr: true }), QX.fitGARCH(r0)).p > 0.01, 'no rejection on symmetric data');
+  close(QL.garchLR({ loglik: 10 }, { loglik: 10 }).p, 0.5, 1e-12, 'LR = 0 gives the mixture p-value 0.5');
+  close(QL.garchLR({ loglik: 10 + 3.841459 / 2 }, { loglik: 10 }).p, 0.025, 1e-6, 'chi-bar-squared: half the chi2(1) tail');
+  const nic = QL.newsImpact(g, s, [-0.05, 0, 0.05]);
+  assert.ok(nic[0].gjr > nic[2].gjr, 'a -5% week raises vol more than a +5% week');
+  close(nic[0].garch, nic[2].garch, 1e-12, 'symmetric GARCH news impact is symmetric');
+  // At ε = 0 next variance = ω + β·σ̄² = σ̄²(1 − α − γ/2)
+  close(nic[1].gjr, Math.sqrt(g.uncondVar * (1 - g.alpha - g.gamma / 2) * 52), 1e-12, 'news impact at zero shock');
+  close(QL.forecastTermVol(g, 1), g.next * Math.sqrt(52), 1e-12, 'one-week term vol = next-week forecast');
+  const flat = { forecast: h => new Array(h).fill(0.03) };
+  close(QL.forecastTermVol(flat, 13), 0.03 * Math.sqrt(52), 1e-12, 'flat path');
 });
 
 test('volTermStructure annualizes trailing realized vol', () => {

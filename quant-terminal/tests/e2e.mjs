@@ -70,6 +70,8 @@ try {
   const dash = await page.evaluate(() => ({ ok: Object.values(D).filter(d => d.ok).length, total: PUB.length, cards: document.querySelectorAll('#grid .card').length, scoreMax: Math.max(...Object.values(D).filter(d => d.ok).map(d => d.score)) }));
   check(dash.ok === dash.total && dash.total >= 60, `all ${dash.total} tickers load (${dash.ok} ok) in ${Date.now() - t0} ms`);
   check(dash.scoreMax < 99, `quant score is not clamped (max ${dash.scoreMax})`);
+  const disp = await page.evaluate(() => document.getElementById('s-disp').textContent);
+  check(/\d+\.\d%/.test(disp), `header shows cross-sectional dispersion (${disp})`);
   await shot('01-dashboard');
 
   // ── Detail modal incl. regime & factor profile ────────────────────────────
@@ -77,8 +79,10 @@ try {
   for (const t of ['NVDA', '005930.KS', 'SPY']) {
     await page.evaluate(t => openDetail(t), t);
     await page.waitForFunction(() => document.querySelector('#det-profile canvas'), { timeout: 20000 });
-    const info = await page.evaluate(() => ({ lw: !!document.querySelector('#det-lw-chart canvas'), prof: document.getElementById('det-profile').textContent.includes('P(turbulent)') }));
+    const info = await page.evaluate(() => ({ lw: !!document.querySelector('#det-lw-chart canvas'), prof: document.getElementById('det-profile').textContent.includes('P(turbulent)'),
+      vol: ['det-garch-chart', 'det-vts-chart', 'det-nic-chart'].every(id => Chart.getChart(id)?.data.datasets[0].data.length > 0), grid: /Leverage γ[\s\S]*CDaR 95%/.test(document.getElementById('det-grid').textContent) }));
     check(info.lw && info.prof, `${t}: price chart + regime/factor profile render`);
+    check(info.vol && info.grid, `${t}: GJR-GARCH, vol term structure, news impact + CDaR render`);
     if (t === 'NVDA') { await page.evaluate(() => (document.getElementById('det-scroll').scrollTop = 99999)); await sleep(300); await shot('02-detail-profile'); }
     await page.keyboard.press('Escape');
   }
@@ -103,7 +107,7 @@ try {
 
   // ── Every tool and tab ───────────────────────────────────────────────────
   console.log('Tools');
-  const toolTabs = { factor: ['exp', 'scores', 'quality', 'fret'], regime: ['mkt', 'uni', 'corr'], lab: ['main', 'dd', 'vt', 'attr'], pairs: ['main'], rrg: ['main'], backtest: ['main'], earnings: ['up', 'study'], replay: ['replay', 'ic'], vol: ['garch', 'var', 'uni'], struct: ['pca', 'denoise', 'kalman'], validate: ['dsr', 'boot'] };
+  const toolTabs = { factor: ['exp', 'scores', 'quality', 'fret', 'ic', 'roll'], regime: ['mkt', 'uni', 'corr'], lab: ['main', 'dd', 'vt', 'attr'], pairs: ['main'], rrg: ['main'], backtest: ['main'], earnings: ['up', 'study'], replay: ['replay', 'ic'], vol: ['garch', 'var', 'uni'], struct: ['pca', 'denoise', 'kalman'], validate: ['dsr', 'boot'] };
   for (const [tool, tabs] of Object.entries(toolTabs)) {
     for (const tab of tabs) {
       await page.evaluate((tool, tab) => openTool(tool, tab), tool, tab);
@@ -163,6 +167,31 @@ try {
     check(true, `portfolio lab/${tab}: option ${val} re-renders`);
     await page.keyboard.press('Escape');
   }
+
+  // Factor IC horizon + rolling exposures company / window switches
+  await page.evaluate(() => openTool('factor', 'ic'));
+  await page.waitForFunction(() => document.getElementById('fic-h') && document.querySelector('#fic-tbl tbody tr'), { timeout: 90000 });
+  await page.select('#fic-h', '4');
+  await page.waitForFunction(() => document.getElementById('fic-h')?.value === '4' && document.querySelectorAll('#fic-tbl tbody tr').length === 5, { timeout: 90000 });
+  const icT = await page.evaluate(() => [...document.querySelectorAll('#fic-tbl tbody tr')].map(r => r.cells[5].textContent));
+  check(icT.every(v => /^-?\d+\.\d$/.test(v)), `factor IC: 5 signals with Newey-West t-stats (${icT.join(', ')})`);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => openTool('factor', 'roll'));
+  await page.waitForFunction(() => document.getElementById('rl-t') && document.querySelector('#rl-tbl tbody tr'), { timeout: 60000 });
+  await page.select('#rl-t', 'AMD');
+  await page.waitForFunction(() => document.getElementById('rl-t')?.value === 'AMD' && document.querySelector('#rl-tbl tbody tr'), { timeout: 60000 });
+  await page.click('#tool-body [data-w="26"]');
+  await page.waitForFunction(() => document.querySelector('#tool-body [data-w="26"].on') && document.querySelector('#rl-tbl tbody tr'), { timeout: 60000 });
+  check(true, 'factor rolling exposures: company and 26-week window switch');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => openTool('regime', 'corr'));
+  await page.waitForFunction(() => document.querySelector('#cd-disp') && !document.querySelector('#tool-body .tool-loading'), { timeout: 60000 });
+  check(await page.evaluate(() => Chart.getChart('cd-disp')?.data.datasets[1].data.some(v => v != null)), 'regimes: cross-sectional dispersion chart renders');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => openTool('lab', 'main'));
+  await page.waitForFunction(() => document.querySelector('#lab-sc tbody tr'), { timeout: 60000 });
+  check(await page.evaluate(() => /CDaR 95%/.test(document.querySelector('#tool-body .kpis').textContent)), 'portfolio lab: CDaR shown with the risk KPIs');
+  await page.keyboard.press('Escape');
 
   // Pairs: FDR + split-sample columns present; RRG sector mode + window switch
   await page.evaluate(() => openTool('pairs'));

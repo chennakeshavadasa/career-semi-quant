@@ -253,8 +253,102 @@
         const C = QL.corrFromCov(QL.covMatrix(M.map(f => idx.map(t => f[t]))));
         $('fr-corr').innerHTML = `<div class="tbl-wrap"><table class="tbl dense"><tr><th></th>${fc.names.map(k => `<th class="num">${k}</th>`).join('')}</tr>${C.map((r, i) => `<tr><th>${fc.names[i]}</th>${r.map(v => `<td class="num" style="${heat(v, 1)}">${v.toFixed(2)}</td>`).join('')}</tr>`).join('')}</table></div>`;
       } },
+      { id: 'ic', label: 'Factor IC', render(body) {
+        const res = factorIC(), S = res.summary[fcIcH], pal = PAL();
+        if (!res.n) return needMore(body, 'Need at least 10 visible companies with two years of history.');
+        body.innerHTML = `<div class="tool-controls"><label class="range-wrap"><span>Horizon</span> <select class="search" id="fic-h">${IC_HS.map(h => `<option value="${h}" ${h === fcIcH ? 'selected' : ''}>${h} week${h > 1 ? 's' : ''}</option>`).join('')}</select></label>
+            <span class="tool-note" style="margin:0">${res.n} weekly cross-sections, ${fmtDate(res.dates[0])} – ${fmtDate(res.dates[res.dates.length - 1])} · ${res.universe} companies</span></div>
+          <p class="tool-note">Each week, every company is ranked on a characteristic known <i>at that date</i>, and the rank is correlated (Spearman) with its next-${fcIcH}-week return. That cross-sectional <b>information coefficient</b> (IC) is how quant desks judge a factor as a stock-selection signal, separately from whether its long-short portfolio earned a premium. Weekly ICs on multi-week returns overlap, so t-stats use <b>Newey-West</b> standard errors with ${Math.max(0, fcIcH - 1)} lag${fcIcH === 2 ? '' : 's'}. |IC| ≈ 0.03–0.05 with |t| &gt; 2 is a usable signal. <b>Survivorship bias</b>: the universe is today's list of companies.</p>
+          <div id="fic-tbl"></div>
+          <div class="tool-grid2" style="margin-top:12px"><div class="panel"><h4>Cumulative IC (${fcIcH}-week horizon)</h4><div class="chart-box tall"><canvas id="fic-cum"></canvas></div><p class="tool-note">A line rising steadily means the signal has ranked stocks correctly week after week; flat or falling stretches show when it stopped working.</p></div>
+            <div class="panel"><h4>Signal decay: mean IC by horizon</h4><div class="chart-box tall"><canvas id="fic-decay"></canvas></div></div></div>`;
+        $('fic-h').addEventListener('change', e => { fcIcH = +e.target.value; showTab('ic'); });
+        table($('fic-tbl'), [{ key: 'k', label: 'Signal', fmt: v => `<b>${escapeHtml(v)}</b>` }, { key: 'desc', label: 'Characteristic (higher rank = more of it)', wrap: true },
+          { key: 'mean', label: 'Mean IC', num: true, fmt: v => num(v, 3), style: v => heat(v, 0.1) },
+          { key: 'sd', label: 'IC vol', num: true, fmt: v => num(v, 3) },
+          { key: 'ir', label: 'IC IR (ann.)', num: true, fmt: v => num(v), title: 'Mean IC ÷ IC standard deviation × √(52 ÷ horizon)' },
+          { key: 't', label: 't (NW)', num: true, fmt: v => num(v, 1), style: v => heat(v != null && Math.abs(v) > 2 ? v : 0, 4), title: 'Newey-West t-statistic of the mean IC' },
+          { key: 'hit', label: 'IC > 0', num: true, fmt: v => pctU(v, 0), title: 'Share of weeks with a positive IC' },
+          { key: 'spread', label: 'Q5 − Q1 /yr', num: true, fmt: v => pct(v), style: v => heat(v, 0.3), title: 'Top-minus-bottom quintile forward return, annualized' }],
+          IC_SIGNALS.map(s => ({ k: s.label, desc: s.desc, ...S[s.k] })), { sortKey: 't' });
+        chart('fic-cum', { type: 'line', data: { labels: res.dates.map(shortDate), datasets: IC_SIGNALS.map((s, j) => { let c = 0; return { label: s.label, data: res.ic[fcIcH][s.k].map(v => (v == null ? c : (c += v))), borderColor: pal[j], borderWidth: 1.6, pointRadius: 0, tension: 0.1 }; }) },
+          options: baseOpts({ scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => (+v).toFixed(1) } } } }) });
+        chart('fic-decay', { type: 'bar', data: { labels: IC_HS.map(h => `${h}w`), datasets: IC_SIGNALS.map((s, j) => ({ label: s.label, data: IC_HS.map(h => res.summary[h][s.k].mean), backgroundColor: pal[j] + 'cc', borderRadius: 3 })) },
+          options: baseOpts({ scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => (+v).toFixed(2) } } } }) });
+      } },
+      { id: 'roll', label: 'Rolling exposures', render(body) {
+        const fc = computeFactors(), tick = fc.exposures.map(e => e.t), vis = new Set(visibleTickers());
+        const opts = tick.filter(t => vis.has(t)); if (!opts.length) return needMore(body, 'No visible companies have enough history. Clear the dashboard filter.');
+        if (!opts.includes(rollT)) rollT = opts.includes('NVDA') ? 'NVDA' : opts[0];
+        const s = fullSeries(rollT), m = new Map(s.dates.map((d, i) => [d, i]));
+        const y = fc.dates.map(d => { const i = m.get(d); return i > 0 && s.closes[i - 1] != null && s.closes[i] != null ? s.closes[i] / s.closes[i - 1] - 1 : null; });
+        const rb = QL.rollingBetas(y, fc.names.map(k => fc.F[k]), rollW), pal = PAL();
+        const pts = rb.map((r, t) => ({ r, d: fc.dates[t] })).filter(x => x.r);
+        if (pts.length < 4) return needMore(body, `Not enough overlapping history for a ${rollW}-week window. Try the 26-week window or a longer Range.`);
+        const full = fc.exposures.find(e => e.t === rollT), last = pts[pts.length - 1].r;
+        const stats = fc.names.map((k, j) => { const v = pts.map(x => x.r.b[j]); return { k, desc: FACTOR_DESC[k], now: last.b[j], full: full.beta[j], min: Math.min(...v), max: Math.max(...v), sd: QL.std(v), chg: last.b[j] - v[Math.max(0, v.length - 14)] }; });
+        body.innerHTML = `<div class="tool-controls"><label class="range-wrap"><span>Company</span> <select class="search" id="rl-t">${opts.map(t => `<option value="${escapeHtml(t)}" ${t === rollT ? 'selected' : ''}>${escapeHtml(t)} · ${escapeHtml(nameOf(t))}</option>`).join('')}</select></label>
+            <div class="seg">${[26, 52].map(w => `<button class="btn ${w === rollW ? 'on' : ''}" data-w="${w}">${w}-week window</button>`).join('')}</div></div>
+          <p class="tool-note">Factor betas re-estimated every week on a trailing ${rollW}-week window. Static betas hide style drift: a stock can move from a market/semis beta play to a momentum name and back. Large swings relative to the full-window estimate mean single-period risk numbers should be treated with care. Rolling R² now: <b>${pctU(last.r2, 0)}</b>.</p>
+          <div class="panel"><h4>Rolling factor betas · ${escapeHtml(rollT)}</h4><div class="chart-box tall"><canvas id="rl-ch"></canvas></div></div>
+          <div id="rl-tbl" style="margin-top:12px"></div>`;
+        $('rl-t').addEventListener('change', e => { rollT = e.target.value; showTab('roll'); });
+        body.querySelectorAll('[data-w]').forEach(b => b.addEventListener('click', () => { rollW = +b.dataset.w; showTab('roll'); }));
+        chart('rl-ch', { type: 'line', data: { labels: pts.map(x => shortDate(x.d)), datasets: fc.names.map((k, j) => ({ label: k, data: pts.map(x => x.r.b[j]), borderColor: pal[j], borderWidth: 1.6, pointRadius: 0, tension: 0.15 })) },
+          options: baseOpts({ scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => (+v).toFixed(1) } } } }) });
+        table($('rl-tbl'), [{ key: 'k', label: 'Factor', fmt: v => `<b>${v}</b>` }, { key: 'desc', label: 'Definition', wrap: true },
+          { key: 'now', label: 'β now', num: true, fmt: v => num(v) }, { key: 'full', label: 'β full window', num: true, fmt: v => num(v) },
+          { key: 'chg', label: 'Δ 13 weeks', num: true, fmt: v => (v >= 0 ? '+' : '') + num(v), style: v => heat(v, 1) },
+          { key: 'min', label: 'Min', num: true, fmt: v => num(v) }, { key: 'max', label: 'Max', num: true, fmt: v => num(v) },
+          { key: 'sd', label: 'Stability (σ of β)', num: true, fmt: v => num(v), title: 'Standard deviation of the rolling beta — higher means the exposure drifts more' }], stats);
+      } },
     ],
   };
+  let rollT = null, rollW = 52, fcIcH = 13;
+  // Point-in-time characteristics for the factor IC study (each uses data up to week t only).
+  const IC_HS = [1, 4, 13, 26];
+  const IC_SIGNALS = [
+    { k: 'mom', label: 'Momentum', desc: '12-1 month return (skips the latest month)' },
+    { k: 'rev', label: 'Reversal', desc: 'Minus the latest 4-week return (short-term reversal)' },
+    { k: 'lowvol', label: 'Low volatility', desc: 'Minus 26-week return volatility' },
+    { k: 'lowbeta', label: 'Low beta', desc: 'Minus 52-week beta to the S&P 500 (betting against beta)' },
+    { k: 'size', label: 'Small size', desc: 'Minus log USD market cap at that date' },
+  ];
+  let icCache = null;
+  function factorIC() {
+    const vis = visibleTickers(), key = `${vis.join(',')}|${MARKET.meta && MARKET.meta.generated_at}`;
+    if (icCache && icCache.key === key) return icCache;
+    const pn = panel([...vis, 'SPY']), n = vis.length, P = pn.P.slice(0, n), R = pn.R.slice(0, n), spy = pn.R[n], G = pn.dates.length;
+    const last = P.map(p => { for (let i = p.length - 1; i >= 0; i--) if (p[i] != null) return p[i]; return null; }), mcap = vis.map(capUSD);
+    const sig = {
+      mom: (i, t) => (P[i][t - 4] != null && P[i][t - 52] != null ? P[i][t - 4] / P[i][t - 52] - 1 : null),
+      rev: (i, t) => (P[i][t] != null && P[i][t - 4] != null ? -(P[i][t] / P[i][t - 4] - 1) : null),
+      lowvol: (i, t) => { const w = R[i].slice(t - 25, t + 1).filter(v => v != null); return w.length >= 20 ? -QL.std(w) : null; },
+      lowbeta: (i, t) => { let sx = 0, sy = 0, sxy = 0, sxx = 0, m = 0; for (let s = t - 51; s <= t; s++) { const a = R[i][s], b = spy[s]; if (a == null || b == null) continue; sx += b; sy += a; sxy += a * b; sxx += b * b; m++; } if (m < 40) return null; const v = sxx - (sx * sx) / m; return v > 0 ? -(sxy - (sx * sy) / m) / v : null; },
+      size: (i, t) => (mcap[i] && P[i][t] != null && last[i] ? -Math.log((mcap[i] * P[i][t]) / last[i]) : null),
+    };
+    const fwd = (i, t, h) => (t + h < G && P[i][t] != null && P[i][t + h] != null ? P[i][t + h] / P[i][t] - 1 : null);
+    const start = Math.max(53, G - 1 - 260), dates = [], ic = Object.fromEntries(IC_HS.map(h => [h, Object.fromEntries(IC_SIGNALS.map(s => [s.k, []]))]));
+    const qs = Object.fromEntries(IC_HS.map(h => [h, Object.fromEntries(IC_SIGNALS.map(s => [s.k, []]))]));
+    for (let t = start; t < G - 1; t++) {
+      dates.push(pn.dates[t]);
+      const X = Object.fromEntries(IC_SIGNALS.map(s => [s.k, vis.map((_, i) => sig[s.k](i, t))]));
+      IC_HS.forEach(h => {
+        const f = vis.map((_, i) => fwd(i, t, h));
+        IC_SIGNALS.forEach(s => {
+          const x = X[s.k], ok = x.map((v, i) => i).filter(i => x[i] != null && f[i] != null);
+          ic[h][s.k].push(ok.length >= 10 ? QL.spearman(x, f) : null);
+          if (ok.length >= 10) { ok.sort((a, b) => x[a] - x[b]); const k = Math.floor(ok.length / 5); qs[h][s.k].push(QL.mean(ok.slice(-k).map(i => f[i])) - QL.mean(ok.slice(0, k).map(i => f[i]))); }
+        });
+      });
+    }
+    const summary = Object.fromEntries(IC_HS.map(h => [h, Object.fromEntries(IC_SIGNALS.map(s => {
+      const v = ic[h][s.k].filter(z => z != null), m = QL.mean(v), sd = QL.std(v);
+      return [s.k, { mean: m, sd, ir: sd ? (m / sd) * Math.sqrt(52 / h) : null, t: QL.neweyWestT(v, h - 1), hit: v.filter(z => z > 0).length / (v.length || 1), spread: qs[h][s.k].length ? QL.mean(qs[h][s.k]) * (52 / h) : null }];
+    }))]));
+    icCache = { key, dates, ic, summary, n: n >= 10 ? dates.length : 0, universe: n };
+    return icCache;
+  }
 
   // ═════════════════════════════════════════════════════════════════════════
   // REGIMES (hidden Markov model)
@@ -426,7 +520,7 @@
       const bench = panel(['SPY', 'SOXX'], weeks + 1), bi = new Map(bench.dates.map((d, i) => [d, i]));
       const spyR = M.dates.map(d => bench.R[0][bi.get(d)]), soxR = M.dates.map(d => bench.R[1][bi.get(d)]);
       const beta = (r, b) => { const idx = r.map((_, i) => i).filter(i => b[i] != null); const rr = idx.map(i => r[i]), bb = idx.map(i => b[i]); const mb = QL.mean(bb), mr = QL.mean(rr); let c = 0, v = 0; idx.forEach((_, k) => { c += (rr[k] - mr) * (bb[k] - mb); v += (bb[k] - mb) ** 2; }); return v ? c / v : 0; };
-      const perf = QL.perfStats(rp);
+      const perf = QL.perfStats(rp), dr = QL.cdar(rp, 0.95);
       body.innerHTML = ctrl + `
         <div class="kpis">
           ${stat('Volatility', pctU(rd.sigma * Math.sqrt(52)), '', 'Annualized standard deviation of weekly portfolio returns')}
@@ -439,6 +533,9 @@
           ${stat('Diversification', num(rd.divRatio) + 'x', rd.divRatio > 1.4 ? 'g' : '', 'Σ w·σ / σ_portfolio — above 1 means correlations are reducing risk')}
           ${stat('Sharpe', num(perf.sharpe), sign(perf.sharpe))}
           ${stat('Max drawdown', pctU(perf.maxDD), 'r')}
+          ${stat('CDaR 95%', pctU(-dr.cdar), 'r', 'Conditional Drawdown at Risk: average depth of the worst 5% of the drawdown path (Chekhlov, Uryasev & Zabarankin). Less sensitive to one extreme episode than max drawdown')}
+          ${stat('DaR 95%', pctU(-dr.dar), 'r', 'Drawdown at Risk: the portfolio was this far or further below its peak 5% of the time')}
+          ${stat('Avg drawdown', pctU(-dr.avgDD), 'r', 'Average distance below the running peak (CDaR at α = 0)')}
         </div>
         <div class="tool-grid2 lab-grid"><div class="panel"><h4>Risk contribution vs weight</h4><div class="chart-box tall"><canvas id="lab-rc"></canvas></div><p class="tool-note">Names whose risk bar is much longer than their weight bar dominate portfolio risk.</p></div>
           <div class="panel"><h4>Historical stress scenarios</h4><div id="lab-sc"></div></div></div>
@@ -889,6 +986,20 @@
   // ═════════════════════════════════════════════════════════════════════════
   // REGIMES — correlation dynamics tab
   // ═════════════════════════════════════════════════════════════════════════
+  const smooth4 = a => a.map((_, t) => { const w = a.slice(Math.max(0, t - 3), t + 1).filter(v => v != null); return w.length >= 3 ? QL.mean(w) : null; });
+  const pctRank = (a, x) => { const v = a.filter(z => z != null); return x == null || !v.length ? null : v.filter(z => z <= x).length / v.length; };
+  // Universe-wide dispersion for the dashboard header: latest 4-week average and its percentile over the last 3 years.
+  let dispCache = null;
+  function dispersionNow() {
+    const key = MARKET.meta && MARKET.meta.generated_at;
+    if (dispCache && dispCache.key === key) return dispCache;
+    const tick = PUB.filter(c => c.t !== 'SPY' && fullSeries(c.t)).map(c => c.t);
+    if (tick.length < 10) return null;
+    const ds = smooth4(QL.xsDispersion(panel(tick, 157).R).slice(1)), now = ds[ds.length - 1];
+    if (now == null) return null;
+    dispCache = { key, now, pct: pctRank(ds, now) };
+    return dispCache;
+  }
   regimeTool.tabs.push({ id: 'corr', label: 'Correlation dynamics', render(body) {
     const weeks = Math.max(rangeWeeks(), 156), vis = visibleTickers().slice(0, 45), pn = panel(vis, weeks + 1);
     const keep = vis.map((t, i) => i).filter(i => pn.R[i].slice(1).every(v => v != null));
@@ -903,17 +1014,24 @@
     const Cc = calmIx.length > 20 ? corrOn(calmIx) : null, Ct = turbIx.length > 20 ? corrOn(turbIx) : null;
     const ewNow = ew.filter(v => v != null).slice(-1)[0], med = [...roll.filter(v => v != null)].sort((a, b) => a - b), medV = med[Math.floor(med.length / 2)];
     const divRatio = ix => { const Rm = R.map(r => ix.map(t => r[t])), C = QL.covMatrix(Rm), w = R.map(() => 1 / R.length); return QL.riskDecomposition(w, C).divRatio; };
+    const ds = smooth4(QL.xsDispersion(R)), dNow = ds[ds.length - 1], dPct = pctRank(ds, dNow);
     body.innerHTML = `<p class="tool-note">Average pairwise correlation of weekly returns across ${keep.length} visible companies with full history over ${fmtDate(dates[0])} – ${fmtDate(dates[dates.length - 1])}. Shading shows when the semiconductor sector (SOXX) was in its turbulent regime (${turbIx.length} turbulent vs ${calmIx.length} calm weeks). Diversification typically weakens exactly when it's needed: correlations rise in sell-offs. Pair-level figures rest on few turbulent weeks, so treat individual pairs as indicative.</p>
       <div class="kpis">${stat('Avg correlation now', num(ewNow), '', 'EWMA (λ = 0.94), RiskMetrics-style')}${stat('Median (window)', num(medV))}
         ${Cc ? stat('In calm weeks', num(QL.avgCorr(Cc))) : ''}${Ct ? stat('In turbulent weeks', num(QL.avgCorr(Ct)), Ct && Cc && QL.avgCorr(Ct) > QL.avgCorr(Cc) ? 'r' : '') : ''}
-        ${Cc ? stat('Diversification (calm)', num(divRatio(calmIx)) + '×', '', 'Equal-weight portfolio: Σ w·σ ÷ σ_portfolio') : ''}${Ct ? stat('Diversification (turbulent)', num(divRatio(turbIx)) + '×') : ''}</div>
+        ${Cc ? stat('Diversification (calm)', num(divRatio(calmIx)) + '×', '', 'Equal-weight portfolio: Σ w·σ ÷ σ_portfolio') : ''}${Ct ? stat('Diversification (turbulent)', num(divRatio(turbIx)) + '×') : ''}
+        ${stat('Dispersion now', pctU(dNow, 2), '', 'Cross-sectional standard deviation of weekly returns, 4-week average')}${stat('Dispersion percentile', pctU(dPct, 0), dPct > 0.8 ? 'g' : '', 'Where today’s dispersion sits within this window')}</div>
       <div class="panel"><h4>Average pairwise correlation over time</h4><div class="chart-box tall"><canvas id="cd-ch"></canvas></div></div>
+      <div class="panel" style="margin-top:12px"><h4>Cross-sectional dispersion</h4><div class="chart-box"><canvas id="cd-disp"></canvas></div><p class="tool-note">How far apart the companies' weekly returns are, averaged over 4 weeks. Correlation and dispersion are two sides of the same coin: high dispersion with low correlation is a stock-picker's market where selection (and pairs) can add value; low dispersion with high correlation means everything moves with the sector and only the sector call matters.</p></div>
       ${Cc && Ct ? '<h4 style="margin-top:14px">Pairs whose correlation rises most in turbulent markets</h4><div id="cd-tbl"></div>' : ''}`;
     chart('cd-ch', { data: { labels: dates.map(shortDate), datasets: [
       { type: 'line', label: 'Turbulent regime', data: pT.map(v => (v != null && v >= 0.5 ? 1 : 0)), yAxisID: 'bg', fill: 'origin', backgroundColor: cssA('--down', 0.1), borderWidth: 0, pointRadius: 0, stepped: true },
       { type: 'line', label: 'Rolling 26-week', data: roll, yAxisID: 'y', borderColor: css('--ink-3'), borderWidth: 1.2, pointRadius: 0 },
       { type: 'line', label: 'EWMA (λ = 0.94)', data: ew, yAxisID: 'y', borderColor: css('--accent'), borderWidth: 1.8, pointRadius: 0 } ] },
       options: baseOpts({ scales: { x: { grid: { display: false } }, y: { position: 'right', min: 0, max: 1 }, bg: { display: false, min: 0, max: 1 } } }) });
+    chart('cd-disp', { data: { labels: dates.map(shortDate), datasets: [
+      { type: 'line', label: 'Turbulent regime', data: pT.map(v => (v != null && v >= 0.5 ? 1 : 0)), yAxisID: 'bg', fill: 'origin', backgroundColor: cssA('--down', 0.1), borderWidth: 0, pointRadius: 0, stepped: true },
+      { type: 'line', label: 'Dispersion (4-week avg)', data: ds.map(v => (v == null ? null : v * 100)), yAxisID: 'y', borderColor: css('--violet'), borderWidth: 1.6, pointRadius: 0 } ] },
+      options: baseOpts({ scales: { x: { grid: { display: false } }, y: { position: 'right', min: 0, ticks: { callback: v => v + '%' } }, bg: { display: false, min: 0, max: 1 } } }) });
     if (Cc && Ct) {
       const pairs = []; for (let i = 0; i < tk.length; i++) for (let j = i + 1; j < tk.length; j++) pairs.push({ pair: `${tk[i]} / ${tk[j]}`, calm: Cc[i][j], turb: Ct[i][j], jump: Ct[i][j] - Cc[i][j] });
       table($('cd-tbl'), [{ key: 'pair', label: 'Pair', fmt: v => `<b>${escapeHtml(v)}</b>` }, { key: 'calm', label: 'Calm corr', num: true, fmt: v => num(v) }, { key: 'turb', label: 'Turbulent corr', num: true, fmt: v => num(v) },
@@ -1092,9 +1210,9 @@
   // ─── Public API ──────────────────────────────────────────────────────────
   const TOOLS = { factor: factorTool, regime: regimeTool, lab: labTool, pairs: pairsTool, rrg: rrgTool, backtest: backtestTool, earnings: earningsTool, replay: replayTool };
   Object.assign(window, {
-    openTool: (k, tab) => openTool(TOOLS[k], tab), closeTool, renderScreener, setView, renderDetailProfile,
+    openTool: (k, tab) => openTool(TOOLS[k], tab), closeTool, renderScreener, setView, renderDetailProfile, dispersionNow,
     rerenderTool: () => { const t = document.querySelector('#tool-tabs .tab.on'); if (current) showTab(t ? t.dataset.tab : undefined); },
-    invalidateToolCaches: () => { factorCache = null; },
+    invalidateToolCaches: () => { factorCache = null; icCache = null; },
     // Extension point for tools2.js: register more tools and reuse the UI helpers.
     registerTool: (k, tool) => { TOOLS[k] = tool; },
     _ui: { panel, returnMatrix, visibleTickers, chart, baseOpts, table, stat, sign, pct, pctU, num, css, cssA, PAL, nameOf, fmtDate, shortDate, needMore, universeNote, heat, fullSeries, showTab },

@@ -93,6 +93,8 @@
       <button class="tool" onclick="openTool('rrg')"><span class="ti">⟳</span><span><b>Rotation</b><small>Relative strength map</small></span></button>
       <button class="tool" onclick="openTool('pairs')"><span class="ti">⇄</span><span><b>Pairs</b><small>Cointegration screener</small></span></button>
       <button class="tool" onclick="openTool('earnings')"><span class="ti">◷</span><span><b>Earnings</b><small>Event study, post-earnings drift</small></span></button>
+      <button class="tool" onclick="openTool('vol')"><span class="ti">σ</span><span><b>Volatility &amp; Tail Risk</b><small>GARCH, EVT, VaR backtests</small></span></button>
+      <button class="tool" onclick="openTool('struct')"><span class="ti">◈</span><span><b>Market Structure</b><small>PCA, denoising, Kalman beta</small></span></button>
       <button class="tool" onclick="toggleCorrelation()"><span class="ti">▦</span><span><b>Correlation</b><small>Who moves together</small></span></button>
       <button class="tool" onclick="toggleRiskMap()"><span class="ti">◉</span><span><b>Risk Map</b><small>Return vs volatility</small></span></button>
     </div>
@@ -105,6 +107,7 @@
     <div class="tool-group">
       <div class="tg-label">Signals &amp; data</div>
       <button class="tool" onclick="openTool('backtest')"><span class="ti">↻</span><span><b>Backtest</b><small>Walk-forward, with costs</small></span></button>
+      <button class="tool" onclick="openTool('validate')"><span class="ti">✓</span><span><b>Strategy Validation</b><small>Deflated Sharpe, bootstrap CIs</small></span></button>
       <button class="tool" onclick="openTool('replay')"><span class="ti">⏮</span><span><b>Timeline Replay</b><small>Past signals &amp; information coefficient</small></span></button>
       <button class="tool" onclick="exportCSV()"><span class="ti">⤓</span><span><b>Export</b><small>Download CSV</small></span></button>
     </div>
@@ -2974,7 +2977,9 @@ document.getElementById('clear-cache-btn').addEventListener('click', async () =>
   }
 })();
 </script>
+<script src="js/quant-ext.js"></script>
 <script src="js/tools.js"></script>
+<script src="js/tools2.js"></script>
 <script>
 // Visit analytics (nithinpuru.github.io/np.js) - loaded only on the live site,
 // so local runs and tests don't request it.

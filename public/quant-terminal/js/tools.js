@@ -1095,6 +1095,9 @@
     openTool: (k, tab) => openTool(TOOLS[k], tab), closeTool, renderScreener, setView, renderDetailProfile,
     rerenderTool: () => { const t = document.querySelector('#tool-tabs .tab.on'); if (current) showTab(t ? t.dataset.tab : undefined); },
     invalidateToolCaches: () => { factorCache = null; },
+    // Extension point for tools2.js: register more tools and reuse the UI helpers.
+    registerTool: (k, tool) => { TOOLS[k] = tool; },
+    _ui: { panel, returnMatrix, visibleTickers, chart, baseOpts, table, stat, sign, pct, pctU, num, css, cssA, PAL, nameOf, fmtDate, shortDate, needMore, universeNote, heat, fullSeries, showTab },
     _toolInternals: { panel, returnMatrix, computeFactors, factorScores, labHoldings, SCENARIOS },
   });
 })();

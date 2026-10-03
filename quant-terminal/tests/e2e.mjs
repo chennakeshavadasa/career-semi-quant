@@ -47,6 +47,13 @@ const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox']
 const page = await browser.newPage();
 await page.setViewport({ width: 1440, height: 900 });
 const errors = [];
+// Offline runs: CDN_DIR=<dir with node_modules/{chart.js,lightweight-charts}> serves the two CDN scripts locally.
+if (process.env.CDN_DIR) {
+  const local = { 'chart.js@4.5.1/dist/chart.umd.min.js': 'chart.js/dist/chart.umd.min.js', 'lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js': 'lightweight-charts/dist/lightweight-charts.standalone.production.js' };
+  await page.setRequestInterception(true);
+  page.on('request', req => { const m = Object.entries(local).find(([k]) => req.url().includes('cdn.jsdelivr.net/npm/' + k));
+    m ? req.respond({ status: 200, contentType: 'text/javascript', body: fs.readFileSync(path.join(process.env.CDN_DIR, 'node_modules', m[1])) }) : req.continue(); });
+}
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 page.on('requestfailed', r => { if (r.url().startsWith(origin)) errors.push('requestfailed: ' + r.url()); });
@@ -96,7 +103,7 @@ try {
 
   // ── Every tool and tab ───────────────────────────────────────────────────
   console.log('Tools');
-  const toolTabs = { factor: ['exp', 'scores', 'quality', 'fret'], regime: ['mkt', 'uni', 'corr'], lab: ['main', 'dd', 'vt', 'attr'], pairs: ['main'], rrg: ['main'], backtest: ['main'], earnings: ['up', 'study'], replay: ['replay', 'ic'] };
+  const toolTabs = { factor: ['exp', 'scores', 'quality', 'fret'], regime: ['mkt', 'uni', 'corr'], lab: ['main', 'dd', 'vt', 'attr'], pairs: ['main'], rrg: ['main'], backtest: ['main'], earnings: ['up', 'study'], replay: ['replay', 'ic'], vol: ['garch', 'var', 'uni'], struct: ['pca', 'denoise', 'kalman'], validate: ['dsr', 'boot'] };
   for (const [tool, tabs] of Object.entries(toolTabs)) {
     for (const tab of tabs) {
       await page.evaluate((tool, tab) => openTool(tool, tab), tool, tab);

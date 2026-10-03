@@ -107,7 +107,7 @@ try {
 
   // ── Every tool and tab ───────────────────────────────────────────────────
   console.log('Tools');
-  const toolTabs = { factor: ['exp', 'scores', 'quality', 'fret', 'ic', 'roll'], regime: ['mkt', 'uni', 'corr'], lab: ['main', 'dd', 'vt', 'attr'], pairs: ['main'], rrg: ['main'], backtest: ['main'], earnings: ['up', 'study'], replay: ['replay', 'ic'], vol: ['garch', 'var', 'uni'], struct: ['pca', 'denoise', 'kalman'], validate: ['dsr', 'boot'] };
+  const toolTabs = { factor: ['exp', 'scores', 'quality', 'fret', 'ic', 'roll', 'fmb'], regime: ['mkt', 'uni', 'corr'], lab: ['main', 'dd', 'vt', 'attr', 'active'], pairs: ['main'], rrg: ['main'], backtest: ['main'], earnings: ['up', 'study'], replay: ['replay', 'ic'], vol: ['garch', 'var', 'uni'], struct: ['pca', 'denoise', 'kalman'], validate: ['dsr', 'boot'] };
   for (const [tool, tabs] of Object.entries(toolTabs)) {
     for (const tab of tabs) {
       await page.evaluate((tool, tab) => openTool(tool, tab), tool, tab);
@@ -136,7 +136,7 @@ try {
     check(!!kp, `backtest ${strat} @25bps: ${kp}`);
     await page.keyboard.press('Escape');
   }
-  for (const src of ['maxSharpe', 'erc', 'hrp', 'bl']) {
+  for (const src of ['maxSharpe', 'erc', 'hrp', 'bl', 'minCVaR']) {
     await page.evaluate(() => openTool('lab'));
     await page.waitForFunction(() => document.getElementById('lab-src'));
     await page.select('#lab-src', src);
@@ -193,6 +193,23 @@ try {
   check(await page.evaluate(() => /CDaR 95%/.test(document.querySelector('#tool-body .kpis').textContent)), 'portfolio lab: CDaR shown with the risk KPIs');
   await page.keyboard.press('Escape');
 
+  await page.evaluate(() => openTool('factor', 'fmb'));
+  await page.waitForFunction(() => document.getElementById('fm-h') && document.querySelectorAll('#fm-tbl tbody tr').length === 5, { timeout: 90000 });
+  await page.select('#fm-h', '13');
+  await page.waitForFunction(() => document.getElementById('fm-h')?.value === '13' && document.querySelectorAll('#fm-tbl tbody tr').length === 5, { timeout: 90000 });
+  const fmT = await page.evaluate(() => [...document.querySelectorAll('#fm-tbl tbody tr')].map(r => r.cells[3].textContent));
+  check(fmT.every(v => /^-?\d+\.\d$/.test(v)), `Fama-MacBeth: 5 premia with Newey-West t-stats (${fmT.join(', ')})`);
+  await page.keyboard.press('Escape');
+  for (const b of ['SPY', 'cap']) {
+    await page.evaluate(() => openTool('lab', 'active'));
+    await page.waitForFunction(() => document.getElementById('ar-b') && document.querySelector('#ar-tbl tbody tr'), { timeout: 90000 });
+    await page.select('#ar-b', b);
+    await page.waitForFunction(v => document.getElementById('ar-b')?.value === v && document.querySelector('#ar-tbl tbody tr'), { timeout: 90000 }, b);
+    const k = await page.evaluate(() => document.querySelector('#tool-body .kpis').innerText.replace(/\s+/g, ' '));
+    check(/Tracking error/i.test(k) && /Bias statistic \d\.\d\d/i.test(k), `portfolio lab/active vs ${b}: ${k.slice(0, 60)} … ${k.slice(k.search(/Bias/i))}`);
+    await page.keyboard.press('Escape');
+  }
+
   // Pairs: FDR + split-sample columns present; RRG sector mode + window switch
   await page.evaluate(() => openTool('pairs'));
   await page.waitForFunction(() => document.querySelector('#pr-tbl tbody tr'), { timeout: 90000 });
@@ -219,10 +236,10 @@ try {
   // ── Optimizer incl. Black-Litterman views ────────────────────────────────
   console.log('Optimizer');
   await page.evaluate(() => togglePortfolio());
-  await page.waitForFunction(() => document.querySelectorAll('.pf-card').length === 6, { timeout: 60000 });
+  await page.waitForFunction(() => document.querySelectorAll('.pf-card').length === 7, { timeout: 60000 });
   await page.click('#bl-sug'); await page.waitForFunction(() => document.querySelectorAll('.bl-row').length === 6, { timeout: 60000 });
-  const bl = await page.evaluate(() => document.querySelectorAll('.pf-card').length);
-  check(bl === 6, 'optimizer: 6 portfolios + Black-Litterman suggested views');
+  const bl = await page.evaluate(() => ({ n: document.querySelectorAll('.pf-card').length, cvar: [...document.querySelectorAll('.pf-card')].some(c => /Minimum CVaR[\s\S]*CVaR 95% \(wk\) [\d.]+%/.test(c.textContent)) }));
+  check(bl.n === 7 && bl.cvar, 'optimizer: 7 portfolios incl. minimum CVaR + Black-Litterman suggested views');
   await shot('04-optimizer');
   await page.evaluate(() => localStorage.removeItem('csq_bl_views'));
   await page.keyboard.press('Escape');

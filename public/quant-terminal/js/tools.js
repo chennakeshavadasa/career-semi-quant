@@ -302,9 +302,36 @@
           { key: 'min', label: 'Min', num: true, fmt: v => num(v) }, { key: 'max', label: 'Max', num: true, fmt: v => num(v) },
           { key: 'sd', label: 'Stability (σ of β)', num: true, fmt: v => num(v), title: 'Standard deviation of the rolling beta — higher means the exposure drifts more' }], stats);
       } },
+      { id: 'fmb', label: 'Fama-MacBeth', render(body) {
+        const res = factorIC(); if (!res.n) return needMore(body, 'Need at least 10 visible companies with two years of history.');
+        const fm = famaMacBethFor(res, fmH), pal = PAL();
+        body.innerHTML = `<div class="tool-controls"><label class="range-wrap"><span>Horizon</span> <select class="search" id="fm-h">${IC_HS.map(h => `<option value="${h}" ${h === fmH ? 'selected' : ''}>${h} week${h > 1 ? 's' : ''}</option>`).join('')}</select></label>
+            <span class="tool-note" style="margin:0">${fm.n} weekly cross-sections · average ${num(fm.avgN, 0)} companies each · mean R² ${pctU(fm.r2, 1)}</span></div>
+          <p class="tool-note"><b>Fama-MacBeth</b> regressions: every week, the next-${fmH}-week returns of all companies are regressed on <i>all five</i> characteristics at once (each standardized cross-sectionally, winsorized at ±3σ). The time-series average of each slope is the return premium for a one-standard-deviation tilt to that characteristic <b>holding the others fixed</b>, the standard academic and buy-side test of whether a factor is priced. The IC tab looks at each signal alone; here overlapping signals (momentum vs low volatility, say) are separated. t-stats are Newey-West with ${Math.max(0, fmH - 1)} lag${fmH === 2 ? '' : 's'}; |t| &gt; 2 is significant. Survivorship bias applies.</p>
+          <div id="fm-tbl"></div>
+          <div class="panel" style="margin-top:12px"><h4>Cumulative premia (sum of weekly slopes, ${fmH}-week horizon)</h4><div class="chart-box tall"><canvas id="fm-ch"></canvas></div></div>`;
+        $('fm-h').addEventListener('change', e => { fmH = +e.target.value; showTab('fmb'); });
+        table($('fm-tbl'), [{ key: 'k', label: 'Characteristic', fmt: v => `<b>${escapeHtml(v)}</b>` }, { key: 'desc', label: 'Definition', wrap: true },
+          { key: 'prem', label: 'Premium /yr per 1σ', num: true, fmt: v => pct(v, 2), style: v => heat(v, 0.1), title: 'Average slope × (52 ÷ horizon)' },
+          { key: 't', label: 't (NW)', num: true, fmt: v => num(v, 1), style: v => heat(v != null && Math.abs(v) > 2 ? v : 0, 4) },
+          { key: 'pos', label: 'Weeks > 0', num: true, fmt: v => pctU(v, 0) },
+          { key: 'ic', label: 'IC alone', num: true, fmt: v => num(v, 3), title: 'Univariate mean IC at this horizon, for comparison (Factor IC tab)' }],
+          IC_SIGNALS.map((s, j) => ({ k: s.label, desc: s.desc, prem: fm.mean[j + 1] * (52 / fmH), t: fm.t[j + 1], pos: fm.pos[j + 1], ic: res.summary[fmH][s.k].mean })), { sortKey: 't' });
+        chart('fm-ch', { type: 'line', data: { labels: res.dates.map(shortDate), datasets: IC_SIGNALS.map((s, j) => { let c = 0; return { label: s.label, data: fm.gammas.map(g => (g ? (c += g.g[j + 1] * 100) : c)), borderColor: pal[j], borderWidth: 1.6, pointRadius: 0, tension: 0.1 }; }) },
+          options: baseOpts({ scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => v + '%' } } } }) });
+      } },
     ],
   };
-  let rollT = null, rollW = 52, fcIcH = 13;
+  let rollT = null, rollW = 52, fcIcH = 13, fmH = 4;
+  function famaMacBethFor(res, h) {
+    const periods = res.Xs.map((X, t) => {
+      const Z = IC_SIGNALS.map(s => QL.zscores(X[s.k]));
+      return { y: res.Fs[h][t], X: res.Fs[h][t].map((_, i) => Z.map(z => z[i])) };
+    });
+    const fm = QL.famaMacBeth(periods, { lags: h - 1, minN: 15 });
+    fm.avgN = QL.mean(fm.gammas.filter(Boolean).map(g => g.n));
+    return fm;
+  }
   // Point-in-time characteristics for the factor IC study (each uses data up to week t only).
   const IC_HS = [1, 4, 13, 26];
   const IC_SIGNALS = [
@@ -330,11 +357,13 @@
     const fwd = (i, t, h) => (t + h < G && P[i][t] != null && P[i][t + h] != null ? P[i][t + h] / P[i][t] - 1 : null);
     const start = Math.max(53, G - 1 - 260), dates = [], ic = Object.fromEntries(IC_HS.map(h => [h, Object.fromEntries(IC_SIGNALS.map(s => [s.k, []]))]));
     const qs = Object.fromEntries(IC_HS.map(h => [h, Object.fromEntries(IC_SIGNALS.map(s => [s.k, []]))]));
+    const Xs = [], Fs = Object.fromEntries(IC_HS.map(h => [h, []]));
     for (let t = start; t < G - 1; t++) {
       dates.push(pn.dates[t]);
       const X = Object.fromEntries(IC_SIGNALS.map(s => [s.k, vis.map((_, i) => sig[s.k](i, t))]));
+      Xs.push(X);
       IC_HS.forEach(h => {
-        const f = vis.map((_, i) => fwd(i, t, h));
+        const f = vis.map((_, i) => fwd(i, t, h)); Fs[h].push(f);
         IC_SIGNALS.forEach(s => {
           const x = X[s.k], ok = x.map((v, i) => i).filter(i => x[i] != null && f[i] != null);
           ic[h][s.k].push(ok.length >= 10 ? QL.spearman(x, f) : null);
@@ -346,7 +375,7 @@
       const v = ic[h][s.k].filter(z => z != null), m = QL.mean(v), sd = QL.std(v);
       return [s.k, { mean: m, sd, ir: sd ? (m / sd) * Math.sqrt(52 / h) : null, t: QL.neweyWestT(v, h - 1), hit: v.filter(z => z > 0).length / (v.length || 1), spread: qs[h][s.k].length ? QL.mean(qs[h][s.k]) * (52 / h) : null }];
     }))]));
-    icCache = { key, dates, ic, summary, n: n >= 10 ? dates.length : 0, universe: n };
+    icCache = { key, dates, ic, summary, Xs, Fs, n: n >= 10 ? dates.length : 0, universe: n };
     return icCache;
   }
 
@@ -431,9 +460,10 @@
     const views = getViews().map(v => ({ ...v, i: M.tickers.indexOf(v.t) })).filter(v => v.i >= 0);
     const bl = QL.blackLitterman(C, wMkt, views.map(v => ({ i: v.i, q: v.q / 100, conf: v.conf / 100 })), { delta: 2.5, tau: 0.05 });
     const wBL = QL.meanVariance(bl.mu, C, 2.5, 1500);
+    const cv = QL.minCVaR(M.dates.map((_, t) => M.R.map(r => r[t])), 0.95);
     const S = w => ({ w, ...QL.portStats(w, mu, C) });
     return { M, C, mu, muHist, bl, wMkt, views,
-      ports: { maxSharpe: { ...fr.maxSharpe, ...S(fr.maxSharpe.w) }, minVar: S(fr.minVar.w), erc: S(erc), hrp: S(h), bl: S(wBL), ew: S(ew), mkt: S(wMkt) },
+      ports: { maxSharpe: { ...fr.maxSharpe, ...S(fr.maxSharpe.w) }, minVar: S(fr.minVar.w), erc: S(erc), hrp: S(h), bl: S(wBL), minCVaR: { ...S(cv.w), cvar: cv.cvar }, ew: S(ew), mkt: S(wMkt) },
       frontier: fr.frontier.map(p => ({ x: p.vol * 100, y: QL.portStats(p.w, mu, C).ret * 100 })) };
   }
   const PORT_META = {
@@ -442,6 +472,7 @@
     erc: ['◆ Risk parity (ERC)', '--purple', 'Every holding contributes the same share of total risk'],
     hrp: ['◈ Hierarchical risk parity', '--cyan', 'López de Prado: clusters correlated names, then splits risk top-down — robust to noisy covariances'],
     bl: ['◉ Black-Litterman', '--orange', 'Market-cap equilibrium returns blended with your views, then optimized'],
+    minCVaR: ['▼ Minimum CVaR', '--red', 'Rockafellar-Uryasev: smallest average loss in the worst 5% of weeks, using the actual (fat-tailed) return history instead of a variance'],
     ew: ['○ Equal weight (1/N)', '--text-muted', 'Naive benchmark that is surprisingly hard to beat out-of-sample'],
   };
   window.buildPortfolios = buildPortfolios;
@@ -488,7 +519,7 @@
     const pf = buildPortfolios(vis.slice(0, 40)); if (!pf) return [];
     return pf.M.tickers.map((t, i) => ({ t, w: pf.ports[labSource].w[i] })).filter(x => x.w > 1e-4);
   }
-  const LAB_SRCS = { ew: 'Equal-weight (visible)', tracker: 'My tracker holdings', maxSharpe: 'Max Sharpe', minVar: 'Min variance', erc: 'Risk parity', hrp: 'HRP', bl: 'Black-Litterman' };
+  const LAB_SRCS = { ew: 'Equal-weight (visible)', tracker: 'My tracker holdings', maxSharpe: 'Max Sharpe', minVar: 'Min variance', erc: 'Risk parity', hrp: 'HRP', bl: 'Black-Litterman', minCVaR: 'Minimum CVaR' };
   const activeTab = () => (document.querySelector('#tool-tabs .tab.on') || {}).dataset?.tab;
   function labControls(H, extra = '') {
     return `<div class="tool-controls"><label class="range-wrap"><span>Portfolio</span> <select class="search" id="lab-src">${Object.entries(LAB_SRCS).map(([k, v]) => `<option value="${k}" ${k === labSource ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -972,14 +1003,81 @@
         [...fa.rows, { k: 'Alpha', beta: null, contrib: fa.alpha }, { k: 'Residual', beta: null, contrib: fa.resid }, { k: 'Total (sum of weekly returns)', beta: null, contrib: fa.total }]);
     },
   };
+  // Ex-ante active risk against a benchmark under the structural factor model (BΣ_fBᵀ + D)
+  // built on the five factor portfolios, with a rolling out-of-sample bias test.
+  let arBench = 'SOXX';
+  const labActive = {
+    render(body) {
+      const H = labHoldings(); if (H.length < 2) return needHoldings(body);
+      body.innerHTML = labControls(H, `<label class="range-wrap"><span>Benchmark</span> <select class="search" id="ar-b">${[['SOXX', 'Semis ETF (SOXX)'], ['SPY', 'S&amp;P 500 (SPY)'], ['cap', 'Cap-weighted universe']].map(([k, v]) => `<option value="${k}" ${k === arBench ? 'selected' : ''}>${v}</option>`).join('')}</select></label>`);
+      bindLab(); $('ar-b').addEventListener('change', e => { arBench = e.target.value; showTab('active'); });
+      const fc = computeFactors(), Fc = fc.names.map(k => fc.F[k]), T = fc.dates.length;
+      const uni = arBench === 'cap' ? visibleTickers() : [];
+      const assets = [...new Set([...H.map(h => h.t), ...uni, ...(arBench === 'cap' ? [] : [arBench])])];
+      const pn = panel(assets), di = new Map(pn.dates.map((d, i) => [d, i]));
+      const R0 = assets.map((_, a) => fc.dates.map(d => { const i = di.get(d); return i == null ? null : pn.R[a][i]; }));
+      const cover = R0.map(r => r.filter(v => v != null).length / T);
+      const keep = assets.map((_, i) => i).filter(i => cover[i] >= 0.9), tk = keep.map(i => assets[i]), R = keep.map(i => R0[i]);
+      const model = QL.factorRiskModel(R, Fc);
+      const ok = tk.map((_, i) => i).filter(i => model.B[i]), tks = ok.map(i => tk[i]), Rk = ok.map(i => R[i]);
+      const sub = { B: ok.map(i => model.B[i]), d: ok.map(i => model.d[i]), Sf: model.Sf };
+      const hw = new Map(H.map(h => [h.t, h.w])), wpRaw = tks.map(t => hw.get(t) || 0), wpSum = wpRaw.reduce((a, b) => a + b, 0);
+      if (wpSum < 0.5) return body.insertAdjacentHTML('beforeend', '<div class="empty-state"><div class="es-title">Not enough history for these holdings over the factor window</div></div>');
+      const wp = wpRaw.map(v => v / wpSum);
+      let wb;
+      if (arBench === 'cap') { const inU = new Set(uni), c = tks.map(t => (inU.has(t) ? capUSD(t) || 0 : 0)), z = c.reduce((a, b) => a + b, 0); wb = c.map(v => v / z); }
+      else { if (!tks.includes(arBench)) return body.insertAdjacentHTML('beforeend', '<div class="empty-state"><div class="es-title">Benchmark has no data over the factor window</div></div>'); wb = tks.map(t => (t === arBench ? 1 : 0)); }
+      const a = wp.map((v, i) => v - wb[i]), A = Math.sqrt(52);
+      const ar = QL.activeRisk(sub, a), tot = QL.activeRisk(sub, wp);
+      const actRet = fc.dates.map((_, t) => Rk.reduce((s, r, i) => s + a[i] * (r[t] ?? 0), 0)), portRet = fc.dates.map((_, t) => Rk.reduce((s, r, i) => s + wp[i] * (r[t] ?? 0), 0));
+      // Out-of-sample bias test: refit on the trailing 52 weeks every 4 weeks, standardize the next 4 active returns.
+      const z = [];
+      for (let t0 = 52; t0 < T; t0 += 4) {
+        const m = QL.factorRiskModel(Rk.map(r => r.slice(t0 - 52, t0)), Fc.map(f => f.slice(t0 - 52, t0)));
+        if (m.B.some(b => !b)) continue;
+        const s = QL.activeRisk(m, a).sigma; if (!s) continue;
+        for (let t = t0; t < Math.min(T, t0 + 4); t++) z.push(actRet[t] / s);
+      }
+      const bias = QL.biasStat(z), realTE = QL.std(actRet) * A, sampVol = QL.std(portRet) * A;
+      const xp = fc.names.map((_, j) => wp.reduce((s, w, i) => s + w * sub.B[i][j], 0)), xb = fc.names.map((_, j) => wb.reduce((s, w, i) => s + w * sub.B[i][j], 0));
+      const facShare = ar.facVar / (ar.sigma ** 2), bName = arBench === 'cap' ? 'the cap-weighted universe' : arBench;
+      body.insertAdjacentHTML('beforeend', `
+        <p class="tool-note">A <b>structural factor risk model</b>, built the way Barra and Axioma build theirs: covariance = factor exposures × factor covariance × exposuresᵀ + stock-specific variance (BΣ<sub>f</sub>Bᵀ + D), using the Factor Model's five factors over ${fmtDate(fc.dates[0])} – ${fmtDate(fc.dates[T - 1])}. <b>Tracking error</b> is the forecast volatility of the portfolio's return minus ${escapeHtml(bName)}'s. It splits into <b>factor bets</b> (style and sector tilts you could hedge) and <b>stock-specific</b> risk (what's left: genuine stock selection). The <b>bias statistic</b> checks the model out of sample: refit every 4 weeks on the prior year, then compare realized active returns with the forecast. Near 1 means calibrated; above the band means the model under-forecast risk.${tks.length < assets.length ? ` ${assets.length - tks.length} name(s) without 90% history over the window are excluded.` : ''}</p>
+        <div class="kpis">
+          ${stat('Tracking error (ex-ante)', pctU(ar.sigma * A), '', 'Model forecast of annualized active volatility')}
+          ${stat('From factor bets', pctU(facShare, 0), facShare > 0.5 ? 'r' : '', 'Share of active variance explained by active factor exposures')}
+          ${stat('Stock-specific', pctU(1 - facShare, 0), '', 'Share of active variance from stock-specific (idiosyncratic) risk')}
+          ${stat('Realized TE (window)', pctU(realTE), '', 'Annualized standard deviation of weekly active returns over the factor window')}
+          ${stat('Portfolio vol: model vs sample', `${pctU(tot.sigma * A)} <small>vs ${pctU(sampVol)}</small>`)}
+          ${bias ? stat('Bias statistic', num(bias.b), bias.ok ? 'g' : 'r', `Std of realized ÷ forecast active returns over ${bias.n} out-of-sample weeks. 95% band ${num(bias.lo)}–${num(bias.hi)}`) : ''}
+        </div>
+        <div class="tool-grid2"><div><h4>Active factor exposures</h4><div id="ar-fx"></div></div>
+          <div class="panel"><h4>Where the tracking error comes from</h4><div class="chart-box"><canvas id="ar-ch"></canvas></div></div></div>
+        <h4 style="margin-top:14px">Holdings: contribution to tracking error</h4><div id="ar-tbl"></div>`);
+      const fxRows = fc.names.map((k, j) => ({ k, p: xp[j], b: xb[j], act: ar.x[j], c: ar.factorContrib[j] / ar.sigma }));
+      table($('ar-fx'), [{ key: 'k', label: 'Factor', fmt: v => `<b>${v}</b>`, title: '' }, { key: 'p', label: 'Portfolio β', num: true, fmt: v => num(v) }, { key: 'b', label: 'Bench β', num: true, fmt: v => num(v) },
+        { key: 'act', label: 'Active β', num: true, fmt: v => (v == null ? '—' : (v >= 0 ? '+' : '') + num(v)), style: v => heat(v, 0.6) }, { key: 'c', label: '% of TE', num: true, fmt: v => pctU(v, 0), title: 'Contribution to tracking error (factor contributions plus stock-specific sum to 100%)' }],
+        [...fxRows, { k: 'Specific', p: null, b: null, act: null, c: ar.specContrib / ar.sigma }]);
+      const cs = [...fxRows.map(r => ({ l: r.k, v: r.c })), { l: 'Specific', v: ar.specContrib / ar.sigma }], pal = PAL();
+      chart('ar-ch', { type: 'bar', data: { labels: cs.map(x => x.l), datasets: [{ data: cs.map(x => x.v * 100), backgroundColor: [...pal.slice(0, fxRows.length), cssA('--ink', 0.3)], borderRadius: 3 }] },
+        options: baseOpts({ indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.x.toFixed(1) + '% of tracking error' } } }, scales: { x: { ticks: { callback: v => v + '%' } }, y: { grid: { display: false } } } }) });
+      const rows = tks.map((t, i) => ({ t, name: t === arBench ? 'Benchmark' : nameOf(t), wp: wp[i], wb: wb[i], act: a[i], mctr: ar.mctr[i] * A, c: ar.contrib[i] / ar.sigma })).filter(r => Math.abs(r.act) > 1e-6);
+      table($('ar-tbl'), [{ key: 't', label: 'Ticker', fmt: v => `<b>${escapeHtml(v)}</b>` }, { key: 'name', label: 'Company' },
+        { key: 'wp', label: 'Portfolio', num: true, fmt: v => pctU(v) }, { key: 'wb', label: 'Benchmark', num: true, fmt: v => pctU(v) },
+        { key: 'act', label: 'Active wt', num: true, fmt: v => pct(v), style: v => heat(v, 0.2) },
+        { key: 'mctr', label: 'Marginal TE', num: true, fmt: v => pct(v), title: 'Change in annualized tracking error per unit of extra active weight' },
+        { key: 'c', label: '% of TE', num: true, fmt: v => pct(v, 0), style: v => heat(v, 0.3, true), title: 'Contribution to tracking error; negative = diversifies the active bets' }], rows, { sortKey: 'c', maxRows: 25 });
+    },
+  };
   const labTool = {
     title: 'Portfolio Lab',
-    sub: () => 'Risk decomposition and stress tests, regime-aware drawdown forecasting, volatility-targeted sizing and performance attribution for a portfolio of your choice.',
+    sub: () => 'Risk decomposition and stress tests, regime-aware drawdown forecasting, volatility-targeted sizing, performance attribution and factor-model active risk for a portfolio of your choice.',
     tabs: [
       { id: 'main', label: 'Risk & stress', render: b => labRisk.render(b) },
       { id: 'dd', label: 'Drawdown forecast', render: b => labDD.render(b) },
       { id: 'vt', label: 'Volatility targeting', render: b => labVT.render(b) },
       { id: 'attr', label: 'Attribution', render: b => labAttr.render(b) },
+      { id: 'active', label: 'Active risk', render: b => labActive.render(b) },
     ],
   };
 

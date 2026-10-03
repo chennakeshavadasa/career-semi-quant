@@ -12,6 +12,8 @@
  *   Factors ............... long-short factor returns, factor regression + attribution
  *   Relative rotation ..... RRG-style RS-Ratio / RS-Momentum
  *   Walk-forward backtest . causal indicators, strategy engine with costs
+ *   Volatility & drawdown . GJR-GARCH (MLE + leverage LR test), news impact, vol term
+ *                           structure, CDaR, cross-sectional dispersion, rolling betas
  */
 (function (root) {
   'use strict';
@@ -656,6 +658,133 @@
     return c / Math.sqrt(va * vb || 1);
   }
 
+  // t-stat of a series' mean with a Newey-West (Bartlett) HAC variance, for overlapping
+  // observations such as weekly ICs measured on multi-week forward returns.
+  function neweyWestT(x, lags = 0) {
+    const v = x.filter(z => z != null && isFinite(z)), n = v.length;
+    if (n < 3) return null;
+    const m = mean(v), e = v.map(z => z - m), g = l => { let s = 0; for (let t = l; t < n; t++) s += e[t] * e[t - l]; return s / n; };
+    let S = g(0); for (let l = 1; l <= Math.min(lags, n - 1); l++) S += 2 * (1 - l / (lags + 1)) * g(l);
+    return S > 0 ? m / Math.sqrt(S / n) : null;
+  }
+
+  // ─── Volatility models ───────────────────────────────────────────────────
+  // Nelder-Mead simplex minimizer (unconstrained; callers reparameterize).
+  function nelderMead(f, x0, { step = 0.5, iters = 500, tol = 1e-10 } = {}) {
+    const n = x0.length;
+    let S = [x0.slice()]; for (let i = 0; i < n; i++) { const x = x0.slice(); x[i] += step; S.push(x); }
+    let F = S.map(f);
+    for (let k = 0; k < iters; k++) {
+      const o = F.map((_, i) => i).sort((a, b) => F[a] - F[b]); S = o.map(i => S[i]); F = o.map(i => F[i]);
+      if (Math.abs(F[n] - F[0]) < tol) break;
+      const c = new Array(n).fill(0); for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) c[j] += S[i][j] / n;
+      const pt = a => c.map((v, j) => v + a * (S[n][j] - v));
+      const xr = pt(-1), fr = f(xr);
+      if (fr < F[0]) { const xe = pt(-2), fe = f(xe); if (fe < fr) { S[n] = xe; F[n] = fe; } else { S[n] = xr; F[n] = fr; } }
+      else if (fr < F[n - 1]) { S[n] = xr; F[n] = fr; }
+      else {
+        const xc = pt(fr < F[n] ? -0.5 : 0.5), fc = f(xc);
+        if (fc < Math.min(fr, F[n])) { S[n] = xc; F[n] = fc; }
+        else for (let i = 1; i <= n; i++) { S[i] = S[i].map((v, j) => S[0][j] + 0.5 * (v - S[0][j])); F[i] = f(S[i]); }
+      }
+    }
+    const b = F.indexOf(Math.min(...F)); return { x: S[b], f: F[b] };
+  }
+
+  // GJR-GARCH(1,1) (Glosten, Jagannathan & Runkle 1993), Gaussian MLE with variance targeting:
+  //   σ²ₜ₊₁ = ω + (α + γ·1[εₜ<0])·εₜ² + β·σ²ₜ,   ω = σ̄²(1 − α − γ/2 − β).
+  // γ > 0 is the leverage effect: bad weeks raise next week's variance more than good ones.
+  // Also fits the symmetric GARCH(1,1) (γ = 0) for a likelihood-ratio test of γ; γ sits on
+  // the boundary under H0, so the p-value is the 50:50 χ²₀/χ²₁ mixture.
+  // Volatilities are annualized decimals; forecast[h] is the expected σ for week n+1+h.
+  function gjrGarch(r, { fw = 52 } = {}) {
+    const x = r.filter(v => v != null && isFinite(v)), n = x.length;
+    if (n < 30) return null;
+    const mu = mean(x), e = x.map(v => v - mu), uv = e.reduce((s, v) => s + v * v, 0) / n, A = Math.sqrt(W);
+    const sig = z => 1 / (1 + Math.exp(-z));
+    // θ = [z_p, z_a, z_g]: persistence p = 0.999·sigmoid(z_p), split between α, γ/2 and β by softmax.
+    const unpack = (th, asym) => {
+      const p = 0.999 * sig(th[0]), ea = Math.exp(th[1]), eg = asym ? Math.exp(th[2]) : 0, Z = ea + eg + 1;
+      return { alpha: (p * ea) / Z, gamma: (2 * p * eg) / Z, beta: p / Z, p };
+    };
+    const filter = ({ alpha, gamma, beta, p }) => {
+      const om = uv * (1 - p), v = new Array(n + 1); v[0] = uv; let ll = 0;
+      for (let t = 0; t < n; t++) {
+        const s2 = Math.max(v[t], 1e-12); ll -= 0.5 * (Math.log(2 * Math.PI) + Math.log(s2) + (e[t] * e[t]) / s2);
+        v[t + 1] = om + (alpha + (e[t] < 0 ? gamma : 0)) * e[t] * e[t] + beta * v[t];
+      }
+      return { v, ll, om };
+    };
+    const fit = asym => {
+      const th0 = asym ? [Math.log(0.95 / 0.049), Math.log(0.05 / 0.87), Math.log(0.03 / 0.87)] : [Math.log(0.95 / 0.049), Math.log(0.08 / 0.87)];
+      const nm = nelderMead(th => { const q = filter(unpack(th, asym)).ll; return isFinite(q) ? -q : 1e12; }, th0);
+      const par = unpack(nm.x, asym); return { ...par, ...filter(par) };
+    };
+    const g1 = fit(true), g0 = fit(false), lr = Math.max(0, 2 * (g1.ll - g0.ll));
+    const pLR = lr > 0 ? 1 - normCdf(Math.sqrt(lr)) : 0.5; // ½·P(χ²₁ > LR) = 1 − Φ(√LR)
+    const forecast = []; let f = g1.v[n];
+    for (let h = 0; h < fw; h++) { forecast.push(Math.sqrt(f) * A); f = g1.om + g1.p * f; }
+    return {
+      condVol: g1.v.slice(0, n).map(v => Math.sqrt(v) * A), forecast, current: Math.sqrt(g1.v[n]) * A, longRun: Math.sqrt(uv) * A,
+      alpha: g1.alpha, gamma: g1.gamma, beta: g1.beta, omega: g1.om, persistence: g1.p, halfLife: g1.p > 0 && g1.p < 1 ? Math.log(0.5) / Math.log(g1.p) : Infinity,
+      ll: g1.ll, lr, pLR, uv, mu, garch: { alpha: g0.alpha, beta: g0.beta, persistence: g0.p, omega: g0.om, ll: g0.ll, current: Math.sqrt(g0.v[n]) * A },
+    };
+  }
+  // Next-week annualized vol as a function of this week's shock ε (news impact curve, Engle & Ng 1993),
+  // holding σ²ₜ at its long-run level.
+  function newsImpact(fit, eps) {
+    const a = Math.sqrt(W), sym = fit.garch;
+    return eps.map(z => ({
+      eps: z,
+      gjr: Math.sqrt(fit.omega + (fit.alpha + (z < 0 ? fit.gamma : 0)) * z * z + fit.beta * fit.uv) * a,
+      garch: Math.sqrt(sym.omega + sym.alpha * z * z + sym.beta * fit.uv) * a,
+    }));
+  }
+  // Average annualized vol over the next h weeks implied by a GARCH-type forecast path.
+  const forecastTermVol = (fit, h) => Math.sqrt(mean(fit.forecast.slice(0, h).map(s => s * s)));
+  // Realized volatility over trailing horizons (weeks), annualized; slope = shortest ÷ longest.
+  function volTermStructure(r, horizons = [4, 8, 13, 26, 52]) {
+    const x = r.filter(v => v != null && isFinite(v));
+    const pts = horizons.map(h => ({ h, vol: x.length >= h && h > 1 ? std(x.slice(-h)) * Math.sqrt(W) : null }));
+    const a = pts[0].vol, b = pts[pts.length - 1].vol;
+    return { pts, slope: a != null && b ? a / b : null };
+  }
+
+  // Drawdown risk (Chekhlov, Uryasev & Zabarankin 2005). From a return series: the drawdown
+  // path (positive fractions), DaR_α = α-quantile of drawdowns and CDaR_α = mean of the worst
+  // (1 − α) share of drawdowns. CDaR_0 is the average drawdown, CDaR_1 the max drawdown.
+  function cdar(r, alpha = 0.95) {
+    const x = r.filter(v => v != null && isFinite(v));
+    if (!x.length) return null;
+    let w = 1, pk = 1; const dd = x.map(v => { w *= 1 + v; pk = Math.max(pk, w); return 1 - w / pk; });
+    const s = [...dd].sort((a, b) => b - a), k = Math.max(1, Math.ceil((1 - alpha) * s.length)), tail = s.slice(0, k);
+    return { dar: tail[k - 1], cdar: mean(tail), avgDD: mean(dd), maxDD: s[0], dd };
+  }
+
+  // Cross-sectional dispersion: per week, the standard deviation of returns across assets
+  // (R is assets × weeks; needs ≥ minN names that week).
+  function xsDispersion(R, minN = 5) {
+    const T = R.length ? R[0].length : 0, out = new Array(T).fill(null);
+    for (let t = 0; t < T; t++) {
+      const v = R.map(r => r[t]).filter(z => z != null && isFinite(z));
+      if (v.length >= minN) { const m = mean(v); out[t] = Math.sqrt(v.reduce((s, z) => s + (z - m) ** 2, 0) / v.length); }
+    }
+    return out;
+  }
+
+  // Rolling OLS betas of y on factor series F (k arrays aligned with y), window `win` weeks.
+  // out[t] = {b: [β₁..βₖ], alpha, r2, n} over weeks t−win+1..t, or null with < 75% coverage.
+  function rollingBetas(y, F, win = 52) {
+    const out = new Array(y.length).fill(null);
+    for (let t = win - 1; t < y.length; t++) {
+      const yy = [], X = [];
+      for (let s = t - win + 1; s <= t; s++) { if (y[s] == null || F.some(f => f[s] == null)) continue; yy.push(y[s]); X.push([1, ...F.map(f => f[s])]); }
+      if (yy.length < Math.max(F.length + 5, 0.75 * win)) continue;
+      const reg = ols(yy, X); out[t] = { b: reg.b.slice(1), alpha: reg.b[0], r2: reg.r2, n: yy.length };
+    }
+    return out;
+  }
+
   const QL = {
     zeros, eye, T, mul, mv, dot, inv, ols, mean, variance, std, rets, covMatrix, shrinkCov, corrFromCov, maxDrawdown, perfStats, normInv,
     fitHMM, adf, EG_CRIT, mackinnonp, benjaminiHochberg, normCdf, cointegration, halfLife,
@@ -663,6 +792,7 @@
     longShortFactor, factorRegression, zscores, rankZ, qualityScores, QUALITY_PILLARS, rrg, rrgSeries, rrgHeading,
     emaSeries, rsiSeries, smaSeries, STRATEGIES, strategyReturns, walkForward, momentumRotation,
     mulberry32, eventStudy, eventWeekIndex, simulateDrawdowns, avgCorr, rollingAvgCorr, ewmaAvgCorr, brinson, carinoLink, ewmaVolSeries, volManaged, spearman,
+    neweyWestT, nelderMead, gjrGarch, newsImpact, forecastTermVol, volTermStructure, cdar, xsDispersion, rollingBetas,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = QL; else root.QL = QL;
 })(typeof window !== 'undefined' ? window : globalThis);

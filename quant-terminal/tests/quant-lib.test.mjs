@@ -243,3 +243,67 @@ test('spearman is +1 / -1 for monotone relations and ignores missing values', ()
   close(QL.spearman([1, 2, 3, 4, 5, 6], [6, 5, 4, 3, 2, 1]), -1, 1e-12, 'monotone down');
   close(QL.spearman([1, 2, null, 4, 5, 6, 7], [2, 4, 9, 8, 10, 12, 14]), 1, 1e-12, 'nulls skipped');
 });
+
+// Simulate a GJR-GARCH(1,1) path with known parameters (weekly scale).
+function simGJR(n, { omega, alpha, gamma, beta }, seed) {
+  const z = normals(n, seed), r = []; let v = omega / (1 - alpha - gamma / 2 - beta);
+  for (let t = 0; t < n; t++) { const e = Math.sqrt(v) * z[t]; r.push(e); v = omega + (alpha + (e < 0 ? gamma : 0)) * e * e + beta * v; }
+  return r;
+}
+
+test('nelderMead minimizes the Rosenbrock function', () => {
+  const nm = QL.nelderMead(([x, y]) => (1 - x) ** 2 + 100 * (y - x * x) ** 2, [-1.2, 1], { iters: 2000, tol: 1e-14 });
+  close(nm.x[0], 1, 1e-3, 'x'); close(nm.x[1], 1, 2e-3, 'y');
+});
+
+test('GJR-GARCH recovers the leverage effect and rejects it when absent', () => {
+  const lev = QL.gjrGarch(simGJR(4000, { omega: 2e-5, alpha: 0.03, gamma: 0.15, beta: 0.85 }, 201), { fw: 26 });
+  close(lev.gamma, 0.15, 0.06, 'gamma'); close(lev.beta, 0.85, 0.06, 'beta'); close(lev.alpha, 0.03, 0.04, 'alpha');
+  close(lev.persistence, 0.955, 0.03, 'persistence');
+  assert.ok(lev.pLR < 0.001, `leverage LR test rejects gamma = 0 (p = ${lev.pLR})`);
+  assert.ok(lev.ll >= lev.garch.ll - 1e-6, 'GJR nests GARCH, so its likelihood is at least as high');
+  // Forecasts mean-revert monotonically toward the long-run vol.
+  const gap = lev.forecast.map(s => Math.abs(s - lev.longRun));
+  for (let h = 1; h < gap.length; h++) assert.ok(gap[h] <= gap[h - 1] + 1e-12, 'forecast converges');
+  const sym = QL.gjrGarch(simGJR(4000, { omega: 2e-5, alpha: 0.1, gamma: 0, beta: 0.85 }, 202));
+  assert.ok(sym.gamma < 0.05 && sym.pLR > 0.01, `symmetric data: gamma ${sym.gamma.toFixed(3)}, p ${sym.pLR.toFixed(3)}`);
+  const nic = QL.newsImpact(lev, [-0.05, 0.05]);
+  assert.ok(nic[0].gjr > nic[1].gjr, 'news impact: a -5% week raises vol more than a +5% week');
+  close(nic[0].garch, nic[1].garch, 1e-12, 'symmetric GARCH news impact is symmetric');
+  close(QL.forecastTermVol(lev, 1), lev.forecast[0], 1e-12, 'one-week term vol = first forecast');
+  assert.equal(QL.gjrGarch([0.01, -0.02]), null, 'too little data returns null');
+});
+
+test('volTermStructure annualizes trailing realized vol', () => {
+  const z = normals(200, 211), r = z.map((v, t) => (t >= 180 ? 0.06 : 0.02) * v);
+  const ts = QL.volTermStructure(r, [4, 13, 52]);
+  close(ts.pts[2].vol, QL.std(r.slice(-52)) * Math.sqrt(52), 1e-12, '52w vol');
+  assert.ok(ts.slope > 1.5, `recent vol spike gives an inverted (steep) short end: slope ${ts.slope.toFixed(2)}`);
+});
+
+test('CDaR: drawdown quantiles on a known path', () => {
+  // Equity 1 -> 0.9 -> 0.8 -> 1.0 -> 0.5: drawdowns 10%, 20%, 0, 50%
+  const r = [-0.1, 0.8 / 0.9 - 1, 1 / 0.8 - 1, -0.5];
+  const c = QL.cdar(r, 0.5);
+  close(c.maxDD, 0.5, 1e-12, 'max drawdown'); close(c.cdar, 0.35, 1e-12, 'CDaR 50% = mean of worst two');
+  close(c.dar, 0.2, 1e-12, 'DaR 50%'); close(c.avgDD, 0.2, 1e-12, 'average drawdown');
+  close(QL.cdar(r, 1).cdar, 0.5, 1e-12, 'CDaR at alpha = 1 is the max drawdown');
+});
+
+test('xsDispersion and rollingBetas', () => {
+  const d = QL.xsDispersion([[0.01, null], [0.03, 0.02], [-0.01, 0.02], [0.05, null], [0.02, 0.02]]);
+  close(d[0], Math.sqrt([0.01, 0.03, -0.01, 0.05, 0.02].reduce((s, v) => s + (v - 0.02) ** 2, 0) / 5), 1e-12, 'dispersion');
+  assert.equal(d[1], null, 'too few names');
+  const f1 = normals(300, 221), f2 = normals(300, 222), e = normals(300, 223);
+  const y = f1.map((v, t) => (t < 150 ? 0.5 : 1.5) * v - 0.7 * f2[t] + 0.05 * e[t]);
+  const rb = QL.rollingBetas(y, [f1, f2], 52);
+  assert.equal(rb[50], null, 'warm-up');
+  close(rb[140].b[0], 0.5, 0.05, 'beta before the break'); close(rb[299].b[0], 1.5, 0.05, 'beta after the break'); close(rb[299].b[1], -0.7, 0.05, 'second beta');
+});
+
+test('neweyWestT: equals the classical t with no lags and shrinks under autocorrelation', () => {
+  const x = normals(400, 231).map(v => v + 0.2), n = x.length;
+  close(QL.neweyWestT(x, 0), QL.mean(x) / (Math.sqrt(x.reduce((s, v) => s + (v - QL.mean(x)) ** 2, 0) / n) / Math.sqrt(n)), 1e-10, 'lag 0');
+  const z = normals(400, 232); let a = 0; const ar = z.map(v => (a = 0.8 * a + v) + 0.5);
+  assert.ok(QL.neweyWestT(ar, 12) < QL.neweyWestT(ar, 0), 'HAC t-stat is smaller for positively autocorrelated data');
+});

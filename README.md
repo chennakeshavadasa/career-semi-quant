@@ -2,7 +2,7 @@
 
 **Live: [nithinpuru.github.io/quant-terminal](https://nithinpuru.github.io/quant-terminal/)**
 
-Institutional-style quant analytics for 70+ semiconductor stocks, including momentum, risk, factor models, regime detection, portfolio optimization, stress testing, pairs trading and walk-forward backtests. It runs entirely in the browser. Full documentation: [`quant-terminal/README.md`](quant-terminal/README.md) · maths and plots: [`quant-terminal/DOCUMENTATION.md`](quant-terminal/DOCUMENTATION.md).
+Institutional-style quant analytics for 70+ semiconductor stocks, including momentum, risk, factor models, regime detection, portfolio optimization, stress testing, pairs trading and walk-forward backtests, plus GARCH volatility forecasting, extreme-value VaR with Kupiec/Christoffersen backtests, random-matrix covariance denoising, Kalman-filter betas and deflated-Sharpe strategy validation. It runs entirely in the browser. Full documentation: [`quant-terminal/README.md`](quant-terminal/README.md) · maths and plots: [`quant-terminal/DOCUMENTATION.md`](quant-terminal/DOCUMENTATION.md).
 
 ## This repo is the source of truth
 
@@ -34,7 +34,9 @@ Each side writes only the files it owns, so the two repos can't conflict or loop
 |---|---|
 | `public/quant-terminal/index.html` | The app (dashboard, cards, detail view, optimizer, tracker) |
 | `public/quant-terminal/js/quant-lib.js` | Quant library: HMM, cointegration, factor models, ERC/HRP/Black-Litterman, walk-forward engine |
+| `public/quant-terminal/js/quant-ext.js` | Risk & validation models: GARCH/GJR, EVT & VaR backtests, deflated Sharpe, bootstrap, PCA / Marchenko-Pastur, Kalman filter |
 | `public/quant-terminal/js/tools.js` | Tool UIs: factor model, regimes, risk & stress, pairs, rotation, backtester, screener |
+| `public/quant-terminal/js/tools2.js` | Tool UIs: volatility & tail risk, market structure, strategy validation |
 | `public/quant-terminal/market_data.json` | Weekly prices + fundamentals + FX (written by the site's data bot) |
 | `quant-terminal/update_data.py` | yfinance data pipeline (runs on the site repo) |
 | `quant-terminal/tests/` | `quant-lib.test.mjs` unit tests, `e2e.mjs` browser test |

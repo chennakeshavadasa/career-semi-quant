@@ -63,9 +63,11 @@ def _write(xw: pd.ExcelWriter, name: str, df: pd.DataFrame | None, index: bool =
         cell.font = hdr
         cell.fill = fill
     ws.freeze_panes = "B2" if index or len(d.columns) > 1 else "A2"
-    cols = ([d.index.name or ""] if index else []) + [str(c) for c in d.columns]
-    for i, c in enumerate(cols, start=1):
-        width = min(46, max(10, len(str(c)) + 2, *(len(str(v)) + 2 for v in (d.index if index and i == 1 else d.iloc[:, i - 1 - (1 if index else 0)]).astype(str).head(200))))
+    columns = ([(d.index.name or "", pd.Series(d.index))] if index else []) + [(str(c), d[c]) for c in d.columns]
+    for i, (c, values) in enumerate(columns, start=1):
+        sample = values.astype(str).head(200)
+        longest = sample.str.len().fillna(0).max() if len(sample) else 0  # pandas 3 keeps NA as NA
+        width = min(46, max(10, len(c) + 2, int(longest if pd.notna(longest) else 0) + 2))
         ws.column_dimensions[get_column_letter(i)].width = width
         if str(c) in pct_cols:
             for row in ws.iter_rows(min_row=2, min_col=i, max_col=i):

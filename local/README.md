@@ -2,6 +2,15 @@
 
 A quant terminal that runs on your own computer. It pulls **live data from Yahoo Finance** (quotes refreshed every 30 s, 1-minute intraday bars, option chains, statements, analyst estimates, insider trades, earnings and economic calendars) and computes **institutional-style analytics locally**: risk and tail models, volatility forecasting, options positioning, factor exposures, regime detection, valuation, portfolio optimization and an RSU / stock-option offer simulator.
 
+It covers four built-in universes, and any other Yahoo symbol you type:
+
+| Universe | Names | Grouped by |
+|---|---|---|
+| Semiconductors | 70 (the web terminal's list, with tiers) | sub-sector: foundry, equipment, memory, analog, AI, SerDes, … |
+| US large caps | 165 across all 11 sectors | sector: technology, financials, health care, energy, … |
+| Global leaders | 64 (Europe, Japan, China, Korea/Taiwan, India, Canada, Latin America, Australia, SE Asia) | region |
+| ETFs | 65 (broad market, sectors, factors, bonds, commodities and crypto, countries, themes) | category |
+
 It opens as a dashboard in your browser and also works from the terminal. Everything stays on your machine; the only network traffic is to Yahoo Finance.
 
 The website edition ([nithinpuru.github.io/quant-terminal](https://nithinpuru.github.io/quant-terminal/)) runs on weekly data refreshed twice a day. This edition is the live, deeper version.
@@ -40,7 +49,7 @@ Stop the dashboard with Ctrl-C in the terminal window.
 
 ## What is inside
 
-**Market dashboard.** US indices and futures, Treasury yields (curve and 10Y-3M spread), FX and crypto, commodities, global indices, VIX term structure (contango or backwardation), sector ETF rotation, a market-cap heatmap of the 70-name semiconductor universe, breadth (share above the 20/50/200-day averages, new highs and lows, correlation, dispersion), a hidden Markov model regime for SOXX, US movers, upcoming earnings and headlines.
+**Market dashboard.** US indices and futures, Treasury yields (curve and 10Y-3M spread), FX and crypto, commodities, global indices, VIX term structure (contango or backwardation), sector ETF rotation, and for the universe you pick (semiconductors, US large caps, global leaders or ETFs): a market-cap heatmap grouped by sub-sector / sector / region, top gainers and losers, group moves, breadth (share above the 20/50/200-day averages, new highs and lows, correlation, dispersion) and a hidden Markov model regime of its reference ETF (SOXX, SPY or ACWI). Plus US movers, upcoming earnings across all universes and headlines.
 
 **Company workspace** (any Yahoo symbol: `NVDA`, `005930.KS`, `8035.T`, `ASML.AS`, `^GSPC`, `BTC-USD`, `ES=F`):
 
@@ -57,7 +66,7 @@ Stop the dashboard with Ctrl-C in the terminal window.
 | Factors & regimes | Style-factor regression on ETF spreads (market, semis, size, value, momentum, quality, low vol) with Newey-West t-stats and variance attribution, macro sensitivities (yields, dollar, oil, VIX), rolling betas, hidden Markov volatility regimes, closest peers |
 | Filings & news | SEC filings with links, dividends, splits, news |
 
-**Tools.** A screener over the universe or any watchlist (about 40 columns, ranked by a composite quant score: momentum, trend, value, quality, growth, estimate revisions, analyst view, low volatility; plus a scatter map), Compare (up to 12 tickers), Portfolio (live value in USD, Euler risk contributions, VaR, seven optimizers incl. risk parity and hierarchical risk parity, efficient frontier, backtest, crisis replay, 12-month Monte Carlo), Offer & RSU value (Monte Carlo of a grant over its vesting schedule, RSUs or options, up to three offers side by side), Calendar (earnings and economic events).
+**Tools.** A screener over any universe or watchlist (about 40 columns, ranked by a composite quant score within that list: momentum, trend, value, quality, growth, estimate revisions, analyst view, low volatility; plus a scatter map), Compare (up to 12 tickers), Portfolio (live value in USD, Euler risk contributions, VaR, seven optimizers incl. risk parity and hierarchical risk parity, efficient frontier, backtest, crisis replay, 12-month Monte Carlo), Offer & RSU value (Monte Carlo of a grant over its vesting schedule, RSUs or options, up to three offers side by side), Calendar (earnings and economic events).
 
 ## Terminal commands
 
@@ -67,7 +76,7 @@ semiquant quote NVDA AMD TSM       live quotes incl. pre/after-hours
 semiquant watch --list "My watchlist"   live-updating board (Ctrl-C to stop)
 semiquant analyze NVDA             one-page tear sheet
 semiquant options NVDA             implied vol, skew, expected move, chain near the money
-semiquant screen --sort score      rank the semiconductor universe
+semiquant screen -u us_large      rank a universe: semis, us_large, global, etfs (or --list "My watchlist")
 semiquant market                   global market snapshot
 semiquant offer NVDA --value 100000 --years 4      value an RSU grant
 semiquant report NVDA AVGO         shareable HTML snapshot (see below)

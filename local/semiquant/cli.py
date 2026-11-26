@@ -410,6 +410,9 @@ def main(argv: list[str] | None = None) -> None:
     if not getattr(a, "fn", None):
         a = ap.parse_args(["serve"] + (argv if argv is not None else sys.argv[1:]))
     logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+    if a.fn is not cmd_serve:  # recoverable Yahoo fallbacks are not worth a terminal warning
+        logging.basicConfig(level=logging.ERROR)
+        logging.getLogger("semiquant").setLevel(logging.ERROR)
     try:
         a.fn(a)
     except KeyboardInterrupt:

@@ -100,7 +100,7 @@ def _overview_heavy(sym: str) -> dict:
 
     df = _daily(sym)
     close = df["close"]
-    b = bench_closes("10y", ("SPY", "SOXX"))
+    b = bench_closes("max", ("SPY", "SOXX"))
     rf = yahoo.risk_free()
     info = safe(yahoo.info, sym, default={}) or {}
     bench = {k: v for k, v in (("S&P 500 (SPY)", b.get("SPY")), ("Semis (SOXX)", b.get("SOXX"))) if v is not None and k}
@@ -285,7 +285,7 @@ def risk(sym: str) -> dict:
 
         df = _daily(sym)
         close = df["close"]
-        b = bench_closes("10y", ("SPY", "SOXX", "QQQ"))
+        b = bench_closes("max", ("SPY", "SOXX", "QQQ"))
         rf = yahoo.risk_free()
         spy, soxx = b.get("SPY"), b.get("SOXX")
         stats = {}
@@ -499,7 +499,7 @@ def earnings_study(sym: str) -> dict | None:
         if ed is None or ed.empty:
             return None
         df = _daily(sym)
-        spy = bench_closes("10y", ("SPY",)).get("SPY")
+        spy = bench_closes("max", ("SPY",)).get("SPY")
         return safe(er.event_study, df["close"], spy, ed, default=None)
 
     return memo(f"estudy:{sym}", 3600, build)

@@ -99,6 +99,13 @@ def _call(fn: Callable[[], Any]) -> Any:
             raise
 
 
+def _all_failed(res: dict[str, Any]) -> bool:
+    """True when every sub-request of a bundle failed or came back empty."""
+    def empty(v):
+        return v is None or (hasattr(v, "empty") and v.empty) or (isinstance(v, (dict, list, tuple)) and not v)
+    return all(empty(v) for v in res.values())
+
+
 def _parallel(fns: dict[str, Callable[[], Any]]) -> dict[str, Any]:
     """Run independent loaders concurrently; failed ones map to None."""
     futs = {k: _pool.submit(fn) for k, fn in fns.items()}
@@ -110,6 +117,18 @@ def _parallel(fns: dict[str, Callable[[], Any]]) -> dict[str, Any]:
             log.info("loader %s failed: %s", k, exc)
             out[k] = None
     return out
+
+
+def _with_backoff(key: str, fn: Callable[[], Any], wait: float = 120.0) -> Any:
+    """Run ``fn``; after a failure with nothing cached, refuse further attempts for ``wait``
+    seconds so a throttled endpoint is not hit again on every request."""
+    if (cache.age(f"fail:{key}") or 1e9) < wait:
+        raise DataError(f"{key}: recently unavailable, retrying shortly")
+    try:
+        return fn()
+    except Exception:
+        cache.put(f"fail:{key}", True, wait)
+        raise
 
 
 def norm_symbol(s: str) -> str:
@@ -517,9 +536,9 @@ def info(symbol: str, ttl: float | None = None) -> dict:
     """Ticker.info (profile, fundamentals, ratios). ``ttl`` lets universe-wide callers
     accept an older copy (e.g. 6 h) while a single ticker page wants it fresh (15 min)."""
     sym = norm_symbol(symbol)
-    return cache.cached(f"info:{sym}", TTL["info"] if ttl is None else ttl,
-                        lambda: _call(lambda: _ticker(sym).info) or {},
-                        disk=True, accept=lambda d: isinstance(d, dict) and len(d) > 3)
+    return _with_backoff(f"info:{sym}", lambda: cache.cached(
+        f"info:{sym}", TTL["info"] if ttl is None else ttl, lambda: _call(lambda: _ticker(sym).info) or {},
+        disk=True, accept=lambda d: isinstance(d, dict) and len(d) > 3))
 
 
 def statements(symbol: str) -> dict[str, pd.DataFrame]:
@@ -559,7 +578,13 @@ def analysts(symbol: str, ttl: float | None = None) -> dict[str, Any]:
             "earnings_history": lambda: _call(lambda: t.earnings_history),
         })
 
-    return cache.cached(f"analysts:{sym}", TTL["analysts"] if ttl is None else ttl, load, disk=True)
+    def load_checked():
+        res = load()
+        if _all_failed(res):  # Yahoo refused every call: keep serving the last good copy
+            raise DataError(f"no analyst data for {sym} right now")
+        return res
+
+    return cache.cached(f"analysts:{sym}", TTL["analysts"] if ttl is None else ttl, load_checked, disk=True)
 
 
 def eps_trend(symbol: str, ttl: float | None = None) -> pd.DataFrame:
@@ -569,8 +594,9 @@ def eps_trend(symbol: str, ttl: float | None = None) -> pd.DataFrame:
     if isinstance(full, dict) and isinstance(full.get("eps_trend"), pd.DataFrame):
         return full["eps_trend"]
     try:
-        return cache.cached(f"epstrend:{sym}", TTL["analysts"] if ttl is None else ttl,
-                            lambda: _call(lambda: _ticker(sym).eps_trend), disk=True)
+        return _with_backoff(f"epstrend:{sym}", lambda: cache.cached(
+            f"epstrend:{sym}", TTL["analysts"] if ttl is None else ttl, lambda: _call(lambda: _ticker(sym).eps_trend),
+            disk=True, accept=lambda d: isinstance(d, pd.DataFrame) and not d.empty))
     except Exception:  # noqa: BLE001
         return pd.DataFrame()
 
@@ -602,13 +628,25 @@ def holders(symbol: str) -> dict[str, Any]:
             "insider_roster": lambda: _call(lambda: t.insider_roster_holders),
         })
 
-    return cache.cached(f"holders:{sym}", TTL["holders"], load, disk=True)
+    def load_checked():
+        res = load()
+        if _all_failed(res):
+            raise DataError(f"no ownership data for {sym} right now")
+        return res
+
+    return cache.cached(f"holders:{sym}", TTL["holders"], load_checked, disk=True)
 
 
 def option_expiries(symbol: str) -> list[str]:
     sym = norm_symbol(symbol)
     try:
-        return list(cache.cached(f"exp:{sym}", TTL["expiries"], lambda: tuple(_call(lambda: _ticker(sym).options) or ())))
+        def load():
+            exps = tuple(_call(lambda: _ticker(sym).options) or ())
+            if not exps:
+                raise DataError(f"no option expiries for {sym}")
+            return exps
+        today = date.today().isoformat()
+        return [e for e in cache.cached(f"exp:{sym}", TTL["expiries"], load, disk=True) if e >= today]
     except Exception:  # noqa: BLE001
         return []
 

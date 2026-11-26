@@ -4,6 +4,20 @@
 
 Institutional-style quant analytics for 70+ semiconductor stocks, including momentum, risk, factor models, regime detection, portfolio optimization, stress testing, pairs trading and walk-forward backtests, plus GARCH volatility forecasting, extreme-value VaR with Kupiec/Christoffersen backtests, random-matrix covariance denoising, Kalman-filter betas and deflated-Sharpe strategy validation. It runs entirely in the browser. Full documentation: [`quant-terminal/README.md`](quant-terminal/README.md) · maths and plots: [`quant-terminal/DOCUMENTATION.md`](quant-terminal/DOCUMENTATION.md).
 
+## Local edition: live data on your own computer
+
+[`local/`](local/README.md) is a separate, deeper version that runs on your machine: live Yahoo Finance quotes (refreshed every 30 s), 1-minute charts, option chains, statements, analyst estimates and ownership, for semiconductors, 165 US large caps across every sector, 64 global leaders, 65 ETFs or any ticker. Institutional analytics run locally: VaR/ES with backtests, GARCH, implied vs realized volatility, gamma exposure, factor regressions, regimes, DCF, portfolio optimizers and an RSU/option offer simulator. It opens as a browser dashboard, works from the terminal, and exports to Excel or a single shareable HTML file.
+
+```bash
+pipx install "git+https://github.com/chennakeshavadasa/career-semi-quant.git#subdirectory=local"
+```
+
+```bash
+semiquant
+```
+
+Or download the repo and double-click `local/start-windows.bat`, `local/start-mac.command` or `local/start-linux.sh`. Details: [`local/README.md`](local/README.md).
+
 ## This repo is the source of truth
 
 Edit the terminal **here**. The portfolio site ([NithinPuru/nithinpuru.github.io](https://github.com/NithinPuru/nithinpuru.github.io)) mirrors the same folders automatically:

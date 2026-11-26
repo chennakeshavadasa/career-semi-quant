@@ -55,18 +55,21 @@ def _warmup() -> None:
         yahoo.history_many(names + ["SPY", "SOXX", "QQQ", "ACWI"], "2y", "1d")  # screener, heatmap, breadth
         yahoo.history_many(list(FACTOR_ETFS), "5y", "1d")  # factor models
         mkt.strip()
-        for t in names:  # fundamentals for scores, ~4 per second
-            try:
-                yahoo.info(t, ttl=scr.FUND_TTL)
-            except Exception:  # noqa: BLE001
-                pass
-            time.sleep(0.25)
-        for t in names:  # consensus revisions
-            try:
-                yahoo.eps_trend(t, ttl=12 * 3600)
-            except Exception:  # noqa: BLE001
-                pass
-            time.sleep(0.25)
+        def gentle(fetch, label: str) -> None:
+            fails = 0
+            for t in names:  # ~4 requests per second
+                try:
+                    ok = fetch(t)
+                    fails = 0 if ok is not False else fails + 1
+                except Exception:  # noqa: BLE001
+                    fails += 1
+                if fails >= 10:  # Yahoo is refusing these calls: stop, pages fetch on demand
+                    log.warning("warm-up: Yahoo is throttling %s requests; skipping the rest for now", label)
+                    return
+                time.sleep(0.25)
+
+        gentle(lambda t: bool(yahoo.info(t, ttl=scr.FUND_TTL)), "fundamentals")
+        gentle(lambda t: not yahoo.eps_trend(t, ttl=12 * 3600).empty, "estimate")
         log.info("warm-up finished in %.0f s", time.time() - t0)
     except Exception as exc:  # noqa: BLE001
         log.warning("warm-up stopped: %s", exc)

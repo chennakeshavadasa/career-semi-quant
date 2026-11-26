@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Semi Quant Terminal · Local</title>
+<meta name="description" content="Local, institutional-grade quant terminal: live Yahoo Finance data, options, fundamentals, risk, portfolio and offer analytics.">
+<script>
+  (function () {
+    var t; try { t = localStorage.getItem('theme'); } catch (e) {}
+    if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d1117'/%3E%3Cpath d='M6 22 L12 15 L17 19 L26 9' stroke='%2358a6ff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+<!--SNAPSHOT-->
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="brand" href="#/market" title="Market dashboard">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 18 L9 11 L13 14 L21 5"/></svg></span>
+      <span><b>Semi Quant Terminal</b><small>Local edition · live Yahoo data</small></span>
+    </a>
+    <div class="search" role="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Search any ticker or company (NVDA, Broadcom, 005930.KS, BTC-USD)…" aria-label="Search ticker">
+      <kbd>/</kbd>
+      <div id="suggest" class="suggest hidden" role="listbox"></div>
+    </div>
+    <div class="top-right">
+      <div class="mstatus" title="Quotes refresh automatically"><span id="live-dot" class="dot"></span><span class="txt" id="mkt-text">Connecting…</span><span class="dim" id="live-time"></span></div>
+      <button class="btn icon" id="refresh-btn" title="Refresh now (R)"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+      <button class="btn icon" id="theme-btn" title="Light / dark theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
+    </div>
+  </header>
+  <aside class="side">
+    <nav class="nav" id="nav">
+      <a href="#/market" data-r="market"><svg viewBox="0 0 24 24"><path d="M3 20h18M6 16V9M11 16V5M16 16v-5M21 16V8"/></svg>Market</a>
+      <a href="#/screener" data-r="screener"><svg viewBox="0 0 24 24"><path d="M4 5h16M7 10h10M10 15h4M11 20h2"/></svg>Screener</a>
+      <a href="#/compare" data-r="compare"><svg viewBox="0 0 24 24"><path d="M4 18l5-6 4 3 7-9"/><path d="M4 12l5 2 4-4 7 3" opacity=".5"/></svg>Compare</a>
+      <a href="#/portfolio" data-r="portfolio"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/></svg>Portfolio</a>
+      <a href="#/offer" data-r="offer"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="2"/><path d="M9 7V5h6v2M4 12h16"/></svg>Offer &amp; RSU value</a>
+      <a href="#/calendar" data-r="calendar"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Calendar</a>
+      <a href="#/settings" data-r="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>Settings &amp; help</a>
+    </nav>
+    <section class="wl" aria-label="Watchlist">
+      <div class="wl-head"><span class="label">Watchlist</span><select id="wl-select" aria-label="Choose watchlist"></select></div>
+      <div id="wl-rows"></div>
+      <div class="wl-add"><input id="wl-input" placeholder="Add ticker…" aria-label="Add ticker to watchlist"><button class="btn sm" id="wl-add-btn">Add</button></div>
+    </section>
+  </aside>
+  <main class="main" id="main">
+    <div id="snap-banner" class="snapshot-banner hidden"></div>
+    <div class="view" id="view"></div>
+  </main>
+</div>
+<div id="loading" class="loading-line hidden"><i></i></div>
+<script src="vendor/lightweight-charts.standalone.production.js"></script>
+<script src="vendor/plotly.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/views/market.js"></script>
+<script src="js/views/ticker.js"></script>
+<script src="js/views/ticker_tabs.js"></script>
+<script src="js/views/ticker_tabs2.js"></script>
+<script src="js/views/tools.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

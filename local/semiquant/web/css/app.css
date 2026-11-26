@@ -168,8 +168,8 @@ h2.sec::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
 /* KPI tiles */
 .kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--card); overflow: hidden; }
 .kpi { padding: 11px 14px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin: 0 -1px -1px 0; min-width: 0; }
-.kpi .v { font: 19px/1.25 var(--mono); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kpi .d { font: 11.5px var(--mono); color: var(--ink-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi .v { font: 19px/1.25 var(--mono); margin-top: 3px; overflow-wrap: anywhere; }
+.kpi .d { font: 11.5px/1.4 var(--mono); color: var(--ink-3); margin-top: 2px; overflow-wrap: anywhere; }
 
 /* Key/value list */
 .kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); column-gap: 22px; }
@@ -236,6 +236,7 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
 
 /* Price chart */
 .pc-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 14px 0; }
+.pc-tools .seg button { padding: 4px 8px; }
 .pc-legend { font: 12px var(--mono); color: var(--ink-2); padding: 6px 14px 0; min-height: 22px; display: flex; gap: 14px; flex-wrap: wrap; }
 .pc-legend span { white-space: nowrap; }
 .pc-main { height: 430px; position: relative; }

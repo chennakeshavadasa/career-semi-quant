@@ -189,6 +189,10 @@ def create_app() -> FastAPI:
     def t_overview(sym: str):
         return tk.overview(sym)
 
+    @app.get("/api/ticker/{sym}/score")
+    def t_score(sym: str):
+        return tk.score(sym)
+
     @app.get("/api/ticker/{sym}/chart")
     def t_chart(sym: str, range: str = "6M", ind: str | None = None):  # noqa: A002
         return tk.chart(sym, range, [x for x in (ind or "").split(",") if x] if ind is not None else None)

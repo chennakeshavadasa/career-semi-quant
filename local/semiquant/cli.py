@@ -137,6 +137,7 @@ def cmd_analyze(a) -> None:
     sym = a.symbol.upper()
     with c.status(f"Analyzing {sym}…"):
         ov = tk.overview(sym)
+        ov["score"] = (tk.score(sym) or {}).get("score")
         risk = tk.risk(sym)
         opt = tk.options(sym, None, False)
     q, ks, pr = ov["quote"], ov.get("key_stats") or {}, ov.get("profile") or {}

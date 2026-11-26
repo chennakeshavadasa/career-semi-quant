@@ -24,7 +24,7 @@ def _quote(sym: str) -> dict:
     return q
 
 
-def _daily(sym: str, period: str = "10y") -> pd.DataFrame:
+def _daily(sym: str, period: str = "max") -> pd.DataFrame:
     df = yahoo.daily(sym, period)
     if df is None or df.empty:
         raise DataError(f"No price history for {sym}")
@@ -97,7 +97,6 @@ def profile(info: dict) -> dict:
 
 def _overview_heavy(sym: str) -> dict:
     from ..analytics import performance, risk, technicals
-    from .screener import score_for
 
     df = _daily(sym)
     close = df["close"]
@@ -114,7 +113,6 @@ def _overview_heavy(sym: str) -> dict:
         "trend": safe(technicals.trend_state, close, default=None),
         "levels": safe(technicals.levels, df.tail(400), default=None),
         "tail": safe(risk.tail_risk_summary, close.tail(1260), default=None),
-        "score": safe(score_for, sym, default=None),
         "spark_1y": [round(float(v), 4) for v in close.tail(252).to_numpy()],
         "rf": rf,
     }
@@ -137,6 +135,34 @@ def overview(sym: str) -> dict:
         nxt = {**(nxt or {}), "time": q["earnings_time"], "estimated": q.get("earnings_estimated")}
     return jsonable({"symbol": sym, "quote": q, "meta": meta(sym), "key_stats": key_stats(info, q),
                      "next_earnings": nxt, "news": yahoo.news(sym, 12), **heavy})
+
+
+def score(sym: str) -> dict:
+    """Composite quant score vs the semiconductor universe (needs universe fundamentals,
+    so it is served separately and the overview never waits for it)."""
+    from .screener import score_for
+
+    sym = yahoo.norm_symbol(sym)
+    return memo(f"score:{sym}", 120, lambda: jsonable({"symbol": sym, "score": score_for(sym)}))
+
+
+def next_earnings(sym: str, q: dict | None = None) -> str | None:
+    """Next earnings date (YYYY-MM-DD): calendar first, then future rows of the earnings dates."""
+    today = datetime.now(NY).strftime("%Y-%m-%d")
+    cal = safe(yahoo.calendar, sym, default={}) or {}
+    ed = cal.get("Earnings Date")
+    for d in (ed if isinstance(ed, list) else [ed]):
+        if d is not None and str(d)[:10] >= today:
+            return str(d)[:10]
+    q = q or {}
+    if (q.get("earnings_time") or "")[:10] >= today:
+        return q["earnings_time"][:10]
+    df = safe(yahoo.earnings_dates, sym, default=None)
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        fut = sorted(pd.Timestamp(i).strftime("%Y-%m-%d") for i in df.index if pd.Timestamp(i).strftime("%Y-%m-%d") >= today)
+        if fut:
+            return fut[0]
+    return None
 
 
 # ─── Chart ───────────────────────────────────────────────────────────────────
@@ -216,6 +242,7 @@ def chart(sym: str, rng: str = "6M", ind: list[str] | None = None) -> dict:
     else:
         full = _daily(sym)
         df = slice_range(full, rng)
+        full = full.tail(len(df) + 400)  # warm-up for long averages without crunching decades
         intraday = False
     if df is None or df.empty:
         raise DataError(f"No chart data for {sym} ({rng})")
@@ -234,6 +261,22 @@ def chart(sym: str, rng: str = "6M", ind: list[str] | None = None) -> dict:
 
 # ─── Risk / volatility / tail ────────────────────────────────────────────────
 
+def _thin_dd(dd: dict | None, max_points: int = 3000) -> dict | None:
+    """Keep long underwater curves light: every k-th point plus the deepest ones."""
+    if not dd or not (dd.get("underwater") or {}).get("t"):
+        return dd
+    t, v = dd["underwater"]["t"], dd["underwater"]["v"]
+    if len(t) <= max_points:
+        return dd
+    k = -(-len(t) // max_points)
+    keep = set(range(0, len(t), k)) | {len(t) - 1}
+    vals = [x if x is not None else 0 for x in v]
+    for i in sorted(range(len(vals)), key=lambda i: vals[i])[:50]:
+        keep.add(i)
+    idx = sorted(keep)
+    return {**dd, "underwater": {"t": [t[i] for i in idx], "v": [v[i] for i in idx]}}
+
+
 def risk(sym: str) -> dict:
     sym = yahoo.norm_symbol(sym)
 
@@ -246,9 +289,9 @@ def risk(sym: str) -> dict:
         rf = yahoo.risk_free()
         spy, soxx = b.get("SPY"), b.get("SOXX")
         stats = {}
-        for w, n in (("1Y", 252), ("3Y", 756), ("5Y", 1260), ("10Y", None)):
+        for w, n in (("1Y", 252), ("3Y", 756), ("5Y", 1260), ("10Y", 2520), ("Max", None)):
             c = close.tail(n + 1) if n else close
-            if len(c) < 30:
+            if len(c) < 30 or (n and len(close) < n * 0.9) or (not n and len(close) <= 2600):
                 continue
             stats[w] = {"vs_spy": safe(pf.summary_stats, c, spy, rf, default=None),
                         "vs_soxx": safe(pf.summary_stats, c, soxx, rf, default=None)}
@@ -257,12 +300,12 @@ def risk(sym: str) -> dict:
         return jsonable({
             "symbol": sym, "rf": rf, "stats": stats,
             "returns": safe(pf.returns_table, close, bench, default=None),
-            "drawdowns": safe(pf.drawdowns, close, 8, default=None),
+            "drawdowns": _thin_dd(safe(pf.drawdowns, close, 8, default=None)),
             "rolling_spy": safe(pf.rolling_metrics, close.tail(1323), spy, 63, default=None),
             "rolling_soxx": safe(pf.rolling_metrics, close.tail(1323), soxx, 63, default=None),
             "distribution": safe(pf.return_distribution, close.tail(1260), 60, 1, default=None),
             "distribution_week": safe(pf.return_distribution, close.tail(1260), 40, 5, default=None),
-            "monthly": safe(pf.monthly_returns, close, default=None),
+            "monthly": safe(pf.monthly_returns, close[close.index >= close.index[-1] - pd.DateOffset(years=15)], default=None),
         })
 
     return memo(f"risk:{sym}", 600, build)
@@ -306,8 +349,7 @@ def tail(sym: str) -> dict:
 
         df = _daily(sym)
         r = returns(df["close"])
-        full = safe(yahoo.history, sym, "max", "1d", default=None)
-        full_close = yahoo.patch_live(full, yahoo.quote(sym))["close"] if full is not None and not full.empty else df["close"]
+        full_close = df["close"]  # _daily is already the full history
         bmax = {}
         for s in ("SPY", "SOXX"):
             h = safe(yahoo.history, s, "max", "1d", default=None)
@@ -317,7 +359,7 @@ def tail(sym: str) -> dict:
         return jsonable({
             "symbol": sym,
             "var_es": safe(rk.var_es, r.tail(1260), (0.95, 0.99), (1, 10), default=None),
-            "backtests": [x for x in (safe(rk.var_backtest, r, 0.99, 500, m, default=None)
+            "backtests": [x for x in (safe(rk.var_backtest, r.tail(2520), 0.99, 500, m, default=None)
                                       for m in ("historical", "normal", "ewma")) if x],
             "stress": safe(rk.stress_test, full_close, bmax, default=None),
             "shocks": safe(rk.hypothetical_shocks, r.tail(504), levels, None, default=None),
@@ -366,9 +408,7 @@ def options(sym: str, expiry: str | None = None, full: bool = True) -> dict:
         chains = yahoo.option_chains(sym, term_exps)
         pairs = {e: (c["calls"], c["puts"]) for e, c in chains.items()}
         ch = chains.get(sel) or yahoo.option_chain(sym, sel)
-        earn = None
-        if q.get("earnings_time") and q["earnings_time"] > datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"):
-            earn = q["earnings_time"][:10]
+        earn = next_earnings(sym, q)
         ts = safe(op.term_structure, pairs, spot, asof, r, qy, earn, default=None)
         atm30 = None
         if ts and ts.get("rows"):

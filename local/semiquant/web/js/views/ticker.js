@@ -194,10 +194,13 @@
         pr.website ? h('p', { style: { marginTop: '8px', fontSize: '13px' } }, h('a', { href: pr.website, target: '_blank', rel: 'noopener' }, pr.website)) : null)));
     }
 
-    // Side: score
-    const sc = d.score;
-    if (sc && fmt.ok(sc.score)) {
-      side.appendChild(ui.panel('Quant score', h('div', null,
+    // Side: score (loaded separately: it ranks against the whole universe)
+    const scoreBox = h('div');
+    side.appendChild(scoreBox);
+    ui.async(scoreBox, () => api(`/api/ticker/${encodeURIComponent(sym)}/score`), (b, r) => {
+      const sc = r.score;
+      if (!sc || !fmt.ok(sc.score)) { b.appendChild(ui.panel('Quant score', ui.empty('Not enough data to score this symbol.'))); return; }
+      b.appendChild(ui.panel('Quant score', h('div', null,
         h('div', { style: { display: 'flex', gap: '14px', alignItems: 'center' } }, ui.ring(sc.score),
           h('div', { class: 'note' }, `Rank ${sc.rank} of ${sc.of} in the ${sc.universe}. Percentile blend of momentum, trend, value, quality, growth, estimate revisions, analyst view and low volatility.`)),
         h('div', { style: { marginTop: '10px' } }, (sc.components || []).map((c) => h('div', { class: 'comp', title: JSON.stringify(c.inputs || {}) },
@@ -206,7 +209,7 @@
         (sc.strengths || []).length || (sc.weaknesses || []).length ? h('div', { class: 'note', style: { marginTop: '8px' } },
           (sc.strengths || []).slice(0, 3).map((s) => h('div', { class: 'up' }, '+ ' + s)),
           (sc.weaknesses || []).slice(0, 3).map((s) => h('div', { class: 'down' }, '− ' + s))) : null)));
-    }
+    }, 260);
     // Technical rating
     const sg = d.signals;
     if (sg && sg.counts) {

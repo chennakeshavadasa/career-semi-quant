@@ -57,7 +57,7 @@
     box.appendChild(sec('Drawdowns'));
     const ddEl = charts.div('chart short');
     const dg = h('div', { class: 'grid g-main' });
-    dg.appendChild(ui.panel('Underwater curve (10 years)', ddEl, { cap: 'Percent below the running peak. Deep, long troughs are what a holder actually lives through.' }));
+    dg.appendChild(ui.panel('Underwater curve (full history)', ddEl, { cap: 'Percent below the running peak. Deep, long troughs are what a holder actually lives through.' }));
     const dd = d.drawdowns || {};
     dg.appendChild(ui.panel('Worst drawdowns', ui.table([{ key: 'depth', label: 'Depth', fmt: 'pct', cls: 'down' }, { key: 'peak', label: 'Peak', fmt: 'date' },
       { key: 'trough', label: 'Trough', fmt: 'date' }, { key: 'recovery', label: 'Recovered', render: (r) => (r.recovery ? fmt.date(r.recovery) : '<span class="warn">not yet</span>') },
@@ -120,8 +120,8 @@
   T.volatility = (body, sym) => loadInto(body, `/api/ticker/${enc(sym)}/volatility`, (box, d) => {
     const s = d.summary || {}, g = d.garch || {}, p = g.params || {};
     box.appendChild(ui.kpis([
-      { label: 'Realized 21d (Yang-Zhang)', value: fmt.pctu(s.rv_21d_yz), sub: 'percentile 1Y ' + fmt.pctu(s.rv_percentile_1y, 0) },
-      { label: 'Realized 63d', value: fmt.pctu(s.rv_63d_cc), sub: 'percentile 5Y ' + fmt.pctu(s.rv_percentile_5y, 0) },
+      { label: 'Realized 21d (Yang-Zhang)', value: fmt.pctu(s.rv_21d_yz), sub: fmt.ok(s.rv_percentile_1y) ? `higher than ${Math.round(s.rv_percentile_1y)}% of the last year` : '' },
+      { label: 'Realized 63d', value: fmt.pctu(s.rv_63d_cc), sub: fmt.ok(s.rv_percentile_5y) ? `21d vol percentile over 5Y: ${Math.round(s.rv_percentile_5y)}` : '' },
       { label: 'EWMA (RiskMetrics)', value: fmt.pctu(s.ewma) },
       { label: 'GARCH next 21d', value: fmt.pctu(s.garch_avg_21d), sub: (g.model || '').toUpperCase() + ' · t errors' },
       { label: 'Long-run vol', value: fmt.pctu(g.long_run_vol) },
@@ -212,8 +212,11 @@
         const b = bts[pick], s = b.series || {};
         if (!s.t) return;
         const ex = s.t.map((t, i) => (fmt.ok(s.ret[i]) && fmt.ok(s.var[i]) && s.ret[i] < -s.var[i] ? s.ret[i] : null));
+        const neg = s.var.filter(fmt.ok).map((v) => -v).concat(s.ret.filter(fmt.ok));
+        const lo = Math.min(...neg) * 1.1, srt = s.ret.filter(fmt.ok).slice().sort((a, b) => a - b);
+        const hi = Math.max(0.02, srt[Math.floor(srt.length * 0.99)] || 0.05);
         charts.lines(bEl, [{ name: 'Daily return', t: s.t, v: s.ret, color: 'ink4', width: 0.8 }, { name: '−VaR 99%', t: s.t, v: s.var.map((v) => (fmt.ok(v) ? -v : null)), color: 'warn', width: 1.5 },
-          { name: 'Exceptions', t: s.t, v: ex, mode: 'markers', color: 'down' }], { yfmt: '.0%' });
+          { name: 'Exceptions', t: s.t, v: ex, mode: 'markers', color: 'down' }], { yfmt: '.0%', layout: { yaxis: { range: [lo, hi] } } });
       };
       box.appendChild(h('div', { class: 'grid g-main' },
         ui.panel(null, bEl, { right: ui.seg(bts.map((b, i) => [i, b.method]), 0, (v) => { pick = v; drawBt(); }) }),
@@ -265,7 +268,7 @@
     box.appendChild(h('div', { class: 't-tools' }, h('span', { class: 'label' }, 'Expiry'), sel,
       h('span', { class: 'dim', style: { fontSize: '12.5px' } }, `Spot ${fmt.price(d.spot)} · r ${fmt.pctu(d.rate, 2)} · q ${fmt.pctu(d.dividend_yield, 2)} · ${d.market_state === 'REGULAR' ? 'live quotes' : 'last session quotes (market closed: bids/asks may be stale)'}`)));
     box.appendChild(ui.kpis([
-      { label: 'ATM implied vol', value: fmt.pctu(c.atm_iv), sub: `${c.dte}d · ATM strike ${fmt.price(c.atm_strike)}` },
+      { label: 'ATM implied vol', value: fmt.pctu(c.atm_iv), sub: `${Math.round(c.dte)}d · ATM strike ${fmt.price(c.atm_strike)}` },
       { label: '30-day IV', value: fmt.pctu(d.atm_iv_30d), sub: 'realized 21d ' + fmt.pctu(d.rv_21d) },
       { label: 'IV − RV', value: fmt.pp(d.vrp), cls: fmt.cls(d.vrp), sub: d.vrp > 0 ? 'options rich' : 'options cheap' },
       { label: 'Implied move', value: '±' + fmt.pctu(c.implied_move), sub: `to ${fmt.dateShort(c.expiry)}: ${fmt.price((c.expected_range || [])[0])} – ${fmt.price((c.expected_range || [])[1])}` },
@@ -294,7 +297,7 @@
     const tr = ts.rows || [];
     charts.lines(tsEl, [{ name: 'ATM IV', t: tr.map((r) => r.dte), v: tr.map((r) => r.atm_iv), mode: 'lines+markers', color: 'accent', width: 2 },
       { name: 'Implied move', t: tr.map((r) => r.dte), v: tr.map((r) => r.implied_move), mode: 'lines+markers', color: 'warn', y2: true }],
-    { yfmt: '.0%', y2: true, y2fmt: '.0%', xtitle: 'days to expiry', hovermode: 'x unified' });
+    { yfmt: '.0%', y2: true, y2fmt: '.0%', xtitle: 'days to expiry (log scale)', hovermode: 'x unified', xtype: 'log' });
     const near = (k) => !fmt.ok(d.spot) || Math.abs(k / d.spot - 1) < 0.35;
     const oi = (c.oi_by_strike || []).filter((r) => near(r.strike));
     charts.bars(oiEl, [{ name: 'Calls', x: oi.map((r) => r.strike), y: oi.map((r) => r.call_oi), colors: 'up' }, { name: 'Puts', x: oi.map((r) => r.strike), y: oi.map((r) => -(r.put_oi || 0)), colors: 'down' }],

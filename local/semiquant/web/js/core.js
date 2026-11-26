@@ -468,7 +468,7 @@
           if (c.render) { const out = c.render(r, v); if (out instanceof Node) td.appendChild(out); else td.innerHTML = out == null ? DASH : out; }
           else td.textContent = fmt.any(v, c.fmt, c.d);
           if (c.heat && fmt.ok(v)) td.style.background = ui.heat(v, c.heat);
-          if (c.sign && fmt.ok(v)) td.classList.add(fmt.cls(v));
+          if (c.sign && fmt.ok(v) && fmt.cls(v)) td.classList.add(fmt.cls(v));
           row.appendChild(td);
         });
         tb.appendChild(row);

@@ -258,6 +258,7 @@ def snapshot_html(symbols: list[str], include_market: bool = True) -> tuple[str,
         enc = quote(s, safe="")  # same as the browser's encodeURIComponent for ticker symbols
         put(f"/api/quotes?symbols={s}", lambda s=s: yahoo.quotes([s]))
         put(f"/api/ticker/{enc}/overview", lambda s=s: tk.overview(s))
+        put(f"/api/ticker/{enc}/score", lambda s=s: tk.score(s))
         for rng in SNAP_CHART_RANGES:
             put(f"/api/ticker/{enc}/chart?range={rng}", lambda s=s, rng=rng: tk.chart(s, rng, SNAP_IND.split(",")))
         for tab, fn in (("risk", tk.risk), ("volatility", tk.volatility), ("tail", tk.tail), ("options", tk.options),

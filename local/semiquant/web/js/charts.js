@@ -324,7 +324,10 @@
       if (!d) continue;
       const el = h('div', { class: 'pc-sub' }, h('span', { class: 'tag' }, name.toUpperCase()));
       root.appendChild(el);
-      const c = LW.createChart(el, { ...lwcOptions(t0, data.intraday), timeScale: { visible: false, borderColor: t0.ruleStrong } });
+      const paneOpts = lwcOptions(t0, data.intraday);
+      paneOpts.layout.attributionLogo = false; // one TradingView attribution (main chart) is enough
+      paneOpts.localization = { priceFormatter: (p) => (Math.abs(p) >= 1e6 ? fmt.big(p) : p.toFixed(2)) };
+      const c = LW.createChart(el, { ...paneOpts, timeScale: { visible: false, borderColor: t0.ruleStrong } });
       charts.push(c);
       const ss = [];
       if (name === 'macd') {
@@ -377,7 +380,13 @@
       destroy() { charts.forEach((c) => { try { c.remove(); } catch (e) { /* ignore */ } }); lwcs.delete(inst); },
       retheme() {
         const t = theme();
-        charts.forEach((c, i) => c.applyOptions(i === 0 ? lwcOptions(t, data.intraday) : { ...lwcOptions(t, data.intraday), timeScale: { visible: false } }));
+        charts.forEach((c, i) => {
+          if (i === 0) { c.applyOptions(lwcOptions(t, data.intraday)); return; }
+          const o2 = lwcOptions(t, data.intraday);
+          o2.layout.attributionLogo = false;
+          o2.localization = { priceFormatter: (p) => (Math.abs(p) >= 1e6 ? fmt.big(p) : p.toFixed(2)) };
+          c.applyOptions({ ...o2, timeScale: { visible: false } });
+        });
         if (style === 'candles') series.applyOptions({ upColor: t.up, downColor: t.down, borderUpColor: t.up, borderDownColor: t.down, wickUpColor: t.up, wickDownColor: t.down });
       },
       png(name) {

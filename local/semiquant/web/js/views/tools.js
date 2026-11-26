@@ -17,22 +17,32 @@
     'Quality & growth': ['ticker', 'name', 'gross_margin', 'operating_margin', 'roe', 'rev_growth', 'eps_growth', 'eps_rev_30d', 'score'],
     'Risk & technical': ['ticker', 'name', 'vol_3m', 'beta_1y', 'max_dd_1y', 'sharpe_1y', 'short_pct', 'rsi14', 'pos_52w', 'trend', 'rel_volume'],
     Analysts: ['ticker', 'name', 'price', 'target_upside', 'rec_mean', 'eps_rev_30d', 'earnings', 'score'],
-    Scores: ['ticker', 'name', 'score', 'momentum', 'trend', 'value', 'quality', 'growth', 'revisions', 'analyst', 'low_vol'],
+    Scores: ['ticker', 'name', 'score', 'momentum', 'trend_score', 'value', 'quality', 'growth', 'revisions', 'analyst', 'low_vol'],
   };
   const HEAT = { change_pct: 0.04, ext_change_pct: 0.03, ret_5d: 0.08, ret_1m: 0.15, ret_3m: 0.3, ret_6m: 0.4, ret_ytd: 0.6, ret_1y: 0.8, mom_12_1: 0.8, rel_strength_3m: 0.2, target_upside: 0.4, eps_rev_30d: 0.05 };
 
   SQ.views.screener = async function (view, parts, params) {
     const lists = SQ.watchlists.lists || {};
-    let list = params.list || '', group = 'Overview', sector = 'All', text = '';
-    view.appendChild(pageHead('Screener', 'Live quotes + daily metrics + fundamentals, ranked into a 0-100 quant score. Click a row to open the company; click a header to sort.', [
-      h('button', { class: 'btn', onclick: () => ui.download('/api/export/screener.xlsx' + (list ? '?list=' + enc(list) : '')) }, h('span', { html: dlIcon }), 'Excel'),
-      h('button', { class: 'btn', onclick: () => ui.download('/api/export/screener.csv' + (list ? '?list=' + enc(list) : '')) }, h('span', { html: dlIcon }), 'CSV')]));
+    let saved = 'semis';
+    try { saved = localStorage.getItem('sq_u') || 'semis'; } catch (e) { /* ignore */ }
+    let src = params.list ? 'l:' + params.list : 'u:' + (params.u || saved);
+    let group = 'Overview', sector = 'All', text = '';
+    const q = () => (src.startsWith('l:') ? 'list=' + enc(src.slice(2)) : 'u=' + enc(src.slice(2)));
+    view.appendChild(pageHead('Screener', 'Live quotes + daily metrics + fundamentals, ranked into a 0-100 quant score. Pick a universe (semiconductors, US large caps across every sector, global leaders, ETFs) or one of your watchlists. Click a row to open it; click a header to sort.', [
+      h('button', { class: 'btn', onclick: () => ui.download('/api/export/screener.xlsx?' + q()) }, h('span', { html: dlIcon }), 'Excel'),
+      h('button', { class: 'btn', onclick: () => ui.download('/api/export/screener.csv?' + q()) }, h('span', { html: dlIcon }), 'CSV')]));
     const tools = h('div', { class: 't-tools' });
     const out = h('div');
     view.appendChild(tools); view.appendChild(out);
     let data = null;
-    const load = () => ui.async(out, () => api('/api/screener' + (list ? '?list=' + enc(list) : '')), (b, d) => { data = d; draw(); }, 500);
-    tools.appendChild(ui.select([['', 'Semiconductor universe (70)']].concat(Object.keys(lists).map((k) => [k, k])), list, (v) => { list = v; load(); }));
+    const load = () => ui.async(out, () => api('/api/screener?' + q()), (b, d) => { data = d; sector = 'All'; draw(); }, 500);
+    let unis = [];
+    try { unis = await api('/api/universes'); } catch (e) { unis = [{ key: 'semis', label: 'Semiconductors', count: 70 }]; }
+    tools.appendChild(ui.select(unis.map((u) => ['u:' + u.key, `${u.label} (${u.count})`]).concat(SQ.snapshot ? [] : Object.keys(lists).map((k) => ['l:' + k, 'Watchlist: ' + k])), src, (v) => {
+      src = v;
+      if (v.startsWith('u:')) { try { localStorage.setItem('sq_u', v.slice(2)); } catch (e) { /* ignore */ } }
+      load();
+    }));
     tools.appendChild(ui.seg(Object.keys(GROUPS), group, (v) => { group = v; draw(); }));
     const sectorSel = h('span');
     tools.appendChild(sectorSel);
@@ -51,11 +61,12 @@
         const o = { key: k, label: c.label, fmt: f, l: c.format === 'text', txt: k === 'name' || k === 'sector' };
         if (k === 'ticker') { o.cls = 'sym'; }
         if (HEAT[k]) o.heat = HEAT[k];
-        if (['score', 'momentum', 'trend', 'value', 'quality', 'growth', 'revisions', 'analyst', 'low_vol'].includes(k) && k !== 'trend' || (k === 'trend' && group === 'Scores')) {
+        if (['score', 'momentum', 'trend_score', 'value', 'quality', 'growth', 'revisions', 'analyst', 'low_vol'].includes(k)) {
           o.render = (r) => { const v = r[k]; if (!fmt.ok(v)) return '–'; const c2 = v >= 67 ? 'up' : v >= 40 ? 'warn' : 'down'; return `<span class="${c2}">${Math.round(v)}</span> <span class="bar" style="width:${v * 0.5}px;background:var(--${c2})"></span>`; };
         }
         if (k === 'price') o.render = (r) => `${fmt.price(r.price)}${r.currency && r.currency !== 'USD' ? ' <span class="dim">' + r.currency + '</span>' : ''}`;
-        if (k === 'trend' && group !== 'Scores') o.render = (r) => `<span class="${r.trend === 'up' ? 'up' : r.trend === 'down' ? 'down' : 'dim'}">${r.trend || '–'}</span>`;
+        if (k === 'trend_score') o.label = 'Trend';
+        if (k === 'trend') o.render = (r) => `<span class="${r.trend === 'up' ? 'up' : r.trend === 'down' ? 'down' : 'dim'}">${r.trend || '–'}</span>`;
         if (k === 'ext_change_pct') o.sign = true;
         if (k === 'change_pct') o.render = (r) => `<span class="${fmt.cls(r.change_pct)}" data-live="${r.ticker}:change_pct:pct" data-sign="change_pct">${fmt.pct(r.change_pct, 2)}</span>`;
         return o;
@@ -63,7 +74,7 @@
       out.innerHTML = '';
       out.appendChild(ui.panel(`${data.name} · ${rows.length} names`, ui.table(spec, rows, { sort: 'score', max: true, onRow: (r) => SQ.go('#/t/' + enc(r.ticker)),
         rowClass: (r) => (r.missing ? 'dim' : ''), csv: 'screener.csv' }),
-      { cap: 'Scores are percentile ranks within this list (100 = best). Composite weights: momentum 20%, trend 10%, value 15%, quality 15%, growth 10%, revisions 15%, analysts 5%, low volatility 10%. Fundamentals refresh every 6 hours, prices live.' }));
+      { cap: `Scores are percentile ranks within this list (100 = best). Composite weights: momentum 20%, trend 10%, value 15%, quality 15%, growth 10%, revisions 15%, analysts 5%, low volatility 10%. Relative strength vs ${data.rel_bench || 'SPY'}. Fundamentals refresh every 6 hours, prices live.` }));
       SQ.live.register('screener', rows.map((r) => r.ticker));
       // Scatter map
       out.appendChild(sec('Map'));
@@ -347,15 +358,15 @@
     const out = h('div');
     view.appendChild(out);
     ui.async(out, () => api('/api/calendar'), (b, d) => {
-      b.appendChild(ui.panel('Semiconductor universe: next 90 days', ui.table([{ key: 'ticker', label: 'Ticker', l: true, cls: 'sym' }, { key: 'name', label: 'Company', l: true, txt: true },
-        { key: 'sector', label: 'Sector', l: true }, { key: 'time', label: 'Date', render: (r) => fmt.dateTime(r.time) + (r.estimated ? ' <span class="dim">(est.)</span>' : '') },
+      b.appendChild(ui.panel('Your universes: next 90 days (semiconductors, US large caps, global leaders)', ui.table([{ key: 'ticker', label: 'Ticker', l: true, cls: 'sym' }, { key: 'name', label: 'Company', l: true, txt: true },
+        { key: 'universe', label: 'Universe', l: true }, { key: 'sector', label: 'Sector', l: true }, { key: 'time', label: 'Date', render: (r) => fmt.dateTime(r.time) + (r.estimated ? ' <span class="dim">(est.)</span>' : '') },
         { key: 'days', label: 'In days', fmt: 'num', d: 0 }], d.universe || [], { sort: 'time', desc: false, onRow: (r) => SQ.go('#/t/' + enc(r.ticker) + '/analysts') })));
       b.appendChild(h('div', { style: { height: '14px' } }));
       b.appendChild(h('div', { class: 'grid g2' },
         ui.panel('All US earnings, next 3 weeks', ui.table([{ key: 'Symbol', label: 'Symbol', l: true, cls: 'sym' }, { key: 'Company', label: 'Company', l: true, txt: true },
           { key: 'Event Start Date', label: 'Date', render: (r) => fmt.dateTime(r['Event Start Date']) }, { key: 'Timing', label: 'When', l: true },
           { key: 'EPS Estimate', label: 'EPS est.', fmt: 'num' }, { key: 'Marketcap', label: 'Mkt cap', fmt: 'big' }], d.earnings || [],
-        { sort: 'Marketcap', max: true, onRow: (r) => SQ.go('#/t/' + enc(r.Symbol)), rowClass: (r) => (r.in_universe ? 'self' : '') }), { cap: 'Highlighted: in the semiconductor universe. BMO = before the open, AMC = after the close.' }),
+        { sort: 'Marketcap', max: true, onRow: (r) => SQ.go('#/t/' + enc(r.Symbol)), rowClass: (r) => (r.in_universe ? 'self' : '') }), { cap: 'Highlighted: in one of your universes. BMO = before the open, AMC = after the close.' }),
         ui.panel('Economic calendar', ui.table([{ key: 'Event Time', label: 'Time', render: (r) => fmt.dateTime(r['Event Time']) }, { key: 'Region', label: 'Region', l: true },
           { key: 'Event', label: 'Event', l: true, txt: true }, { key: 'For', label: 'For', l: true }, { key: 'Expected', label: 'Expected', fmt: 'num' },
           { key: 'Last', label: 'Last', fmt: 'num' }, { key: 'Actual', label: 'Actual', fmt: 'num' }], d.economic || [], { sort: 'Event Time', desc: false, max: true }))));

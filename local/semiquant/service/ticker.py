@@ -11,7 +11,7 @@ import pandas as pd
 from ..analytics._util import clean, jsonable, records, safe, ser
 from ..data import yahoo
 from ..data.yahoo import DataError, frame_rows
-from ..universe import FACTOR_ETFS, META, SEMI_TICKERS
+from ..universe import ALL_META, FACTOR_ETFS, UNIVERSES, home_universe, universe_meta
 from .common import RANGES, bench_closes, memo, meta, returns, slice_range, time_axis, universe_closes
 
 NY = ZoneInfo("America/New_York")
@@ -457,14 +457,16 @@ def fundamentals(sym: str) -> dict:
             valuation_hist = {"columns": [str(c) for c in vh.columns],
                               "rows": [{"metric": str(i), "values": [clean(v) for v in r.to_numpy()]} for i, r in vh.iterrows()]}
         # Sector peers from live quotes (cheap): relative valuation context.
-        m = META.get(sym)
+        hu = home_universe(sym)
+        um = universe_meta(hu) if hu else {}
+        m = um.get(sym)
         peers = []
         if m:
-            sec = [t for t, x in META.items() if x["sector"] == m["sector"] and t != sym and x["sector"] != "Market"]
+            sec = [t for t, x in um.items() if x["sector"] == m["sector"] and t != sym][:25]
             pq = yahoo.quotes([sym] + sec)
             for t in [sym] + sec:
                 x = pq.get(t) or {}
-                peers.append({"ticker": t, "name": META.get(t, {}).get("name"), "pe": x.get("pe"), "fpe": x.get("fpe"),
+                peers.append({"ticker": t, "name": um.get(t, {}).get("name"), "pe": x.get("pe"), "fpe": x.get("fpe"),
                               "pb": x.get("pb"), "market_cap": x.get("market_cap"), "currency": x.get("currency"),
                               "change_52w": x.get("change_52w"), "dividend_yield": x.get("dividend_yield"), "self": t == sym})
         return jsonable({"symbol": sym, "available": True, **summary, "valuation_history": valuation_hist,
@@ -630,8 +632,8 @@ def factors(sym: str) -> dict:
         style = fx.build_factor_returns(px)
         macro = fx.build_macro_factors(px)
         r2y = r.tail(504)
-        uc = universe_closes("2y")
-        peers_px = uc.drop(columns=[c for c in ("SPY", "SOXX") if c in uc.columns])
+        uc = universe_closes("2y", home_universe(sym) or "us_large")
+        peers_px = uc.drop(columns=[c for c in ("SPY", "SOXX", "ACWI") if c in uc.columns and c != sym])
         if sym not in peers_px.columns:
             peers_px = peers_px.join(px[[sym]], how="left")
         return jsonable({

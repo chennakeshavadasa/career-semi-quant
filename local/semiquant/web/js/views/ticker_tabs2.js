@@ -56,10 +56,16 @@
         g3.appendChild(ui.panel(title, el));
         charts.lines(el, keys.filter(([k]) => m[k] && m[k].some(fmt.ok)).map(([k, n, c]) => ({ name: n, t, v: m[k], color: c, mode: 'lines+markers' })), { yfmt: f, xtype: 'category' });
       });
-      const rows = Object.entries(dm.latest || {}).map(([k, val]) => ({ metric: label(k), value: val, k }));
-      const pctKeys = /margin|growth|pct|roe|roa|roic|change/;
+      const NAMES = { revenue_growth_yoy: ['Revenue growth (yoy)', 'chg'], gross_margin: ['Gross margin', 'lvl'], operating_margin: ['Operating margin', 'lvl'],
+        net_margin: ['Net margin', 'lvl'], fcf_margin: ['FCF margin', 'lvl'], rnd_pct_revenue: ['R&D / revenue', 'lvl'], sbc_pct_revenue: ['Stock comp / revenue', 'lvl'],
+        capex_pct_revenue: ['Capex / revenue', 'lvl'], roe: ['Return on equity', 'lvl'], roa: ['Return on assets', 'lvl'], roic: ['Return on invested capital', 'lvl'],
+        asset_turnover: ['Asset turnover', 'x'], inventory_days: ['Inventory days', 'd'], dso: ['Days sales outstanding', 'd'], current_ratio: ['Current ratio', 'x'],
+        quick_ratio: ['Quick ratio', 'x'], debt_to_equity: ['Debt / equity', 'x'], net_debt_to_ebitda: ['Net debt / EBITDA', 'x'], interest_coverage: ['Interest coverage', 'x'],
+        fcf_conversion: ['FCF / net income', 'x'], share_change_yoy: ['Share count change (yoy)', 'chg'] };
+      const show = (k, v) => { const [, t] = NAMES[k] || [null, 'x']; return t === 'chg' ? fmt.pct(v) : t === 'lvl' ? fmt.pctu(v) : t === 'd' ? fmt.num(v, 0) : fmt.num(v, 2); };
       mg.appendChild(h('div', { style: { height: '14px' } }));
-      mg.appendChild(ui.panel('Latest values', ui.kv(rows.map((r) => [r.metric, pctKeys.test(r.k) ? fmt.pct(r.value) : fmt.num(r.value, 2)]))));
+      mg.appendChild(ui.panel('Latest values', ui.kv(Object.entries(dm.latest || {}).map(([k, v]) => [(NAMES[k] || [label(k)])[0], show(k, v),
+        (NAMES[k] || [])[1] === 'chg' ? fmt.cls(v) : '']))));
     }
     drawDerived();
 
@@ -178,8 +184,9 @@
         { key: 'GradeDate', label: 'Date', render: (r) => fmt.date(r.GradeDate) }, { key: 'Firm', label: 'Firm', l: true, txt: true },
         { key: 'Action', label: 'Action', l: true, render: (r) => `<span class="${r.Action === 'up' ? 'up' : r.Action === 'down' ? 'down' : ''}">${{ up: 'Upgrade', down: 'Downgrade', main: 'Maintain', init: 'Initiate', reit: 'Reiterate' }[r.Action] || r.Action || ''}</span>` },
         { key: 'FromGrade', label: 'From', l: true }, { key: 'ToGrade', label: 'To', l: true },
-        { key: 'priorPriceTarget', label: 'Old PT', fmt: 'price' }, { key: 'currentPriceTarget', label: 'New PT', fmt: 'price' },
-        { key: 'pt_chg', label: 'PT change', get: (r) => (r.priorPriceTarget ? r.currentPriceTarget / r.priorPriceTarget - 1 : null), fmt: 'pct', sign: true }], up,
+        { key: 'priorPriceTarget', label: 'Old PT', render: (r) => (r.priorPriceTarget ? fmt.price(r.priorPriceTarget) : '–') },
+        { key: 'currentPriceTarget', label: 'New PT', render: (r) => (r.currentPriceTarget ? fmt.price(r.currentPriceTarget) : '–') },
+        { key: 'pt_chg', label: 'PT change', get: (r) => (r.priorPriceTarget && r.currentPriceTarget ? r.currentPriceTarget / r.priorPriceTarget - 1 : null), fmt: 'pct', sign: true }], up,
       { max: true, csv: `${sym}-rating-changes.csv` })));
     }
     box.appendChild(sec('Consensus estimates & revisions'));

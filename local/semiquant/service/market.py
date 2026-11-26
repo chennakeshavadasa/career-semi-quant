@@ -9,7 +9,8 @@ import pandas as pd
 
 from ..analytics._util import clean, jsonable, safe
 from ..data import yahoo
-from ..universe import MARKET_GROUPS, SECTOR_ETFS, SEMIS, SEMI_TICKERS, VIX_TERM, YIELD_CURVE
+from ..universe import (MARKET_GROUPS, SECTOR_ETFS, STOCK_UNIVERSES, UNIVERSES, VIX_TERM, YIELD_CURVE, get_universe,
+                        universe_key, universe_meta, universe_tickers)
 from .common import memo, returns, universe_closes
 
 
@@ -47,7 +48,7 @@ def strip() -> dict:
     """Live quotes for every market group, the VIX curve and sector ETFs (fast; polled)."""
     syms = [s for g in MARKET_GROUPS.values() for s, _ in g] + [s for s, _ in VIX_TERM] + [s for s, _ in SECTOR_ETFS]
     q = yahoo.quotes(syms)
-    h = memo("mkt:spark", 600, lambda: yahoo.history_many(syms, "3mo", "1d"))
+    h = yahoo.daily_many(syms, "3mo")  # cached 6 h, last point patched from the live quote
     groups = {g: [_row(q.get(s), s, lbl, h) for s, lbl in items] for g, items in MARKET_GROUPS.items()}
     vix = [{"label": lbl, "symbol": s, "value": (q.get(s) or {}).get("price"), "change": (q.get(s) or {}).get("change")}
            for s, lbl in VIX_TERM]
@@ -75,16 +76,17 @@ def strip() -> dict:
     })
 
 
-def heatmap() -> dict:
-    """Semiconductor universe tiles: market cap (USD) and today's move, plus movers."""
+def heatmap(u: str = "semis") -> dict:
+    """Universe tiles: market cap (USD) and today's move, plus movers and group moves."""
     from .common import fx_to_usd
 
-    q = yahoo.quotes(SEMI_TICKERS)
+    u = universe_key(u)
+    meta = universe_meta(u)
+    q = yahoo.quotes(list(meta))
     fx = fx_to_usd([x.get("currency") for x in q.values()])
     tiles = []
-    for t, name, sector, tier in SEMIS:
-        if sector == "Market":
-            continue
+    for t, m in meta.items():
+        name, sector, tier = m["name"], m["sector"], m["tier"]
         x = q.get(t) or {}
         mc = clean(x.get("market_cap"))
         rate = fx.get(x.get("currency"), 1.0)
@@ -104,27 +106,30 @@ def heatmap() -> dict:
             s[1] += t["market_cap_usd"]
     sector_moves = sorted(({"sector": k, "change_pct": v[0] / v[1], "market_cap_usd": v[1]}
                            for k, v in by_sector.items() if v[1]), key=lambda r: r["change_pct"], reverse=True)
-    return jsonable({"tiles": tiles, "gainers": gainers, "losers": losers, "sectors": sector_moves,
+    return jsonable({"universe": u, "label": UNIVERSES[u]["label"], "group_label": UNIVERSES[u]["group_label"],
+                     "tiles": tiles, "gainers": gainers, "losers": losers, "sectors": sector_moves,
                      "advancers": sum(1 for t in live if t["change_pct"] > 0),
                      "decliners": sum(1 for t in live if t["change_pct"] < 0),
                      "missing": [t["ticker"] for t in tiles if t["missing"]]})
 
 
-def breadth() -> dict:
-    """Breadth and regime of the semiconductor universe (daily, cached 10 min)."""
+def breadth(u: str = "semis") -> dict:
+    """Breadth of a universe and the volatility regime of its reference ETF (cached 10 min)."""
+    u = universe_key(u)
+
     def build():
         from ..analytics import regimes, scoring
 
-        c = universe_closes("2y")
-        semis = c[[t for t in SEMI_TICKERS if t in c.columns]]
-        b = safe(scoring.breadth, semis, default={}) or {}
-        reg = {}
-        if "SOXX" in c.columns:
-            r = returns(yahoo.daily("SOXX", "10y")["close"].tail(1260))
-            reg = safe(regimes.hmm_fit, r, 2, default={}) or {}
+        c = universe_closes("2y", u)
+        names = c[[t for t in universe_tickers(u) if t in c.columns]]
+        b = safe(scoring.breadth, names, default={}) or {}
+        reg, ref = {}, get_universe(u)["regime"]
+        d = safe(yahoo.daily, ref, "10y", default=None)
+        if d is not None and len(d) > 300:
+            reg = safe(regimes.hmm_fit, returns(d["close"].tail(1260)), 2, default={}) or {}
             reg = {k: reg.get(k) for k in ("states", "current_label", "current_probs", "transition", "n_states")}
-        return jsonable({"breadth": b, "regime": reg})
-    return memo("mkt:breadth", 600, build)
+        return jsonable({"universe": u, "label": UNIVERSES[u]["label"], "regime_ref": ref, "breadth": b, "regime": reg})
+    return memo(f"mkt:breadth:{u}", 600, build)
 
 
 def movers() -> dict:
@@ -136,18 +141,23 @@ def movers() -> dict:
 
 
 def upcoming_earnings(days: int = 30) -> list[dict]:
-    """Universe companies reporting within ``days`` (from live quotes)."""
-    q = yahoo.quotes(SEMI_TICKERS)
+    """Companies in the stock universes reporting within ``days`` (from live quotes)."""
+    metas = {}
+    for k in STOCK_UNIVERSES:
+        for t, m in universe_meta(k).items():
+            metas.setdefault(t, m)
+    q = yahoo.quotes(list(metas))
     now = datetime.now(timezone.utc)
     out = []
-    for t, name, sector, tier in SEMIS:
+    for t, m in metas.items():
+        name, sector = m["name"], m["sector"]
         x = q.get(t) or {}
         et = x.get("earnings_time")
         if not et:
             continue
         when = datetime.strptime(et, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
         if now - timedelta(days=1) <= when <= now + timedelta(days=days):
-            out.append({"ticker": t, "name": name, "sector": sector, "time": et,
+            out.append({"ticker": t, "name": name, "sector": sector, "universe": UNIVERSES[m["universe"]]["label"], "time": et,
                         "estimated": x.get("earnings_estimated"), "days": (when - now).total_seconds() / 86400})
     return jsonable(sorted(out, key=lambda r: r["time"]))
 
@@ -165,5 +175,5 @@ def market_news() -> list[dict]:
 
 def overview() -> dict:
     """Everything the market page needs, in one call (the page also polls ``strip``)."""
-    return {"strip": strip(), "heatmap": heatmap(), "breadth": breadth(), "movers": safe(movers, default={}),
+    return {"strip": strip(), "heatmap": heatmap("semis"), "breadth": breadth("semis"), "movers": safe(movers, default={}),
             "earnings": safe(upcoming_earnings, default=[]), "news": safe(market_news, default=[])}

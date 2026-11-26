@@ -9,7 +9,7 @@ import pandas as pd
 from ..analytics._util import clean, jsonable, safe, ser
 from ..data import yahoo
 from ..data.yahoo import DataError
-from ..universe import META, SEMIS
+from ..universe import ALL_META, UNIVERSES
 from .common import RANGES, fx_to_usd, memo, returns
 
 
@@ -140,7 +140,7 @@ def calendar() -> dict:
 
     def build():
         ec = yahoo.earnings_calendar(21, 100, most_active=False)
-        uni = set(META)
+        uni = set(ALL_META)
         for r in ec:
             r["in_universe"] = r.get("Symbol") in uni
         return {"earnings": ec, "economic": yahoo.economic_calendar(10, 100)}
@@ -154,8 +154,10 @@ def search(qs: str) -> list[dict]:
     if not s:
         return []
     up, low = s.upper(), s.lower()
-    local = [{"symbol": t, "name": n, "type": "Equity", "exchange": None, "sector": sec, "universe": True}
-             for t, n, sec, _ in SEMIS if t.startswith(up) or low in n.lower()][:6]
+    hits = [m for t, m in ALL_META.items() if t.startswith(up) or low in (m["name"] or "").lower()]
+    hits.sort(key=lambda m: (m["ticker"] != up, not m["ticker"].startswith(up), len(m["ticker"])))
+    local = [{"symbol": m["ticker"], "name": m["name"], "type": "ETF" if m["universe"] == "etfs" else "Equity",
+              "exchange": None, "sector": m["sector"], "universe": UNIVERSES[m["universe"]]["label"]} for m in hits[:6]]
     seen = {x["symbol"] for x in local}
     remote = [x for x in yahoo.search(s, 8) if x["symbol"] not in seen]
     return jsonable(local + remote)[:12]

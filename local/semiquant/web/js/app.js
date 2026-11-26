@@ -68,7 +68,7 @@
 
   // ─── Search / command palette ─────────────────────────────────────────
   const COMMANDS = [
-    ['#/market', 'Market dashboard', 'Page'], ['#/screener', 'Screener: semiconductor universe', 'Page'],
+    ['#/market', 'Market dashboard', 'Page'], ['#/screener', 'Screener: semis, US large caps, global, ETFs', 'Page'],
     ['#/compare', 'Compare tickers', 'Page'], ['#/portfolio', 'Portfolio risk & optimizer', 'Page'],
     ['#/offer', 'Offer & RSU value simulator', 'Page'], ['#/calendar', 'Earnings & economic calendar', 'Page'],
     ['#/settings', 'Settings, exports & help', 'Page'],
@@ -105,7 +105,7 @@
       const res = await api('/api/search?q=' + encodeURIComponent(s));
       if (my !== seq) return;
       const found = res.filter((r) => r.symbol !== up).map((r) => ({ href: '#/t/' + encodeURIComponent(r.symbol), sym: r.symbol, name: r.name,
-        type: [r.type, r.exchange].filter(Boolean).join(' · '), grp: r.universe ? 'Semiconductor universe' : 'Yahoo Finance' }));
+        type: [r.type, r.exchange || r.sector].filter(Boolean).join(' · '), grp: r.universe ? 'Universe: ' + r.universe : 'Yahoo Finance' }));
       items = direct.concat(found, cmds);
       sel = 0; draw();
     } catch (e) { /* keep local items */ }

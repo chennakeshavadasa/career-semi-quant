@@ -145,3 +145,190 @@ def sectors() -> list[str]:
 
 def meta(ticker: str) -> dict:
     return META.get(ticker.upper(), {"ticker": ticker.upper(), "name": None, "sector": None, "tier": None})
+
+
+# ─── Broader universes (beyond semiconductors) ───────────────────────────────
+# (ticker, name, group). Group = GICS sector, region or ETF category; it drives the
+# heatmap grouping and the screener's sector filter. Delisted / renamed tickers are
+# flagged in the UI ("no recent trades") instead of breaking anything.
+
+US_LARGE: list[tuple[str, str, str]] = [
+    # Information Technology
+    ("AAPL", "Apple", "Technology"), ("MSFT", "Microsoft", "Technology"), ("NVDA", "NVIDIA", "Technology"),
+    ("AVGO", "Broadcom", "Technology"), ("ORCL", "Oracle", "Technology"), ("CRM", "Salesforce", "Technology"),
+    ("AMD", "AMD", "Technology"), ("ADBE", "Adobe", "Technology"), ("CSCO", "Cisco", "Technology"),
+    ("ACN", "Accenture", "Technology"), ("IBM", "IBM", "Technology"), ("NOW", "ServiceNow", "Technology"),
+    ("INTU", "Intuit", "Technology"), ("QCOM", "Qualcomm", "Technology"), ("TXN", "Texas Instruments", "Technology"),
+    ("MU", "Micron", "Technology"), ("AMAT", "Applied Materials", "Technology"), ("LRCX", "Lam Research", "Technology"),
+    ("KLAC", "KLA", "Technology"), ("ADI", "Analog Devices", "Technology"), ("INTC", "Intel", "Technology"),
+    ("PANW", "Palo Alto Networks", "Technology"), ("CRWD", "CrowdStrike", "Technology"), ("PLTR", "Palantir", "Technology"),
+    ("FTNT", "Fortinet", "Technology"), ("WDAY", "Workday", "Technology"), ("ADSK", "Autodesk", "Technology"),
+    ("DELL", "Dell Technologies", "Technology"), ("APH", "Amphenol", "Technology"), ("MSI", "Motorola Solutions", "Technology"),
+    # Communication Services
+    ("GOOGL", "Alphabet", "Communication"), ("META", "Meta Platforms", "Communication"), ("NFLX", "Netflix", "Communication"),
+    ("DIS", "Walt Disney", "Communication"), ("TMUS", "T-Mobile US", "Communication"), ("VZ", "Verizon", "Communication"),
+    ("T", "AT&T", "Communication"), ("CMCSA", "Comcast", "Communication"), ("CHTR", "Charter Communications", "Communication"),
+    ("TTWO", "Take-Two Interactive", "Communication"),
+    # Consumer Discretionary
+    ("AMZN", "Amazon", "Consumer discretionary"), ("TSLA", "Tesla", "Consumer discretionary"), ("HD", "Home Depot", "Consumer discretionary"),
+    ("MCD", "McDonald's", "Consumer discretionary"), ("LOW", "Lowe's", "Consumer discretionary"), ("BKNG", "Booking Holdings", "Consumer discretionary"),
+    ("TJX", "TJX Companies", "Consumer discretionary"), ("SBUX", "Starbucks", "Consumer discretionary"), ("NKE", "Nike", "Consumer discretionary"),
+    ("CMG", "Chipotle", "Consumer discretionary"), ("ABNB", "Airbnb", "Consumer discretionary"), ("ORLY", "O'Reilly Automotive", "Consumer discretionary"),
+    ("MAR", "Marriott", "Consumer discretionary"), ("GM", "General Motors", "Consumer discretionary"), ("F", "Ford", "Consumer discretionary"),
+    ("RCL", "Royal Caribbean", "Consumer discretionary"), ("DASH", "DoorDash", "Consumer discretionary"),
+    # Consumer Staples
+    ("WMT", "Walmart", "Consumer staples"), ("COST", "Costco", "Consumer staples"), ("PG", "Procter & Gamble", "Consumer staples"),
+    ("KO", "Coca-Cola", "Consumer staples"), ("PEP", "PepsiCo", "Consumer staples"), ("PM", "Philip Morris", "Consumer staples"),
+    ("MO", "Altria", "Consumer staples"), ("MDLZ", "Mondelez", "Consumer staples"), ("CL", "Colgate-Palmolive", "Consumer staples"),
+    ("TGT", "Target", "Consumer staples"), ("KDP", "Keurig Dr Pepper", "Consumer staples"), ("MNST", "Monster Beverage", "Consumer staples"),
+    # Health Care
+    ("LLY", "Eli Lilly", "Health care"), ("UNH", "UnitedHealth", "Health care"), ("JNJ", "Johnson & Johnson", "Health care"),
+    ("ABBV", "AbbVie", "Health care"), ("MRK", "Merck", "Health care"), ("PFE", "Pfizer", "Health care"),
+    ("TMO", "Thermo Fisher", "Health care"), ("ABT", "Abbott", "Health care"), ("DHR", "Danaher", "Health care"),
+    ("ISRG", "Intuitive Surgical", "Health care"), ("AMGN", "Amgen", "Health care"), ("GILD", "Gilead", "Health care"),
+    ("VRTX", "Vertex", "Health care"), ("BSX", "Boston Scientific", "Health care"), ("SYK", "Stryker", "Health care"),
+    ("MDT", "Medtronic", "Health care"), ("CVS", "CVS Health", "Health care"), ("REGN", "Regeneron", "Health care"),
+    # Financials
+    ("BRK-B", "Berkshire Hathaway", "Financials"), ("JPM", "JPMorgan Chase", "Financials"), ("V", "Visa", "Financials"),
+    ("MA", "Mastercard", "Financials"), ("BAC", "Bank of America", "Financials"), ("WFC", "Wells Fargo", "Financials"),
+    ("GS", "Goldman Sachs", "Financials"), ("MS", "Morgan Stanley", "Financials"), ("C", "Citigroup", "Financials"),
+    ("AXP", "American Express", "Financials"), ("SCHW", "Charles Schwab", "Financials"), ("BLK", "BlackRock", "Financials"),
+    ("SPGI", "S&P Global", "Financials"), ("PGR", "Progressive", "Financials"), ("CB", "Chubb", "Financials"),
+    ("MRSH", "Marsh McLennan", "Financials"), ("COF", "Capital One", "Financials"), ("BX", "Blackstone", "Financials"),
+    ("KKR", "KKR", "Financials"), ("CME", "CME Group", "Financials"), ("ICE", "Intercontinental Exchange", "Financials"),
+    ("PYPL", "PayPal", "Financials"),
+    # Industrials
+    ("GE", "GE Aerospace", "Industrials"), ("CAT", "Caterpillar", "Industrials"), ("RTX", "RTX", "Industrials"),
+    ("HON", "Honeywell", "Industrials"), ("UNP", "Union Pacific", "Industrials"), ("BA", "Boeing", "Industrials"),
+    ("DE", "Deere", "Industrials"), ("LMT", "Lockheed Martin", "Industrials"), ("UPS", "UPS", "Industrials"),
+    ("ETN", "Eaton", "Industrials"), ("ADP", "ADP", "Industrials"), ("WM", "Waste Management", "Industrials"),
+    ("GD", "General Dynamics", "Industrials"), ("NOC", "Northrop Grumman", "Industrials"), ("MMM", "3M", "Industrials"),
+    ("FDX", "FedEx", "Industrials"), ("UBER", "Uber", "Industrials"), ("CSX", "CSX", "Industrials"),
+    ("PH", "Parker-Hannifin", "Industrials"), ("VRT", "Vertiv", "Industrials"), ("GEV", "GE Vernova", "Industrials"),
+    ("PWR", "Quanta Services", "Industrials"),
+    # Energy
+    ("XOM", "Exxon Mobil", "Energy"), ("CVX", "Chevron", "Energy"), ("COP", "ConocoPhillips", "Energy"), ("SLB", "SLB", "Energy"),
+    ("EOG", "EOG Resources", "Energy"), ("PSX", "Phillips 66", "Energy"), ("MPC", "Marathon Petroleum", "Energy"),
+    ("OXY", "Occidental", "Energy"), ("WMB", "Williams", "Energy"), ("KMI", "Kinder Morgan", "Energy"),
+    # Utilities
+    ("NEE", "NextEra Energy", "Utilities"), ("SO", "Southern Co", "Utilities"), ("DUK", "Duke Energy", "Utilities"),
+    ("CEG", "Constellation Energy", "Utilities"), ("VST", "Vistra", "Utilities"), ("AEP", "American Electric Power", "Utilities"),
+    ("SRE", "Sempra", "Utilities"), ("D", "Dominion Energy", "Utilities"),
+    # Real Estate
+    ("PLD", "Prologis", "Real estate"), ("AMT", "American Tower", "Real estate"), ("EQIX", "Equinix", "Real estate"),
+    ("WELL", "Welltower", "Real estate"), ("SPG", "Simon Property", "Real estate"), ("O", "Realty Income", "Real estate"),
+    ("DLR", "Digital Realty", "Real estate"), ("PSA", "Public Storage", "Real estate"),
+    # Materials
+    ("LIN", "Linde", "Materials"), ("SHW", "Sherwin-Williams", "Materials"), ("APD", "Air Products", "Materials"),
+    ("ECL", "Ecolab", "Materials"), ("FCX", "Freeport-McMoRan", "Materials"), ("NEM", "Newmont", "Materials"),
+    ("DOW", "Dow", "Materials"), ("NUE", "Nucor", "Materials"),
+]
+
+GLOBAL: list[tuple[str, str, str]] = [
+    # Europe
+    ("ASML", "ASML", "Europe"), ("SAP", "SAP", "Europe"), ("NVO", "Novo Nordisk", "Europe"), ("AZN", "AstraZeneca", "Europe"),
+    ("SHEL", "Shell", "Europe"), ("TTE", "TotalEnergies", "Europe"), ("BP", "BP", "Europe"), ("HSBC", "HSBC", "Europe"),
+    ("UL", "Unilever", "Europe"), ("NVS", "Novartis", "Europe"), ("SNY", "Sanofi", "Europe"), ("DEO", "Diageo", "Europe"),
+    ("BTI", "British American Tobacco", "Europe"), ("UBS", "UBS", "Europe"), ("SAN", "Banco Santander", "Europe"),
+    ("SPOT", "Spotify", "Europe"), ("MC.PA", "LVMH", "Europe"), ("SIE.DE", "Siemens", "Europe"),
+    ("NESN.SW", "Nestle", "Europe"), ("RHHBY", "Roche", "Europe"),
+    # Japan
+    ("TM", "Toyota", "Japan"), ("SONY", "Sony", "Japan"), ("MUFG", "Mitsubishi UFJ", "Japan"), ("SMFG", "Sumitomo Mitsui", "Japan"),
+    ("HMC", "Honda", "Japan"), ("7974.T", "Nintendo", "Japan"), ("9984.T", "SoftBank Group", "Japan"), ("6861.T", "Keyence", "Japan"),
+    ("8035.T", "Tokyo Electron", "Japan"),
+    # China & Hong Kong
+    ("BABA", "Alibaba", "China"), ("0700.HK", "Tencent", "China"), ("PDD", "PDD Holdings", "China"), ("JD", "JD.com", "China"),
+    ("BIDU", "Baidu", "China"), ("NTES", "NetEase", "China"), ("1211.HK", "BYD", "China"), ("3690.HK", "Meituan", "China"),
+    ("TCOM", "Trip.com", "China"),
+    # Korea & Taiwan
+    ("TSM", "TSMC", "Korea & Taiwan"), ("005930.KS", "Samsung Electronics", "Korea & Taiwan"),
+    ("000660.KS", "SK hynix", "Korea & Taiwan"), ("2317.TW", "Hon Hai (Foxconn)", "Korea & Taiwan"),
+    ("2454.TW", "MediaTek", "Korea & Taiwan"),
+    # India
+    ("INFY", "Infosys", "India"), ("HDB", "HDFC Bank", "India"), ("IBN", "ICICI Bank", "India"), ("WIT", "Wipro", "India"),
+    ("RELIANCE.NS", "Reliance Industries", "India"), ("TCS.NS", "Tata Consultancy", "India"),
+    # Americas ex-US
+    ("RY", "Royal Bank of Canada", "Canada"), ("TD", "Toronto-Dominion", "Canada"), ("SHOP", "Shopify", "Canada"),
+    ("ENB", "Enbridge", "Canada"), ("CNQ", "Canadian Natural", "Canada"), ("MELI", "MercadoLibre", "Latin America"),
+    ("NU", "Nu Holdings", "Latin America"), ("VALE", "Vale", "Latin America"), ("PBR", "Petrobras", "Latin America"),
+    ("ITUB", "Itau Unibanco", "Latin America"),
+    # Asia-Pacific other
+    ("BHP", "BHP", "Australia"), ("RIO", "Rio Tinto", "Australia"), ("CBA.AX", "Commonwealth Bank", "Australia"),
+    ("SE", "Sea Ltd", "Southeast Asia"), ("GRAB", "Grab", "Southeast Asia"),
+]
+
+ETFS: list[tuple[str, str, str]] = [
+    ("SPY", "S&P 500", "Broad equity"), ("QQQ", "Nasdaq 100", "Broad equity"), ("DIA", "Dow 30", "Broad equity"),
+    ("IWM", "Russell 2000", "Broad equity"), ("VTI", "Total US market", "Broad equity"), ("RSP", "S&P 500 equal weight", "Broad equity"),
+    ("ACWI", "All-country world", "Broad equity"), ("VEA", "Developed ex-US", "Broad equity"), ("VWO", "Emerging markets", "Broad equity"),
+    ("XLK", "Technology", "US sectors"), ("XLC", "Communication", "US sectors"), ("XLY", "Discretionary", "US sectors"),
+    ("XLP", "Staples", "US sectors"), ("XLE", "Energy", "US sectors"), ("XLF", "Financials", "US sectors"),
+    ("XLV", "Health care", "US sectors"), ("XLI", "Industrials", "US sectors"), ("XLB", "Materials", "US sectors"),
+    ("XLRE", "Real estate", "US sectors"), ("XLU", "Utilities", "US sectors"), ("SMH", "Semiconductors (VanEck)", "US sectors"),
+    ("SOXX", "Semiconductors (iShares)", "US sectors"), ("IGV", "Software", "US sectors"), ("XBI", "Biotech", "US sectors"),
+    ("KRE", "Regional banks", "US sectors"), ("ITB", "Homebuilders", "US sectors"), ("ITA", "Aerospace & defense", "US sectors"),
+    ("MTUM", "Momentum factor", "Factors"), ("QUAL", "Quality factor", "Factors"), ("USMV", "Minimum volatility", "Factors"),
+    ("VLUE", "Value factor", "Factors"), ("IWF", "Russell 1000 growth", "Factors"), ("IWD", "Russell 1000 value", "Factors"),
+    ("SCHD", "Dividend equity", "Factors"),
+    ("SHY", "Treasuries 1-3y", "Bonds"), ("IEF", "Treasuries 7-10y", "Bonds"), ("TLT", "Treasuries 20y+", "Bonds"),
+    ("TIP", "Inflation-protected", "Bonds"), ("LQD", "Investment-grade corporate", "Bonds"), ("HYG", "High yield", "Bonds"),
+    ("AGG", "US aggregate bonds", "Bonds"), ("EMB", "EM sovereign bonds", "Bonds"),
+    ("GLD", "Gold", "Commodities & crypto"), ("SLV", "Silver", "Commodities & crypto"), ("USO", "Crude oil", "Commodities & crypto"),
+    ("DBC", "Commodity basket", "Commodities & crypto"), ("CPER", "Copper", "Commodities & crypto"),
+    ("IBIT", "Bitcoin", "Commodities & crypto"), ("ETHA", "Ether", "Commodities & crypto"),
+    ("EWJ", "Japan", "Countries"), ("FXI", "China large caps", "Countries"), ("MCHI", "China", "Countries"),
+    ("INDA", "India", "Countries"), ("EWT", "Taiwan", "Countries"), ("EWY", "South Korea", "Countries"),
+    ("EWG", "Germany", "Countries"), ("EWU", "United Kingdom", "Countries"), ("EWZ", "Brazil", "Countries"),
+    ("EWC", "Canada", "Countries"),
+    ("ARKK", "Innovation (ARK)", "Themes"), ("BOTZ", "Robotics & AI", "Themes"), ("URA", "Uranium", "Themes"),
+    ("TAN", "Solar", "Themes"), ("LIT", "Lithium & batteries", "Themes"), ("ICLN", "Clean energy", "Themes"),
+]
+
+UNIVERSES: dict[str, dict] = {
+    "semis": {"label": "Semiconductors", "group_label": "Sub-sector", "bench": "SPY", "sector_bench": "SOXX",
+              "regime": "SOXX", "rows": [(t, n, s) for t, n, s, _ in SEMIS if s != "Market"]},
+    "us_large": {"label": "US large caps", "group_label": "Sector", "bench": "SPY", "sector_bench": "SPY",
+                 "regime": "SPY", "rows": US_LARGE},
+    "global": {"label": "Global leaders", "group_label": "Region", "bench": "ACWI", "sector_bench": "ACWI",
+               "regime": "ACWI", "rows": GLOBAL},
+    "etfs": {"label": "ETFs", "group_label": "Category", "bench": "SPY", "sector_bench": "SPY",
+             "regime": "SPY", "rows": ETFS},
+}
+STOCK_UNIVERSES = ("semis", "us_large", "global")
+
+
+def get_universe(key: str | None) -> dict:
+    return UNIVERSES.get(key or "semis") or UNIVERSES["semis"]
+
+
+def universe_key(key: str | None) -> str:
+    return key if key in UNIVERSES else "semis"
+
+
+def universe_tickers(key: str | None) -> list[str]:
+    return [t for t, _, _ in get_universe(key)["rows"]]
+
+
+def universe_meta(key: str | None) -> dict[str, dict]:
+    k = universe_key(key)
+    out = {}
+    for t, n, s in UNIVERSES[k]["rows"]:
+        tier = META.get(t, {}).get("tier") if k == "semis" else None
+        out[t] = {"ticker": t, "name": n, "sector": s, "tier": tier, "universe": k}
+    return out
+
+
+# Every known ticker; semiconductors first so their sub-sector and tier win.
+ALL_META: dict[str, dict] = {}
+for _k in UNIVERSES:
+    for _t, _m in universe_meta(_k).items():
+        ALL_META.setdefault(_t, _m)
+
+
+def home_universe(ticker: str) -> str | None:
+    """First universe that lists the ticker (semis, then US large caps, global, ETFs)."""
+    t = (ticker or "").upper()
+    for k in UNIVERSES:
+        if any(r[0] == t for r in UNIVERSES[k]["rows"]):
+            return k
+    return None

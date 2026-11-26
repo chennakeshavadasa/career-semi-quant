@@ -4,7 +4,7 @@ Freshness (cache TTLs) is tuned for "latest data within a minute":
 
     quotes            10 s   one batch request (v7 quote API) for up to 50 symbols
     1-minute bars     30 s   intraday charts incl. pre/post market
-    daily bars        10 min + every read is patched with the live quote, so today's bar
+    daily bars         6 h  + every read is patched with the live quote, so today's bar
                              (close, high, low, volume) is never older than the quote
     options chains     2 min
     news               5 min
@@ -33,7 +33,7 @@ log = logging.getLogger("semiquant.data")
 
 TTL = {
     "quote": 10, "1m": 30, "2m": 30, "5m": 60, "15m": 60, "30m": 120, "60m": 300, "90m": 300, "1h": 300,
-    "1d": 600, "5d": 600, "1wk": 3600, "1mo": 3600, "3mo": 3600,
+    "1d": 6 * 3600, "5d": 600, "1wk": 12 * 3600, "1mo": 12 * 3600, "3mo": 12 * 3600,  # daily bars are live-patched
     "info": 900, "statements": 12 * 3600, "analysts": 3600, "earnings": 6 * 3600, "holders": 6 * 3600,
     "expiries": 300, "chain": 120, "news": 300, "calendar": 3600, "filings": 6 * 3600, "actions": 12 * 3600,
     "valuation": 12 * 3600, "market": 60, "screen": 180, "search": 600, "calendars": 3600, "industry": 6 * 3600,

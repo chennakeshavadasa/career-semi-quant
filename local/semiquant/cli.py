@@ -5,7 +5,7 @@
     semiquant watch [--list NAME]     live-updating quote board (Ctrl-C to stop)
     semiquant analyze NVDA            one-page tear sheet in the terminal
     semiquant options NVDA            implied vol, skew, expected move, chain near the money
-    semiquant screen [--sort score]   rank the semiconductor universe (or a watchlist)
+    semiquant screen -u us_large      rank a universe: semis, us_large, global, etfs (or --list)
     semiquant market                  indices, rates, FX, commodities, VIX curve
     semiquant offer NVDA --value 100000 --years 4    value an RSU grant
     semiquant report NVDA AMD         shareable single-file HTML snapshot (send it to anyone)
@@ -235,8 +235,8 @@ def cmd_screen(a) -> None:
 
     c = _console()
     tick = config.watchlists().get(a.list) if a.list else None
-    with c.status("Scoring the universe (first run fetches fundamentals: ~10-20 s)…"):
-        d = scr.table(tick, a.list)
+    with c.status("Scoring the universe (first run fetches fundamentals: ~10-60 s)…"):
+        d = scr.table(tick, a.list, a.universe)
     rows = sorted(d["rows"], key=lambda r: (r.get(a.sort) is None, -(r.get(a.sort) or 0) if not a.asc else (r.get(a.sort) or 0)))
     t = Table(title=f"{d['name']} · sorted by {a.sort}", box=None, header_style="dim")
     cols = [("ticker", "Ticker"), ("name", "Name"), ("score", "Score"), ("change_pct", "Day"), ("ret_1m", "1M"), ("ret_ytd", "YTD"),
@@ -370,8 +370,10 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--width", type=float, default=0.12, help="show strikes within ±width of spot (default 0.12)")
     s.set_defaults(fn=cmd_options)
 
-    s = sub.add_parser("screen", help="rank the universe or a watchlist")
-    s.add_argument("--list")
+    s = sub.add_parser("screen", help="rank a universe or a watchlist")
+    s.add_argument("--universe", "-u", default="semis", choices=["semis", "us_large", "global", "etfs"],
+                   help="semis (default), us_large (all sectors), global, etfs")
+    s.add_argument("--list", help="a saved watchlist instead of a universe")
     s.add_argument("--sort", default="score")
     s.add_argument("--asc", action="store_true")
     s.add_argument("--top", type=int, default=30)

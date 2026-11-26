@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..analytics._util import clean, jsonable
 from ..data import cache, yahoo
-from ..universe import META, SEMI_TICKERS
+from ..universe import ALL_META, get_universe, universe_tickers
 
 # Chart ranges -> how to fetch them. Daily ranges are sliced from the cached 10-year
 # daily series (indicators are computed on the full series first, so a 200-day average
@@ -60,11 +60,14 @@ def returns(close: pd.Series) -> pd.Series:
     return close.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
 
 
-def universe_closes(period: str = "2y", extra: tuple[str, ...] = ("SPY", "SOXX")) -> pd.DataFrame:
-    """Daily closes for the semiconductor universe (+ benchmarks), live-patched."""
+def universe_closes(period: str = "2y", universe: str = "semis") -> pd.DataFrame:
+    """Daily closes for a universe plus its benchmarks (live-patched)."""
+    u = get_universe(universe)
+    extra = list(dict.fromkeys(["SPY", u["bench"], u["sector_bench"], u["regime"]]))
+
     def load():
-        return yahoo.closes(list(SEMI_TICKERS) + list(extra), period=period)
-    return cache.cached(f"svc:ucloses:{period}:{','.join(extra)}", 60, load)
+        return yahoo.closes(universe_tickers(universe) + extra, period=period)
+    return cache.cached(f"svc:ucloses:{period}:{universe}", 60, load)
 
 
 def bench_closes(period: str = "10y", symbols: tuple[str, ...] = ("SPY", "SOXX", "QQQ")) -> dict[str, pd.Series]:
@@ -73,7 +76,7 @@ def bench_closes(period: str = "10y", symbols: tuple[str, ...] = ("SPY", "SOXX",
 
 
 def meta(sym: str) -> dict:
-    return META.get(sym, {"ticker": sym, "name": None, "sector": None, "tier": None})
+    return ALL_META.get(sym, {"ticker": sym, "name": None, "sector": None, "tier": None, "universe": None})
 
 
 # ─── FX ──────────────────────────────────────────────────────────────────────

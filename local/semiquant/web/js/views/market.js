@@ -28,7 +28,7 @@
   SQ.views.market = async function (view) {
     view.appendChild(h('div', { class: 'page-h' },
       h('div', null, h('h1', null, 'Markets'),
-        h('div', { class: 'sub' }, 'Live Yahoo Finance quotes, refreshed automatically (every ', String(SQ.settings.quote_refresh_seconds), ' s while markets are open). Click anything to open it.')),
+        h('div', { class: 'sub' }, 'Live Yahoo Finance quotes, refreshed automatically (every ', String(SQ.settings.quote_refresh_seconds), ' s while markets are open). Semiconductors, US large caps across all sectors, global leaders and ETFs. Click anything to open it.')),
       h('div', { class: 'actions' },
         h('button', { class: 'btn', onclick: () => ui.download('/api/export/snapshot.html?market=true') , title: 'One HTML file with this dashboard and the screener: send it to a friend, it opens in any browser' },
           h('span', { html: '<svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12m0-12l-4 4m4-4l4 4"/></svg>' }), 'Share snapshot'),
@@ -71,96 +71,113 @@
       void secBox;
     }, 260);
 
-    // Semiconductor heatmap + breadth
-    view.appendChild(ui.sec('Semiconductor universe today'));
-    const hmGrid = h('div', { class: 'grid g-main' });
-    view.appendChild(hmGrid);
-    const hmBox = h('div'), sideBox = h('div');
-    hmGrid.appendChild(hmBox); hmGrid.appendChild(sideBox);
-    ui.async(hmBox, () => api('/api/market/heatmap'), (box, d) => {
-      const el = charts.div('chart tall');
-      const capped = d.tiles.filter((t) => t.market_cap_usd && !t.missing).length;
-      const equal = capped < d.tiles.length / 2;  // caps unknown yet (first run while Yahoo throttles)
-      const size = (t) => (equal ? 1 : t.market_cap_usd);
-      const draw = (tiles) => {
-        const sectors = Array.from(new Set(tiles.map((t) => t.sector)));
-        const ids = [], labels = [], parents = [], values = [], colors = [], text = [], custom = [];
-        sectors.forEach((s) => {
-          const kids = tiles.filter((t) => t.sector === s && !t.missing && size(t));
-          const tot = kids.reduce((a, t) => a + size(t), 0);
-          if (!tot) return;
-          ids.push('s:' + s); labels.push(s); parents.push(''); values.push(tot);
-          const w = kids.reduce((a, t) => a + size(t) * (t.change_pct || 0), 0) / tot;
-          colors.push(w); text.push(fmt.pct(w, 2)); custom.push(`${s} · ${equal ? kids.length + ' names' : fmt.money(tot)} · ${fmt.pct(w, 2)}`);
-          kids.forEach((t) => {
-            ids.push(t.ticker); labels.push(t.ticker); parents.push('s:' + s); values.push(size(t));
-            colors.push(t.change_pct || 0); text.push(fmt.pct(t.change_pct, 2));
-            custom.push(`${t.name} · ${fmt.price(t.price)} ${t.currency || ''} · ${fmt.pct(t.change_pct, 2)} · cap ${fmt.money(t.market_cap_usd)}`);
+    // Universe section: heatmap, movers, group moves, breadth & regime for the chosen universe
+    const UNIS = [['semis', 'Semiconductors'], ['us_large', 'US large caps'], ['global', 'Global leaders'], ['etfs', 'ETFs']];
+    let uni = 'semis';
+    try { uni = localStorage.getItem('sq_u') || 'semis'; } catch (e) { /* ignore */ }
+    if (SQ.snapshot && !['semis', 'us_large'].includes(uni)) uni = 'semis';
+    const uniHead = h('div', { class: 't-tools', style: { margin: '26px 0 10px' } }, h('span', { class: 'label' }, 'Today in'));
+    const uniBox = h('div');
+    view.appendChild(uniHead);
+    view.appendChild(uniBox);
+    uniHead.appendChild(ui.seg(SQ.snapshot ? UNIS.slice(0, 2) : UNIS, uni, (v) => {
+      uni = v;
+      try { localStorage.setItem('sq_u', v); } catch (e) { /* ignore */ }
+      drawUniverse();
+    }));
+    uniHead.appendChild(h('a', { class: 'btn sm', href: '#', onclick: (e) => { e.preventDefault(); SQ.go('#/screener?u=' + uni); } }, 'Screen this universe'));
+    let uniCleanup = [];
+    function drawUniverse() {
+      uniCleanup.splice(0).forEach((fn) => { try { fn(); } catch (e) { /* ignore */ } });
+      charts.disposeAll(uniBox);
+      uniBox.innerHTML = '';
+      const hmGrid = h('div', { class: 'grid g-main' });
+      const hmBox = h('div'), sideBox = h('div'), brHead = h('div'), brBox = h('div');
+      hmGrid.appendChild(hmBox); hmGrid.appendChild(sideBox);
+      uniBox.appendChild(hmGrid); uniBox.appendChild(brHead); uniBox.appendChild(brBox);
+      ui.async(hmBox, () => api('/api/market/heatmap?u=' + uni), (box, d) => {
+        const el = charts.div('chart tall');
+        const capped = d.tiles.filter((t) => t.market_cap_usd && !t.missing).length;
+        const equal = capped < d.tiles.length / 2;  // caps unknown (ETFs, or first run while Yahoo throttles)
+        const size = (t) => (equal ? 1 : t.market_cap_usd);
+        const draw = (tiles) => {
+          const sectors = Array.from(new Set(tiles.map((t) => t.sector)));
+          const ids = [], labels = [], parents = [], values = [], colors = [], text = [], custom = [];
+          sectors.forEach((s) => {
+            const kids = tiles.filter((t) => t.sector === s && !t.missing && size(t));
+            const tot = kids.reduce((a, t) => a + size(t), 0);
+            if (!tot) return;
+            ids.push('s:' + s); labels.push(s); parents.push(''); values.push(tot);
+            const w = kids.reduce((a, t) => a + size(t) * (t.change_pct || 0), 0) / tot;
+            colors.push(w); text.push(fmt.pct(w, 2)); custom.push(`${s} · ${equal ? kids.length + ' names' : fmt.money(tot)} · ${fmt.pct(w, 2)}`);
+            kids.forEach((t) => {
+              ids.push(t.ticker); labels.push(t.ticker); parents.push('s:' + s); values.push(size(t));
+              colors.push(t.change_pct || 0); text.push(fmt.pct(t.change_pct, 2));
+              custom.push(`${t.name} · ${fmt.price(t.price)} ${t.currency || ''} · ${fmt.pct(t.change_pct, 2)}${t.market_cap_usd ? ' · cap ' + fmt.money(t.market_cap_usd) : ''}`);
+            });
           });
+          charts.treemap(el, { ids, labels, parents, values, colors, text, custom }, { scale: uni === 'etfs' ? 0.025 : 0.04 });
+        };
+        box.appendChild(ui.panel(`${d.label}: ${equal ? 'heatmap' : 'heatmap by market cap (USD)'}, coloured by today's move`, el,
+          { cap: `Click a tile to open it. ${d.group_label} tiles show the ${equal ? 'average' : 'cap-weighted'} move. ` +
+            (equal && uni !== 'etfs' ? 'Tiles are equal-sized until market caps load. ' : '') +
+            (d.missing && d.missing.length ? `No recent trades: ${d.missing.join(', ')} (delisted or suspended).` : '') }));
+        draw(d.tiles);
+        el.on && el.on('plotly_click', (ev) => {
+          const p = ev.points && ev.points[0];
+          if (p && p.id && !String(p.id).startsWith('s:') && p.id !== 'root') SQ.go('#/t/' + encodeURIComponent(p.id));
         });
-        charts.treemap(el, { ids, labels, parents, values, colors, text, custom }, { scale: 0.04 });
-      };
-      box.appendChild(ui.panel(equal ? 'Heatmap, coloured by today\'s move' : 'Heatmap by market cap (USD), coloured by today\'s move', el,
-        { cap: 'Click a tile for the company. Sector tiles show the ' + (equal ? 'average' : 'cap-weighted') + ' move. ' +
-          (equal ? 'Tiles are equal-sized until market caps load. ' : '') +
-          (d.missing && d.missing.length ? `No recent trades: ${d.missing.join(', ')} (delisted or suspended).` : '') }));
-      draw(d.tiles);
-      el.on && el.on('plotly_click', (ev) => {
-        const p = ev.points && ev.points[0];
-        if (p && p.id && !String(p.id).startsWith('s:')) SQ.go('#/t/' + encodeURIComponent(p.id));
-      });
-      SQ.live.register('market-heat', d.tiles.map((t) => t.ticker));
-      const off = SQ.live.onQuotes((qs) => {
-        let changed = false;
-        d.tiles.forEach((t) => { const q = qs[t.ticker]; if (q && q.change_pct !== t.change_pct) { t.change_pct = q.change_pct; t.price = q.price; changed = true; } });
-        if (changed) draw(d.tiles);
-      });
-      SQ.onCleanup(off);
-      // Side: today's breadth & sector moves & movers
-      sideBox.innerHTML = '';
-      const tot = d.advancers + d.decliners;
-      sideBox.appendChild(ui.kpis([
-        { label: 'Advancers', value: String(d.advancers), cls: 'up', sub: tot ? fmt.pctu(d.advancers / tot, 0) + ' of names' : '' },
-        { label: 'Decliners', value: String(d.decliners), cls: 'down', sub: tot ? fmt.pctu(d.decliners / tot, 0) + ' of names' : '' },
-      ]));
-      const secEl = charts.div('chart short');
-      sideBox.appendChild(h('div', { style: { height: '12px' } }));
-      sideBox.appendChild(ui.panel('Sub-sector moves (cap-weighted)', secEl));
-      charts.bars(secEl, { x: d.sectors.map((s) => s.change_pct), y: d.sectors.map((s) => s.sector), horizontal: true, colors: 'sign' },
-        { horizontal: true, xfmt: '.1%', margin: { l: 84, r: 10, t: 4, b: 26 } });
-      const mv = (rows) => ui.table([
-        { key: 'ticker', label: 'Ticker', l: true, cls: 'sym' }, { key: 'name', label: 'Name', l: true, txt: true },
-        { key: 'change_pct', label: 'Day', fmt: 'pct', d: 2, sign: true }], rows, { onRow: (r) => SQ.go('#/t/' + r.ticker), sort: 'change_pct', desc: rows === d.gainers });
-      sideBox.appendChild(h('div', { style: { height: '12px' } }));
-      sideBox.appendChild(h('div', { class: 'grid g2' }, ui.panel('Top gainers', mv(d.gainers)), ui.panel('Top losers', mv(d.losers))));
-    }, 520);
+        SQ.live.register('market-heat', d.tiles.map((t) => t.ticker));
+        const off = SQ.live.onQuotes((qs) => {
+          let changed = false;
+          d.tiles.forEach((t) => { const q = qs[t.ticker]; if (q && q.change_pct !== t.change_pct) { t.change_pct = q.change_pct; t.price = q.price; changed = true; } });
+          if (changed) draw(d.tiles);
+        });
+        uniCleanup.push(off, () => SQ.live.unregister('market-heat'));
+        const tot = d.advancers + d.decliners;
+        sideBox.appendChild(ui.kpis([
+          { label: 'Advancers', value: String(d.advancers), cls: 'up', sub: tot ? fmt.pctu(d.advancers / tot, 0) + ' of names' : '' },
+          { label: 'Decliners', value: String(d.decliners), cls: 'down', sub: tot ? fmt.pctu(d.decliners / tot, 0) + ' of names' : '' },
+        ]));
+        const secEl = charts.div('chart short');
+        secEl.style.height = Math.max(220, 22 * d.sectors.length + 40) + 'px';
+        sideBox.appendChild(h('div', { style: { height: '12px' } }));
+        sideBox.appendChild(ui.panel(`${d.group_label} moves (${equal ? 'average' : 'cap-weighted'})`, secEl));
+        charts.bars(secEl, { x: d.sectors.map((s) => s.change_pct), y: d.sectors.map((s) => s.sector), horizontal: true, colors: 'sign' },
+          { horizontal: true, xfmt: '.1%', margin: { l: 120, r: 10, t: 4, b: 26 } });
+        const mv = (rows, best) => ui.table([
+          { key: 'ticker', label: 'Ticker', l: true, cls: 'sym' }, { key: 'name', label: 'Name', l: true, txt: true },
+          { key: 'change_pct', label: 'Day', fmt: 'pct', d: 2, sign: true }], rows, { onRow: (r) => SQ.go('#/t/' + encodeURIComponent(r.ticker)), sort: 'change_pct', desc: best });
+        sideBox.appendChild(h('div', { style: { height: '12px' } }));
+        sideBox.appendChild(h('div', { class: 'grid g2' }, ui.panel('Top gainers', mv(d.gainers, true)), ui.panel('Top losers', mv(d.losers, false))));
+      }, 520);
 
-    // Breadth & regime
-    view.appendChild(ui.sec('Breadth & regime (semiconductor universe, daily)'));
-    const brBox = h('div');
-    view.appendChild(brBox);
-    ui.async(brBox, () => api('/api/market/breadth'), (box, d) => {
-      const b = d.breadth || {}, r = d.regime || {};
-      const cur = r.current_label;
-      const probs = r.current_probs || [];
-      box.appendChild(ui.kpis([
-        { label: 'Above 20-day avg', value: fmt.pctu(b.pct_above_sma20, 0) },
-        { label: 'Above 50-day avg', value: fmt.pctu(b.pct_above_sma50, 0) },
-        { label: 'Above 200-day avg', value: fmt.pctu(b.pct_above_sma200, 0) },
-        { label: 'New 52W highs / lows', value: `${b.new_highs_52w ?? '–'} / ${b.new_lows_52w ?? '–'}` },
-        { label: 'Avg correlation 63d', value: fmt.num(b.avg_corr_63d, 2), title: 'High correlation = names move together (macro-driven); low = stock-picker\'s market' },
-        { label: '1M dispersion', value: fmt.pctu(b.dispersion_1m, 1), title: 'Cross-sectional standard deviation of 1-month returns' },
-        { label: 'SOXX regime (HMM)', value: cur || '–', cls: cur === 'Turbulent' ? 'down' : cur === 'Calm' ? 'up' : '',
-          sub: probs.length ? 'P(calm) ' + fmt.pctu(probs[0], 0) : '' },
-      ]));
-      const el = charts.div('chart short');
-      box.appendChild(h('div', { style: { height: '12px' } }));
-      const states = (r.states || []).map((s) => `${s.label}: ${fmt.pctu(s.vol_ann, 0)} vol, lasts ~${fmt.num(s.expected_duration_days, 0)} days`).join(' · ');
-      box.appendChild(ui.panel('Share of semis above their 50-day average (1 year)', el,
-        { cap: 'Breadth above 70% = broad strength; below 30% = washed-out. Regime: two-state Gaussian hidden Markov model on SOXX daily returns (5 years). ' + states }));
-      if (b.pct_above_sma50_series) charts.lines(el, [{ name: '% above 50d', ...b.pct_above_sma50_series, color: 'accent', fill: 'tozeroy', fillcolor: 'rgba(' + charts.theme().accentRgb + ',.08)' }],
-        { yfmt: '.0%', legend: false, shapes: [{ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0.5, y1: 0.5 }] });
-    }, 200);
+      brHead.appendChild(ui.sec('Breadth & regime (daily)'));
+      ui.async(brBox, () => api('/api/market/breadth?u=' + uni), (box, d) => {
+        const b = d.breadth || {}, r = d.regime || {};
+        const cur = r.current_label;
+        const probs = r.current_probs || [];
+        box.appendChild(ui.kpis([
+          { label: 'Above 20-day avg', value: fmt.pctu(b.pct_above_sma20, 0) },
+          { label: 'Above 50-day avg', value: fmt.pctu(b.pct_above_sma50, 0) },
+          { label: 'Above 200-day avg', value: fmt.pctu(b.pct_above_sma200, 0) },
+          { label: 'New 52W highs / lows', value: `${b.new_highs_52w ?? '–'} / ${b.new_lows_52w ?? '–'}` },
+          { label: 'Avg correlation 63d', value: fmt.num(b.avg_corr_63d, 2), title: 'High correlation = names move together (macro-driven); low = stock-picker\'s market' },
+          { label: '1M dispersion', value: fmt.pctu(b.dispersion_1m, 1), title: 'Cross-sectional standard deviation of 1-month returns' },
+          { label: `${d.regime_ref} regime (HMM)`, value: cur || '–', cls: cur === 'Turbulent' ? 'down' : cur === 'Calm' ? 'up' : '',
+            sub: probs.length ? 'P(calm) ' + fmt.pctu(probs[0], 0) : '' },
+        ]));
+        const el = charts.div('chart short');
+        box.appendChild(h('div', { style: { height: '12px' } }));
+        const states = (r.states || []).map((s) => `${s.label}: ${fmt.pctu(s.vol_ann, 0)} vol, lasts ~${fmt.num(s.expected_duration_days, 0)} days`).join(' · ');
+        box.appendChild(ui.panel(`${d.label}: share above the 50-day average (1 year)`, el,
+          { cap: `Breadth above 70% = broad strength; below 30% = washed-out. Regime: two-state Gaussian hidden Markov model on ${d.regime_ref} daily returns (5 years). ` + states }));
+        if (b.pct_above_sma50_series) charts.lines(el, [{ name: '% above 50d', ...b.pct_above_sma50_series, color: 'accent', fill: 'tozeroy', fillcolor: 'rgba(' + charts.theme().accentRgb + ',.08)' }],
+          { yfmt: '.0%', legend: false, shapes: [{ type: 'line', xref: 'paper', x0: 0, x1: 1, y0: 0.5, y1: 0.5 }] });
+      }, 200);
+    }
+    SQ.onCleanup(() => uniCleanup.splice(0).forEach((fn) => { try { fn(); } catch (e) { /* ignore */ } }));
+    drawUniverse();
 
     // Movers + earnings + news
     view.appendChild(ui.sec('US movers, upcoming earnings & news'));

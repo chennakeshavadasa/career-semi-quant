@@ -29,6 +29,7 @@ DEFAULT_WATCHLISTS = {
     "Tier A semis": [t for t, _, s, tier in SEMIS if tier == "A" and s != "Market"],
     "Tier B semis": [t for t, _, s, tier in SEMIS if tier == "B"],
     "My watchlist": ["NVDA", "AMD", "AVGO", "TSM", "ASML", "MU", "SPY", "QQQ"],
+    "US mega caps": ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "WMT", "XOM"],
 }
 
 _lock = threading.Lock()

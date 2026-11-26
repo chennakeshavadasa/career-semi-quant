@@ -46,20 +46,22 @@ class SafeJSON(JSONResponse):
 
 def _warmup() -> None:
     """Preload what the first screens need, gently (Yahoo-friendly pacing)."""
-    from ..universe import FACTOR_ETFS, SEMI_TICKERS
+    from ..universe import FACTOR_ETFS, universe_tickers
 
     t0 = time.time()
     try:
-        yahoo.quotes(list(SEMI_TICKERS) + ["SPY", "SOXX", "QQQ"])
-        yahoo.history_many(list(SEMI_TICKERS) + ["SPY", "SOXX", "QQQ"] + list(FACTOR_ETFS), "10y", "1d")
+        names = list(dict.fromkeys(universe_tickers("semis") + universe_tickers("us_large")))
+        yahoo.quotes(names + ["SPY", "SOXX", "QQQ", "ACWI"])
+        yahoo.history_many(names + ["SPY", "SOXX", "QQQ", "ACWI"], "2y", "1d")  # screener, heatmap, breadth
+        yahoo.history_many(list(FACTOR_ETFS), "5y", "1d")  # factor models
         mkt.strip()
-        for t in SEMI_TICKERS:  # fundamentals for scores, ~4 per second
+        for t in names:  # fundamentals for scores, ~4 per second
             try:
                 yahoo.info(t, ttl=scr.FUND_TTL)
             except Exception:  # noqa: BLE001
                 pass
             time.sleep(0.25)
-        for t in SEMI_TICKERS:  # consensus revisions
+        for t in names:  # consensus revisions
             try:
                 yahoo.eps_trend(t, ttl=12 * 3600)
             except Exception:  # noqa: BLE001
@@ -144,12 +146,18 @@ def create_app() -> FastAPI:
         return mkt.strip()
 
     @app.get("/api/market/heatmap")
-    def market_heatmap():
-        return mkt.heatmap()
+    def market_heatmap(u: str = "semis"):
+        return mkt.heatmap(u)
 
     @app.get("/api/market/breadth")
-    def market_breadth():
-        return mkt.breadth()
+    def market_breadth(u: str = "semis"):
+        return mkt.breadth(u)
+
+    @app.get("/api/universes")
+    def universes():
+        from ..universe import UNIVERSES
+        return [{"key": k, "label": v["label"], "count": len(v["rows"]), "group_label": v["group_label"]}
+                for k, v in UNIVERSES.items()]
 
     @app.get("/api/market/movers")
     def market_movers():
@@ -168,9 +176,9 @@ def create_app() -> FastAPI:
         return tools.search(q)
 
     @app.get("/api/screener")
-    def screener(list: str | None = None, symbols: str | None = None):  # noqa: A002 - query name
+    def screener(list: str | None = None, symbols: str | None = None, u: str = "semis"):  # noqa: A002 - query name
         tick = syms(symbols) or (config.watchlists().get(list or "") if list else None)
-        return scr.table(tick, name=list)
+        return scr.table(tick, name=list, universe=u)
 
     @app.get("/api/compare")
     def compare(symbols: str = Query(...), range: str = "1Y", bench: str = "SPY"):  # noqa: A002
@@ -246,10 +254,10 @@ def create_app() -> FastAPI:
                         headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.get("/api/export/screener.{fmt}")
-    def x_screener(fmt: str, list: str | None = None, symbols: str | None = None):  # noqa: A002
+    def x_screener(fmt: str, list: str | None = None, symbols: str | None = None, u: str = "semis"):  # noqa: A002
         from ..service import export
         tick = syms(symbols) or (config.watchlists().get(list or "") if list else None)
-        data, name, mime = export.screener_file(tick, fmt, list)
+        data, name, mime = export.screener_file(tick, fmt, list, u)
         return Response(data, media_type=mime, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.post("/api/export/portfolio.xlsx")

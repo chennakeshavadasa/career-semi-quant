@@ -162,8 +162,9 @@ def ticker_xlsx(sym: str) -> tuple[bytes, str]:
 
 # ─── Screener / portfolio ────────────────────────────────────────────────────
 
-def screener_file(tickers: list[str] | None, fmt: str = "xlsx", name: str | None = None) -> tuple[bytes, str, str]:
-    t = scr.table(tickers, name)
+def screener_file(tickers: list[str] | None, fmt: str = "xlsx", name: str | None = None,
+                  universe: str | None = "semis") -> tuple[bytes, str, str]:
+    t = scr.table(tickers, name, universe)
     cols = [c["key"] for c in t["columns"]]
     extra = ["momentum", "trend_score", "value", "quality", "growth", "revisions", "analyst", "low_vol"]
     df = pd.DataFrame(t["rows"])
@@ -249,11 +250,14 @@ def snapshot_html(symbols: list[str], include_market: bool = True) -> tuple[str,
     syms = [yahoo.norm_symbol(s) for s in symbols if s][:8]
     t0 = time.time()
     if include_market:
-        for path, fn in (("/api/market/strip", mkt.strip), ("/api/market/heatmap", mkt.heatmap), ("/api/market/breadth", mkt.breadth),
-                         ("/api/market/movers", mkt.movers), ("/api/market/earnings", lambda: mkt.upcoming_earnings(30)),
-                         ("/api/market/news", mkt.market_news), ("/api/screener", lambda: scr.table(None, None)),
+        for path, fn in (("/api/market/strip", mkt.strip), ("/api/market/movers", mkt.movers),
+                         ("/api/market/earnings", lambda: mkt.upcoming_earnings(30)), ("/api/market/news", mkt.market_news),
                          ("/api/calendar", tools.calendar)):
             put(path, fn)
+        for u in ("semis", "us_large"):  # the two stock universes the dashboard opens with
+            put(f"/api/market/heatmap?u={u}", lambda u=u: mkt.heatmap(u))
+            put(f"/api/market/breadth?u={u}", lambda u=u: mkt.breadth(u))
+            put(f"/api/screener?u={u}", lambda u=u: scr.table(None, None, u))
     for s in syms:
         enc = quote(s, safe="")  # same as the browser's encodeURIComponent for ticker symbols
         put(f"/api/quotes?symbols={s}", lambda s=s: yahoo.quotes([s]))
@@ -274,6 +278,9 @@ def snapshot_html(symbols: list[str], include_market: bool = True) -> tuple[str,
     quotes = jsonable(yahoo.quotes(sorted(all_syms))) if all_syms else {}
     data[snap_key("/api/settings")] = config.settings()
     data[snap_key("/api/watchlists")] = {"Snapshot": syms or ["SPY"]}
+    from ..universe import UNIVERSES
+    data[snap_key("/api/universes")] = [{"key": k, "label": v["label"], "count": len(v["rows"]), "group_label": v["group_label"]}
+                                        for k, v in UNIVERSES.items() if k in ("semis", "us_large")]
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     snap = {"created": created, "version": __version__, "home": (f"t/{syms[0]}" if syms and not include_market else "market"),
             "symbols": syms, "data": data, "quotes": quotes, "build_seconds": round(time.time() - t0, 1)}

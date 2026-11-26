@@ -9,7 +9,7 @@ import pandas as pd
 
 from ..analytics._util import clean, jsonable, safe
 from ..data import yahoo
-from ..universe import META, SEMI_TICKERS
+from ..universe import ALL_META, UNIVERSES, get_universe, home_universe, universe_key, universe_meta, universe_tickers
 from .common import fx_to_usd, memo
 
 FUND_TTL = 6 * 3600  # universe-wide fundamentals may be up to 6 h old (one request per ticker)
@@ -65,36 +65,39 @@ def fundamentals_frame(tickers: list[str], revisions: bool = True) -> pd.DataFra
     return pd.DataFrame(rows).set_index("ticker") if rows else pd.DataFrame()
 
 
-def _score_universe(tickers: tuple[str, ...]) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def _score_universe(tickers: tuple[str, ...], bench: str = "SPY", sector_bench: str = "SOXX"):
     from ..analytics import scoring
 
-    c = yahoo.closes(list(tickers) + ["SPY", "SOXX"], "2y", calendar="SPY")
+    c = yahoo.closes(list(tickers) + list(dict.fromkeys(["SPY", bench, sector_bench])), "2y", calendar="SPY")
     present = [t for t in tickers if t in c.columns and c[t].notna().sum() > 30]
-    m = scoring.universe_metrics(c[present], c.get("SPY"), c.get("SOXX"))
+    m = scoring.universe_metrics(c[present], c.get(bench), c.get(sector_bench))
     f = fundamentals_frame(present)
     s = scoring.quant_score(m, f)
     return m, f, s
 
 
-def scored(tickers: tuple[str, ...] | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    tickers = tuple(tickers or SEMI_TICKERS)
-    return memo(f"scored:{hash(tickers)}", 120, lambda: _score_universe(tickers))
+def scored(tickers: tuple[str, ...] | None = None, bench: str = "SPY", sector_bench: str = "SOXX"):
+    tickers = tuple(tickers or universe_tickers("semis"))
+    return memo(f"scored:{hash(tickers)}:{bench}:{sector_bench}", 120, lambda: _score_universe(tickers, bench, sector_bench))
 
 
 def score_for(sym: str) -> dict | None:
-    """Composite quant score for one ticker, ranked against the semiconductor universe."""
+    """Composite quant score for one ticker, ranked against its home universe (US large caps
+    for any ticker that is not in a built-in universe)."""
     from ..analytics import scoring
 
     sym = yahoo.norm_symbol(sym)
-    universe = tuple(SEMI_TICKERS) if sym in SEMI_TICKERS else tuple(SEMI_TICKERS) + (sym,)
-    m, f, s = scored(universe)
+    key = home_universe(sym) or "us_large"
+    u = UNIVERSES[key]
+    base = tuple(universe_tickers(key))
+    m, f, s = scored(base if sym in base else base + (sym,), u["bench"], u["sector_bench"])
     if sym not in s.index:
         return None
     row = s.loc[sym]
     out = safe(scoring.score_explain, row, default={}) or {}
     out["rank"] = int((s["score"] > row["score"]).sum() + 1)
     out["of"] = int(s["score"].notna().sum())
-    out["universe"] = "semiconductor universe"
+    out["universe"] = u["label"]
     return jsonable(out)
 
 
@@ -104,7 +107,7 @@ COLUMNS = [  # (key, label, group, format)
     ("ext_change_pct", "Ext.", "Performance", "pct"), ("score", "Score", "Score", "score"),
     ("ret_5d", "1W", "Performance", "pct"), ("ret_1m", "1M", "Performance", "pct"), ("ret_3m", "3M", "Performance", "pct"),
     ("ret_6m", "6M", "Performance", "pct"), ("ret_ytd", "YTD", "Performance", "pct"), ("ret_1y", "1Y", "Performance", "pct"),
-    ("mom_12_1", "Mom 12-1", "Performance", "pct"), ("rel_strength_3m", "RS vs SOXX 3M", "Performance", "pct"),
+    ("mom_12_1", "Mom 12-1", "Performance", "pct"), ("rel_strength_3m", "Rel. strength 3M", "Performance", "pct"),
     ("market_cap_usd", "Mkt cap $", "Valuation", "big"), ("pe", "P/E", "Valuation", "x"), ("fpe", "Fwd P/E", "Valuation", "x"),
     ("ev_sales", "EV/Sales", "Valuation", "x"), ("ev_ebitda", "EV/EBITDA", "Valuation", "x"),
     ("fcf_yield", "FCF yield", "Valuation", "pct"), ("dividend_yield", "Div yield", "Valuation", "pct"),
@@ -119,16 +122,20 @@ COLUMNS = [  # (key, label, group, format)
 ]
 
 
-def table(tickers: list[str] | None = None, name: str | None = None) -> dict:
-    """Screener rows (one per ticker) with ~40 columns; scores are ranked within the list."""
-    tickers = [yahoo.norm_symbol(t) for t in (tickers or SEMI_TICKERS)]
-    m, f, s = scored(tuple(tickers))
+def table(tickers: list[str] | None = None, name: str | None = None, universe: str | None = None) -> dict:
+    """Screener rows (one per ticker) with ~40 columns; scores are ranked within the list.
+    ``universe`` picks a built-in universe when no explicit ``tickers`` are given."""
+    key = universe_key(universe) if not tickers else None
+    u = get_universe(key) if key else {"label": name or "Watchlist", "bench": "SPY", "sector_bench": "SPY"}
+    metas = universe_meta(key) if key else {}
+    tickers = [yahoo.norm_symbol(t) for t in (tickers or list(metas))]
+    m, f, s = scored(tuple(tickers), u["bench"], u["sector_bench"])
     q = yahoo.quotes(tickers)
     fx = fx_to_usd([x.get("currency") for x in q.values()])
     rows = []
     for t in tickers:
         x = q.get(t) or {}
-        mt = META.get(t, {})
+        mt = metas.get(t) or ALL_META.get(t, {})
         row = {"ticker": t, "name": mt.get("name") or x.get("name"), "sector": mt.get("sector") or
                (f.loc[t, "sector_yf"] if t in f.index else None), "tier": mt.get("tier"),
                "price": x.get("price"), "currency": x.get("currency"), "change_pct": x.get("change_pct"),
@@ -142,10 +149,10 @@ def table(tickers: list[str] | None = None, name: str | None = None) -> dict:
             row.update({k: v for k, v in m.loc[t].items() if k != "last"})
         if t in f.index:
             row.update({k: v for k, v in f.loc[t].items() if k not in ("sector_yf",)})
-        if t in s.index:
-            row.update({k: v for k, v in s.loc[t].items()})
-        row["missing"] = not x
+        if t in s.index:  # score components; "trend" is renamed so the up/down/range label survives
+            row.update({("trend_score" if k == "trend" else k): v for k, v in s.loc[t].items()})
+        row["missing"] = not x or bool(x.get("inactive"))
         rows.append(row)
-    return jsonable({"name": name or "Semiconductor universe", "columns": [
+    return jsonable({"name": name or u["label"], "universe": key, "rel_bench": u["sector_bench"], "columns": [
         {"key": k, "label": lbl, "group": g, "format": fm} for k, lbl, g, fm in COLUMNS],
         "rows": rows, "n": len(rows)})

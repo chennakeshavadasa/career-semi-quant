@@ -81,6 +81,7 @@ semiquant market                   global market snapshot
 semiquant offer NVDA --value 100000 --years 4      value an RSU grant
 semiquant report NVDA AVGO         shareable HTML snapshot (see below)
 semiquant export NVDA              Excel workbook with everything
+semiquant publish --out site/app   static website + data (the web edition)
 ```
 
 With the one-click launchers, put the command after the file name, for example `./start-linux.sh quote NVDA`.
@@ -90,6 +91,12 @@ With the one-click launchers, put the command after the file name, for example `
 * **A result.** Every company page has a **Share** button (or run `semiquant report NVDA`). It saves **one HTML file** with every tab, interactive charts and the data at that moment. Anyone can open it in a browser: no install, works offline. The market page has its own **Share snapshot** button.
 * **The data.** **Excel** buttons (company page, screener, portfolio) save the underlying numbers; every table also has a CSV button, and every chart can be saved as PNG.
 * **The tool.** Send the pipx command above, or the `local` folder as a zip: they double-click the launcher for their system.
+
+## Web edition and phone app
+
+`semiquant publish --out DIR` writes the same dashboard as static files plus precomputed data (`DIR/data/*.json`), so it can be hosted anywhere without a server. The portfolio site runs it every 15 minutes on weekdays (every 30 minutes overnight) and serves it at [nithinpuru.github.io/quant-terminal/app/](https://nithinpuru.github.io/quant-terminal/app/). Each run only redoes what is due: quotes, heatmaps, screeners and intraday charts every run; scores and longer charts hourly; risk, options and factors every 3 hours; fundamentals daily.
+
+The web edition installs as an app on a phone: open it in Safari (iPhone: Share, then **Add to Home Screen**) or Chrome (Android: menu, then **Install app**). It opens full screen with a bottom tab bar, checks for new data every minute, and keeps the last data for offline use. Watchlists, settings and your portfolio stay on the device. Full analysis tabs are published for the semiconductor universe and the US mega caps; every other ticker shows its live quote, and the local edition analyses anything.
 
 ## How fresh is the data?
 

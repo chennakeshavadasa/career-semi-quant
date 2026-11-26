@@ -10,7 +10,7 @@
   function loadInto(body, path, render, skel = 420) {
     const box = h('div');
     body.appendChild(box);
-    ui.async(box, () => api(path), render, skel);
+    ui.async(box, () => api(path), (b, d) => (d && d.unavailable ? b.appendChild(ui.empty(d.message)) : render(b, d)), skel);
   }
 
   // ─── Risk & returns ───────────────────────────────────────────────────

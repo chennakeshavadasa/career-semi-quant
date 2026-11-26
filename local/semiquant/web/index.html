@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c121b" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Semi Quant">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <title>Semi Quant Terminal · Local</title>
 <meta name="description" content="Local, institutional-grade quant terminal: live Yahoo Finance data, options, fundamentals, risk, portfolio and offer analytics.">
 <script>
@@ -32,6 +40,7 @@
     <div class="top-right">
       <div class="mstatus" title="Quotes refresh automatically"><span id="live-dot" class="dot"></span><span class="txt" id="mkt-text">Connecting…</span><span class="dim" id="live-time"></span></div>
       <button class="btn icon" id="refresh-btn" title="Refresh now (R)"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+      <button class="btn hidden" id="install-btn" title="Install as an app on this device">Install app</button>
       <button class="btn icon" id="theme-btn" title="Light / dark theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
     </div>
   </header>
@@ -56,11 +65,20 @@
     <div class="view" id="view"></div>
   </main>
 </div>
+<nav class="bnav" id="bnav" aria-label="Main">
+  <a href="#/market" data-r="market"><svg viewBox="0 0 24 24"><path d="M3 20h18M6 16V9M11 16V5M16 16v-5M21 16V8"/></svg>Market</a>
+  <a href="#/screener" data-r="screener"><svg viewBox="0 0 24 24"><path d="M4 5h16M7 10h10M10 15h4M11 20h2"/></svg>Screener</a>
+  <a href="#/watchlist" data-r="watchlist"><svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>Watchlist</a>
+  <a href="#/calendar" data-r="calendar"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>Calendar</a>
+  <a href="#/more" data-r="more"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>More</a>
+</nav>
 <div id="loading" class="loading-line hidden"><i></i></div>
 <script src="vendor/lightweight-charts.standalone.production.js"></script>
 <script src="vendor/plotly.min.js"></script>
 <script src="js/core.js"></script>
+<script src="js/static.js"></script>
 <script src="js/charts.js"></script>
+<script src="js/ta.js"></script>
 <script src="js/views/market.js"></script>
 <script src="js/views/ticker.js"></script>
 <script src="js/views/ticker_tabs.js"></script>

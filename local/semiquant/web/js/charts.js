@@ -38,11 +38,13 @@
       margin: { l: 50, r: 14, t: 8, b: 32 }, colorway: palette(t), xaxis: axis(t), yaxis: axis(t),
       legend: { orientation: 'h', y: 1.02, yanchor: 'bottom', x: 0, font: { size: 11, color: t.ink2 }, bgcolor: 'rgba(0,0,0,0)' },
       hoverlabel: { bgcolor: t.card, bordercolor: t.ruleStrong, font: { family: t.mono, size: 12, color: t.ink } },
-      hovermode: 'x unified', showlegend: true, dragmode: 'zoom',
+      hovermode: 'x unified', showlegend: true, dragmode: TOUCH ? false : 'zoom',
     };
   }
+  // Touch screens: no toolbar and no drag-zoom, so swipes scroll the page (tap still shows values).
+  const TOUCH = window.matchMedia && matchMedia('(hover: none)').matches;
   const CONFIG = {
-    displaylogo: false, responsive: true, displayModeBar: 'hover',
+    displaylogo: false, responsive: true, displayModeBar: TOUCH ? false : 'hover',
     modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d', 'toggleSpikelines', 'hoverCompareCartesian', 'hoverClosestCartesian'],
     toImageButtonOptions: { format: 'png', scale: 2, filename: 'semiquant-chart' },
   };
@@ -228,6 +230,7 @@
       timeScale: { borderColor: t.ruleStrong, timeVisible: intraday, secondsVisible: false, rightOffset: 3 },
       crosshair: { mode: 0, vertLine: { color: t.ink4, labelBackgroundColor: t.ink2 }, horzLine: { color: t.ink4, labelBackgroundColor: t.ink2 } },
       localization: { priceFormatter: (p) => fmt.price(p) },
+      handleScroll: { vertTouchDrag: false }, // vertical swipes scroll the page, horizontal ones pan the chart
     };
   }
 

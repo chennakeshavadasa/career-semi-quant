@@ -133,6 +133,70 @@
   $('#refresh-btn').addEventListener('click', refresh);
   $('#theme-btn').addEventListener('click', SQ.toggleTheme);
 
+  // ─── Phone pages: watchlist and "more" ────────────────────────────────
+  SQ.views.watchlist = async function (view) {
+    const lists = WL.lists || {};
+    view.appendChild(h('div', { class: 'page-h' }, h('div', null, h('h1', null, 'Watchlist'),
+      h('div', { class: 'sub' }, SQ.static ? 'Saved on this device. Prices refresh with every published update.' : 'Live prices; tap a row to open it.'))));
+    const sel = ui.select(Object.keys(lists), WL.current, (v) => { WL.current = v; try { localStorage.setItem('sq_wl', v); } catch (e) { /* ignore */ } draw(); });
+    const inp = h('input', { class: 'inp', placeholder: 'Add ticker (e.g. NVDA)', style: { flex: '1', minWidth: '0' } });
+    const add = () => { const v = inp.value.trim().toUpperCase(); if (v) { inp.value = ''; SQ.addToWatchlist(v); setTimeout(draw, 300); } };
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+    view.appendChild(h('div', { class: 't-tools' }, sel, inp, h('button', { class: 'btn primary', type: 'button', onclick: add }, 'Add')));
+    const box = h('section', { class: 'panel wl-page' });
+    view.appendChild(box);
+    function draw() {
+      const syms = (WL.lists || {})[WL.current] || [];
+      box.innerHTML = '';
+      syms.forEach((s) => {
+        const q = SQ.live.quotes[s] || {};
+        const remove = (e) => { e.stopPropagation(); WL.lists[WL.current] = syms.filter((x) => x !== s); saveWatchlists(); setTimeout(draw, 200); };
+        const row = h('div', { class: 'wl-row', onclick: () => SQ.go('#/t/' + encodeURIComponent(s)) },
+          h('span', { class: 's' }, s), h('span', { class: 'p', dataset: { live: s + ':price:price' } }, fmt.price(q.price)),
+          h('button', { class: 'btn sm x', type: 'button', title: 'Remove', onclick: remove }, '✕'),
+          h('span', { class: 'n', dataset: { live: s + ':name:text' } }, q.name || ''),
+          h('span', { class: 'c ' + fmt.cls(q.change_pct), dataset: { live: s + ':change_pct:pct', sign: 'change_pct' } }, fmt.pct(q.change_pct, 2)));
+        box.appendChild(row);
+      });
+      if (!syms.length) box.appendChild(ui.empty('Empty list: add a ticker above.'));
+      SQ.live.register('wlpage', syms);
+      SQ.live.tick(true);
+    }
+    draw();
+  };
+
+  let installEvt = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('#install-btn').classList.remove('hidden'); });
+  SQ.install = async () => {
+    if (installEvt) { installEvt.prompt(); await installEvt.userChoice; installEvt = null; $('#install-btn').classList.add('hidden'); return; }
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    ui.toast(ios ? 'iPhone / iPad: tap Share (the square with the arrow) in Safari, then "Add to Home Screen".'
+      : 'Open the browser menu and choose "Install app" or "Add to Home screen".', 7000);
+  };
+  $('#install-btn').addEventListener('click', SQ.install);
+  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+  SQ.views.more = async function (view) {
+    const icon = (d) => h('span', { html: '<svg viewBox="0 0 24 24">' + d + '</svg>' });
+    view.appendChild(h('div', { class: 'page-h' }, h('div', null, h('h1', null, 'More'))));
+    const items = [
+      ['#/compare', 'Compare', 'Performance, risk and correlation side by side', '<path d="M4 18l5-6 4 3 7-9"/>'],
+      ['#/portfolio', 'Portfolio', SQ.static ? 'Live value of your holdings' : 'Risk, optimizers, backtest, Monte Carlo', '<circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/>'],
+      ['#/offer', 'Offer & RSU value', 'What an equity grant could be worth at each vest', '<rect x="4" y="7" width="16" height="12" rx="2"/><path d="M9 7V5h6v2"/>'],
+      ['#/settings', 'Settings & help', 'Watchlists, data freshness, sharing', '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>'],
+    ];
+    const list = h('div', { class: 'menu-list' }, items.map(([href, t, sub, d]) => h('a', { href }, icon(d), h('span', null, t, h('small', null, sub)))),
+      h('button', { type: 'button', onclick: SQ.toggleTheme }, icon('<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z"/>'),
+        h('span', null, 'Light / dark theme', h('small', null, 'Follows your choice on every page'))),
+      standalone() ? null : h('button', { type: 'button', onclick: SQ.install }, icon('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>'),
+        h('span', null, 'Install as an app', h('small', null, 'Home-screen icon, opens full screen, keeps the last data offline'))));
+    view.appendChild(list);
+  };
+
+  if (SQ.static && 'serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => null));
+  }
+
   // ─── Start ────────────────────────────────────────────────────────────
   (async function start() {
     if (SQ.snapshot) {
@@ -142,6 +206,10 @@
         `Install the free local tool for live data: <a href="https://github.com/chennakeshavadasa/career-semi-quant/tree/master/local" target="_blank" rel="noopener">how to run it</a>.`;
       $('#refresh-btn').classList.add('hidden');
       $('#wl-input').closest('.wl-add').classList.add('hidden');
+    }
+    if (SQ.static) {
+      const sub = $('.brand small');
+      if (sub) sub.textContent = 'Web edition · updated every ~15 min';
     }
     if (SQ.snapshot) {
       Object.assign(SQ.live.quotes, SQ.snapshot.quotes || {});

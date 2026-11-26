@@ -35,6 +35,12 @@
           h('span', { class: 'chg ' + fmt.cls(q && q.change_pct), dataset: { live: sym + ':change_pct:pct', sign: 'change_pct' } }, fmt.pct(q && q.change_pct, 2)), ext),
         h('div', { class: 'dim mono', style: { fontSize: '11.5px', marginTop: '4px' } },
           stateLabel, q && q.time ? ' · last trade ' + fmt.dateTime(q.time) : '', q && q.delay_min ? ` · delayed ${q.delay_min} min` : '')),
+      SQ.static ? h('div', { class: 'th-actions' },
+        h('button', { class: 'btn', title: 'Add to your watchlist (saved on this device)', onclick: () => SQ.addToWatchlist(sym) }, '☆ Watch'),
+        SQ.isPublished(sym) ? h('a', { class: 'btn', href: '#/compare?s=' + encodeURIComponent(sym + ',SOXX,SPY') }, 'Compare') : null,
+        SQ.isPublished(sym) ? h('a', { class: 'btn', href: '#/offer?t=' + encodeURIComponent(sym) }, 'Value a grant') : null,
+        h('button', { class: 'btn primary', title: 'Share a link to this page', onclick: () => SQ.shareLink(`${sym} on Semi Quant Terminal`) },
+          h('span', { html: '<svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12m0-12l-4 4m4-4l4 4"/></svg>' }), 'Share')) :
       h('div', { class: 'th-actions' },
         h('button', { class: 'btn', title: 'Add to the current watchlist', onclick: () => SQ.addToWatchlist(sym) }, '☆ Watch'),
         h('a', { class: 'btn', href: '#/compare?s=' + encodeURIComponent(sym + ',SOXX,SPY') }, 'Compare'),
@@ -74,6 +80,7 @@
     }
     const tabs = SQ.$('#tt'), body = SQ.$('#tb');
     tabs.innerHTML = '';
+    if (SQ.static && !SQ.isPublished(sym)) { body.innerHTML = ''; body.appendChild(quoteCard(sym, state.quote || {})); return; }
     TABS.forEach(([k, label]) => tabs.appendChild(h('a', { href: `#/t/${encodeURIComponent(sym)}/${k}`, class: k === tab ? 'on' : '' }, label)));
     SQ.cleanups.splice(0).forEach((fn) => { try { fn(); } catch (e) { /* ignore */ } });
     charts.disposeAll(body);
@@ -82,6 +89,26 @@
     if (!fn) { body.appendChild(ui.empty('Coming soon.')); return; }
     await fn(body, sym, params);
   };
+
+  // Published website: tickers outside the fully analysed set get a quote card.
+  function quoteCard(sym, q) {
+    const pos = fmt.ok(q.low_52w) && fmt.ok(q.high_52w) && q.high_52w > q.low_52w ? (q.price - q.low_52w) / (q.high_52w - q.low_52w) : null;
+    return h('div', { class: 'grid' },
+      ui.kpis([
+        { label: 'Price', value: fmt.price(q.price), sub: q.currency || '' },
+        { label: 'Day', value: fmt.pct(q.change_pct, 2), cls: fmt.cls(q.change_pct), sub: fmt.num(q.change, 2) },
+        q.ext_price ? { label: q.ext_label || 'Extended hours', value: fmt.price(q.ext_price), sub: fmt.pct(q.ext_change_pct, 2) } : null,
+        { label: 'Day range', value: `${fmt.price(q.low)} – ${fmt.price(q.high)}` },
+        { label: '52-week range', value: `${fmt.price(q.low_52w)} – ${fmt.price(q.high_52w)}`, sub: fmt.ok(pos) ? `at ${Math.round(pos * 100)}% of the range` : '' },
+        { label: 'Market cap', value: fmt.money(q.market_cap, q.currency) },
+        { label: 'P/E / forward', value: `${fmt.x(q.pe)} / ${fmt.x(q.fpe)}` },
+        { label: 'Volume', value: fmt.big(q.volume) },
+      ]),
+      ui.panel('Full analysis', h('div', { class: 'note' },
+        h('p', null, `Charts, risk, volatility, options, fundamentals, analyst estimates and ownership are published for the semiconductor universe and the US mega caps (refreshed every ~15 minutes in market hours). ${sym} shows its live quote here and appears in the heatmaps and screener.`),
+        h('p', { style: { marginTop: '8px' } }, 'For every tab on any ticker, run the free local edition on your computer: ',
+          h('a', { href: 'https://github.com/chennakeshavadasa/career-semi-quant/tree/master/local', target: '_blank', rel: 'noopener' }, 'how to install it'), '.'))));
+  }
 
   // ─── Price chart panel ────────────────────────────────────────────────
   const OVERLAY_OPTS = [['sma20', 'SMA 20'], ['sma50', 'SMA 50'], ['sma200', 'SMA 200'], ['ema21', 'EMA 21'], ['bb', 'Bollinger'], ['vwap', 'VWAP'],

@@ -28,7 +28,7 @@
     let src = params.list ? 'l:' + params.list : 'u:' + (params.u || saved);
     let group = 'Overview', sector = 'All', text = '';
     const q = () => (src.startsWith('l:') ? 'list=' + enc(src.slice(2)) : 'u=' + enc(src.slice(2)));
-    view.appendChild(pageHead('Screener', 'Live quotes + daily metrics + fundamentals, ranked into a 0-100 quant score. Pick a universe (semiconductors, US large caps across every sector, global leaders, ETFs) or one of your watchlists. Click a row to open it; click a header to sort.', [
+    view.appendChild(pageHead('Screener', 'Live quotes + daily metrics + fundamentals, ranked into a 0-100 quant score. Pick a universe (semiconductors, US large caps across every sector, global leaders, ETFs) or one of your watchlists. Click a row to open it; click a header to sort.', SQ.static ? null : [
       h('button', { class: 'btn', onclick: () => ui.download('/api/export/screener.xlsx?' + q()) }, h('span', { html: dlIcon }), 'Excel'),
       h('button', { class: 'btn', onclick: () => ui.download('/api/export/screener.csv?' + q()) }, h('span', { html: dlIcon }), 'CSV')]));
     const tools = h('div', { class: 't-tools' });
@@ -165,6 +165,7 @@
     const analyze = async () => {
       const body = read();
       try { await SQ.put('/api/portfolio', body); } catch (e) { /* snapshot or offline */ }
+      if (SQ.static) { ui.async(out, () => staticPortfolio(body), renderStaticPortfolio, 300); return; }
       ui.async(out, () => SQ.post('/api/portfolio/analyze', body), (b, d) => renderPortfolio(b, d, body), 600);
     };
     const xlsx = async () => {
@@ -296,14 +297,14 @@
         h('label', { class: 'field' }, h('span', null, 'Vesting start'), h('input', { class: 'inp', type: 'date', value: o.start, oninput: (e) => { o.start = e.target.value; } })),
         field(o, 'years', 'Vesting years', 'number'), field(o, 'cliff_months', 'Cliff (months)', 'number'),
         field(o, 'frequency', 'Then vests', 'text', [['monthly', 'monthly'], ['quarterly', 'quarterly'], ['semiannual', 'every 6 months'], ['annual', 'yearly']]),
-        field(o, 'method', 'Model', 'text', [['bootstrap', 'Bootstrap (history)'], ['garch', 'GARCH-t'], ['gbm', 'Lognormal (GBM)']]),
+        field(o, 'method', 'Model', 'text', SQ.static ? [['bootstrap', 'Bootstrap (history)']] : [['bootstrap', 'Bootstrap (history)'], ['garch', 'GARCH-t'], ['gbm', 'Lognormal (GBM)']]),
         field(o, 'drift', 'Drift', 'text', [['zero', 'Zero (conservative)'], ['riskfree', 'Risk-free rate'], ['historical', 'Historical average']])),
       { right: offers.length > 1 ? h('button', { class: 'btn sm', type: 'button', onclick: () => { offers.splice(i, 1); drawForms(); } }, 'Remove') : null })));
     }
     drawForms();
     async function run() {
       out.innerHTML = '';
-      const results = await Promise.all(offers.filter((o) => o.ticker).map((o) => SQ.post('/api/offer', o).then((r) => ({ ok: true, r })).catch((e) => ({ ok: false, e, o }))));
+      const results = await Promise.all(offers.filter((o) => o.ticker).map((o) => (SQ.static ? staticOffer(o) : SQ.post('/api/offer', o)).then((r) => ({ ok: true, r })).catch((e) => ({ ok: false, e, o }))));
       const good = results.filter((x) => x.ok).map((x) => x.r);
       results.filter((x) => !x.ok).forEach((x) => out.appendChild(ui.error(`${x.o.ticker}: ${x.e.message}`)));
       if (!good.length) return;
@@ -352,6 +353,115 @@
     return box;
   }
 
+  // ─── Published website: portfolio value and offer Monte Carlo in the browser ──
+  const FX_SUB = { GBp: ['GBP', 100], GBX: ['GBP', 100], ILA: ['ILS', 100], ZAc: ['ZAR', 100] };
+  async function staticPortfolio(p) {
+    const hold = (p.holdings || []).filter((x) => x.ticker && fmt.ok(x.shares));
+    if (!hold.length) throw new Error('Add at least one holding (ticker and number of shares).');
+    const syms = hold.map((x) => x.ticker.toUpperCase());
+    const q = await api('/api/quotes?symbols=' + encodeURIComponent(syms.join(',')));
+    const curs = Array.from(new Set(syms.map((s) => (q[s] || {}).currency).filter((c) => c && c !== 'USD')));
+    const fxSyms = curs.map((c) => (FX_SUB[c] ? FX_SUB[c][0] : c) + '=X');
+    const fx = fxSyms.length ? await api('/api/quotes?symbols=' + encodeURIComponent(fxSyms.join(','))) : {};
+    const toUsd = (c) => { if (!c || c === 'USD') return 1; const [b, d] = FX_SUB[c] || [c, 1]; const r = (fx[b + '=X'] || {}).price; return r ? 1 / (r * d) : null; };
+    let total = 0, day = 0;
+    const rows = hold.map((x) => {
+      const s = x.ticker.toUpperCase(), qq = q[s] || {}, k = toUsd(qq.currency);
+      const val = fmt.ok(qq.price) && k ? qq.price * x.shares * k : null;
+      const dch = val != null && fmt.ok(qq.change) ? qq.change * x.shares * k : null;
+      total += val || 0; day += dch || 0;
+      return { ticker: s, shares: x.shares, price: qq.price, currency: qq.currency, value: val, day_change: dch, day_change_pct: qq.change_pct,
+        pnl: val != null && fmt.ok(x.cost) ? val - x.cost * x.shares * k : null, pnl_pct: fmt.ok(x.cost) && fmt.ok(qq.price) ? qq.price / x.cost - 1 : null, missing: !q[s] };
+    });
+    rows.forEach((r) => { r.weight = r.value && total ? r.value / total : 0; });
+    return { rows, total, day, day_pct: total - day ? day / (total - day) : null };
+  }
+  function renderStaticPortfolio(b, d) {
+    const pnl = d.rows.reduce((a, r) => a + (r.pnl || 0), 0);
+    b.appendChild(ui.kpis([{ label: 'Value (USD)', value: fmt.money(d.total) }, { label: 'Today', value: fmt.money(d.day), cls: fmt.cls(d.day), sub: fmt.pct(d.day_pct, 2) },
+      { label: 'Unrealised P&L', value: d.rows.some((r) => fmt.ok(r.pnl)) ? fmt.money(pnl) : '–', cls: fmt.cls(pnl), sub: 'from your cost basis' }]));
+    b.appendChild(h('div', { style: { height: '14px' } }));
+    b.appendChild(ui.panel('Holdings', ui.table([{ key: 'ticker', label: 'Ticker', l: true, cls: 'sym' }, { key: 'shares', label: 'Shares', fmt: 'num', d: 2 },
+      { key: 'price', label: 'Price', fmt: 'price' }, { key: 'value', label: 'Value $', fmt: 'big' }, { key: 'weight', label: 'Weight', fmt: 'pctu' },
+      { key: 'day_change_pct', label: 'Day', fmt: 'pct', d: 2, sign: true }, { key: 'pnl', label: 'P&L $', fmt: 'big', sign: true }, { key: 'pnl_pct', label: 'P&L %', fmt: 'pct', sign: true }],
+    d.rows, { sort: 'value', onRow: (r) => SQ.go('#/t/' + enc(r.ticker)), csv: 'portfolio.csv' }),
+    { cap: 'Holdings are saved on this device only. Risk decomposition, optimizers, crisis replays and Monte Carlo for the portfolio run in the local edition.' }));
+  }
+
+  function vestSchedule(start, years, cliffMonths, freq) {
+    const step = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 }[freq] || 3, total = Math.round(years * 12);
+    const d0 = new Date(start + 'T12:00:00'), add = (m) => { const d = new Date(d0); d.setMonth(d.getMonth() + m); return d.toISOString().slice(0, 10); };
+    const out = [];
+    const cliff = Math.min(Math.max(0, cliffMonths || 0), total);
+    if (cliff > 0) out.push({ date: add(cliff), fraction: cliff / total });
+    for (let m = (cliff > 0 ? cliff : 0) + step; m <= total; m += step) out.push({ date: add(m), fraction: step / total });
+    const sum = out.reduce((a, v) => a + v.fraction, 0);
+    if (out.length && Math.abs(sum - 1) > 1e-9) out[out.length - 1].fraction += 1 - sum;
+    return out;
+  }
+  function pct(sorted, p) { if (!sorted.length) return null; const i = Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1)))); return sorted[i]; }
+  function normCdf(x) { const t = 1 / (1 + 0.2316419 * Math.abs(x)), d = 0.3989423 * Math.exp(-x * x / 2); const pr = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return x > 0 ? 1 - pr : pr; }
+  async function staticOffer(o) {
+    const sym = (o.ticker || '').toUpperCase();
+    const ch = await api(`/api/ticker/${enc(sym)}/chart?range=10Y`);
+    const t = ch.bars.t, c = ch.bars.c;
+    const spot = c[c.length - 1];
+    const lr = []; for (let i = Math.max(1, c.length - 1260); i < c.length; i++) if (c[i] > 0 && c[i - 1] > 0) lr.push(Math.log(c[i] / c[i - 1]));
+    const mean = lr.reduce((a, v) => a + v, 0) / lr.length, sd = Math.sqrt(lr.reduce((a, v) => a + (v - mean) ** 2, 0) / (lr.length - 1));
+    const drift = o.drift === 'historical' ? mean : o.drift === 'riskfree' ? 0.04 / 252 - sd * sd / 2 : -sd * sd / 2;
+    const resid = lr.map((v) => v - mean);
+    const today = new Date().toISOString().slice(0, 10);
+    const sched = vestSchedule(o.start || today, +o.years || 4, +o.cliff_months || 12, o.frequency || 'quarterly');
+    const avg30 = c.slice(-30).reduce((a, v) => a + v, 0) / Math.min(30, c.length);
+    const grantPrice = fmt.ok(o.grant_price) ? +o.grant_price : avg30;
+    const isOpt = (o.kind || 'rsu') === 'option';
+    const units = fmt.ok(o.units) && o.units > 0 ? +o.units : isOpt ? 1000 : (+o.grant_value || 100000) / grantPrice;
+    const strike = isOpt ? (fmt.ok(o.strike) ? +o.strike : spot) : null;
+    const tdays = (d) => Math.max(0, Math.round((new Date(d + 'T12:00:00') - new Date(today + 'T12:00:00')) / 864e5 * 252 / 365));
+    const steps = sched.map((v) => tdays(v.date)), P = 4000, block = 5;
+    const vals = sched.map(() => new Float64Array(P)), tot = new Float64Array(P);
+    const closeOn = (d) => { let k = -1; for (let i = 0; i < t.length; i++) { if (t[i] <= d) k = i; else break; } return k >= 0 ? c[k] : null; };
+    for (let p = 0; p < P; p++) {
+      let logS = Math.log(spot), day = 0, pos = 0, left = 0;  // block bootstrap: 5-day blocks of demeaned returns
+      const order = steps.map((s, i) => [s, i]).sort((a, b) => a[0] - b[0]);
+      for (const [s, i] of order) {
+        while (day < s) {
+          if (left === 0) { pos = Math.floor(Math.random() * (resid.length - block)); left = block; }
+          logS += resid[pos] + drift; pos++; left--; day++;
+        }
+        const past = sched[i].date <= today, px = past ? closeOn(sched[i].date) || spot : Math.exp(logS);
+        const v = isOpt ? Math.max(px - strike, 0) * units * sched[i].fraction : px * units * sched[i].fraction;
+        vals[i][p] = v; tot[p] += v;
+      }
+    }
+    const stat = (arr) => { const s = Array.from(arr).sort((a, b) => a - b); return { mean: s.reduce((a, v) => a + v, 0) / s.length, p5: pct(s, 0.05), p25: pct(s, 0.25), p50: pct(s, 0.5), p75: pct(s, 0.75), p95: pct(s, 0.95), s }; };
+    const grantValue = units * grantPrice;
+    const vests = sched.map((v, i) => {
+      const st = stat(vals[i]);
+      const out = { date: v.date, fraction: v.fraction, units: units * v.fraction, past: v.date <= today, mean: st.mean, p5: st.p5, p25: st.p25, p50: st.p50, p75: st.p75, p95: st.p95 };
+      if (isOpt) { out.mean_intrinsic = st.mean; out.prob_underwater = st.s.filter((x) => x <= 0).length / P; }
+      else out.prob_below_grant = st.s.filter((x) => x < grantValue * v.fraction).length / P;
+      return out;
+    });
+    const T = stat(tot);
+    const total = { mean: T.mean, p5: T.p5, p25: T.p25, p50: T.p50, p75: T.p75, p95: T.p95 };
+    const result = { units, grant_price: grantPrice, grant_value: grantValue, spot, vests, total, method: 'bootstrap (browser)', drift: o.drift || 'zero' };
+    if (isOpt) {
+      const vol = sd * Math.sqrt(252), Tm = +o.expiry_years || 10, r = 0.04;
+      const d1 = (Math.log(spot / strike) + (r + vol * vol / 2) * Tm) / (vol * Math.sqrt(Tm)), d2 = d1 - vol * Math.sqrt(Tm);
+      const bs = spot * normCdf(d1) - strike * Math.exp(-r * Tm) * normCdf(d2);
+      Object.assign(result, { strike, vol, bs_value_per_option: bs, bs_value_total: bs * units });
+    } else {
+      total.prob_below_grant_value = T.s.filter((x) => x < grantValue).length / P;
+      total.expected_vs_grant = T.mean / grantValue - 1;
+    }
+    const tail = c.slice(-1260);
+    let pk = -Infinity, mdd = 0; tail.forEach((v) => { pk = Math.max(pk, v); mdd = Math.min(mdd, v / pk - 1); });
+    const q = await api('/api/quotes?symbols=' + enc(sym)).catch(() => ({}));
+    return { input: { ...o, ticker: sym }, schedule: sched, result,
+      context: { ticker: sym, name: (q[sym] || {}).name, price: spot, currency: ch.currency, vol_1y: sd * Math.sqrt(252), garch_long_run: null, max_drawdown_5y: mdd } };
+  }
+
   // ─── Calendar ─────────────────────────────────────────────────────────
   SQ.views.calendar = async function (view) {
     view.appendChild(pageHead('Calendar', 'Earnings dates for the semiconductor universe and the wider market, and upcoming economic releases (Yahoo Finance).'));
@@ -383,7 +493,15 @@
       s[k] = parseInt(e.target.value, 10);
       try { Object.assign(SQ.settings, await SQ.put('/api/settings', { [k]: s[k] })); ui.toast('Saved'); SQ.live.tick(true); } catch (err) { ui.toast(err.message); }
     } });
-    g.appendChild(ui.panel('Refresh', h('div', { class: 'form' },
+    if (SQ.static) {
+      const m = (SQ.st && SQ.st.meta) || {};
+      g.appendChild(ui.panel('Data & updates', h('div', null, ui.kv([['Published', fmt.dateTime(m.built_at)], ['Companies with full analysis', String((m.full || []).length)],
+        ['Quotes, heatmaps, screener, 1-day charts', 'every ~15 min in market hours'], ['Scores, longer charts, breadth', 'hourly'],
+        ['Risk, volatility, options, factors, analysts', 'every 3 hours'], ['Fundamentals, ownership, filings', 'daily']]),
+      h('div', { class: 't-tools', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', type: 'button', onclick: SQ.install }, 'Install as an app'))),
+      { cap: 'This page checks for a new data build every minute and updates prices in place. Exchange delays from Yahoo still apply.' }));
+    }
+    if (!SQ.static) g.appendChild(ui.panel('Refresh', h('div', { class: 'form' },
       h('label', { class: 'field' }, h('span', null, 'Quotes while a market is open (s)'), num('quote_refresh_seconds')),
       h('label', { class: 'field' }, h('span', null, 'Quotes while all are closed (s)'), num('closed_refresh_seconds')),
       h('label', { class: 'field' }, h('span', null, '1-minute chart refresh (s)'), num('intraday_refresh_seconds'))),

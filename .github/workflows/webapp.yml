@@ -1,0 +1,102 @@
+name: Web app (publish + deploy)
+
+# Publishes the web edition (local/ dashboard as static files + data/*.json, made by
+# `semiquant publish`) and deploys it with this repo's GitHub Pages:
+#   https://chennakeshavadasa.github.io/career-semi-quant/app/     (the Android app loads this)
+# The rest of the Pages site (index.html, 404.html, public/) is deployed alongside, unchanged.
+#
+# One-time setting: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
+#
+# Refresh tiers inside `semiquant publish` (quotes every run, scores hourly, risk/options
+# 3-hourly, fundamentals daily) plus the cache below keep a 15-minute schedule light.
+# Live prices don't wait for this: the app streams them from Yahoo directly.
+
+on:
+  schedule:
+    - cron: "4,19,34,49 7-23 * * 1-5"   # every 15 min: Europe, US pre-market, session, after-hours
+    - cron: "4,34 0-6 * * 1-5"          # every 30 min overnight (Asian markets)
+    - cron: "4 */3 * * 0,6"             # weekends: every 3 hours
+  push:
+    branches: [master]
+    paths: ["local/semiquant/**", "index.html", "404.html", "public/**", ".github/workflows/webapp.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: webapp
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache keys
+        id: k
+        run: |
+          echo "hour=webapp-$(date -u +%Y%m%d%H)" >> "$GITHUB_OUTPUT"
+          echo "week=webapp-pip-$(date -u +%G%V)" >> "$GITHUB_OUTPUT"
+
+      # Previous output + Yahoo cache: each run only redoes what is due.
+      - name: Restore published data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.semiquant/cache
+            .qt-out
+          key: ${{ steps.k.outputs.hour }}
+          restore-keys: webapp-2
+
+      - name: Restore pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ steps.k.outputs.week }}
+          restore-keys: webapp-pip-
+
+      - name: Publish web edition
+        timeout-minutes: 22
+        continue-on-error: true   # a Yahoo hiccup keeps the previous data, never blocks the deploy
+        run: |
+          python -m pip install --quiet ./local
+          semiquant publish --out .qt-out --budget 12
+
+      - name: Assemble site
+        run: |
+          set -e
+          mkdir -p _site
+          cp index.html _site/
+          [ -f 404.html ] && cp 404.html _site/
+          cp -r public _site/public
+          if [ -f .qt-out/index.html ]; then
+            mkdir -p _site/app && cp -r .qt-out/. _site/app/
+          else
+            echo "::warning::no published web edition in this run"
+          fi
+          touch _site/.nojekyll
+          du -sh _site _site/app 2>/dev/null || true
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

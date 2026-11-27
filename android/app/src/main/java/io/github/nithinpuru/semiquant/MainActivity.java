@@ -29,7 +29,7 @@ import java.io.OutputStream;
 
 /**
  * Semi Quant Terminal for Android: a full-screen WebView on the web edition
- * (nithinpuru.github.io/quant-terminal/app/). The page does all the work: live
+ * (chennakeshavadasa.github.io/career-semi-quant/app/, published by this repo). The page does all the work: live
  * prices stream from Yahoo, analytics come from the data published every 15
  * minutes, and the service worker keeps the last data for offline use. This
  * activity adds what a browser normally provides: file downloads, the share
@@ -37,11 +37,11 @@ import java.io.OutputStream;
  */
 public class MainActivity extends Activity {
 
-    static final String HOST = "nithinpuru.github.io";
-    static final String APP_PATH = "/quant-terminal/app";
+    static final String HOST = "chennakeshavadasa.github.io";
+    static final String APP_PATH = "/career-semi-quant/app";
     static final String HOME = "https://" + HOST + APP_PATH + "/";
     static final String OFFLINE = "file:///android_asset/offline.html";
-    static final int BG = 0xFF0C121B;
+    static final int BG = 0xFF000000;
 
     /**
      * Injected after each page load. Downloads made by the page (CSV, Excel, chart PNG)

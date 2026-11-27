@@ -27,7 +27,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="nithinpuru.github.io" android:pathPrefix="/quant-terminal/app" />
+                <data android:scheme="https" android:host="chennakeshavadasa.github.io" android:pathPrefix="/career-semi-quant/app" />
             </intent-filter>
         </activity>
     </application>

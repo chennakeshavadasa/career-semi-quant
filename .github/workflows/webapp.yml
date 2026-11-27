@@ -20,6 +20,12 @@ on:
     branches: [master]
     paths: ["local/semiquant/**", "index.html", "404.html", "public/**", ".github/workflows/webapp.yml"]
   workflow_dispatch:
+  # GitHub's branch-based "pages build and deployment" republishes the plain repo files (no app/)
+  # after every push to master, so the app 404s until the next run here. Until Settings -> Pages
+  # -> Build and deployment -> Source is "GitHub Actions" (which stops those builds), put the
+  # last built app back right after one: the check job skips it when the app is still live,
+  # and the restore skips the publish (about a minute).
+  page_build:
 
 permissions:
   contents: read
@@ -31,7 +37,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      needed: ${{ steps.c.outputs.needed }}
+    steps:
+      - id: c
+        run: |
+          if [ "${{ github.event_name }}" != "page_build" ]; then echo "needed=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          sleep 30  # let the branch deployment settle
+          if curl -sf -o /dev/null "https://chennakeshavadasa.github.io/career-semi-quant/app/data/meta.json?t=$(date +%s)"; then
+            echo "The app is live; nothing to restore."
+          else
+            echo "The app is missing after a branch deployment; restoring the last build."
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: check
+    if: needs.check.outputs.needed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -65,6 +89,7 @@ jobs:
           restore-keys: webapp-pip-
 
       - name: Publish web edition
+        if: github.event_name != 'page_build'  # a restore redeploys the cached build as it is
         timeout-minutes: 22
         continue-on-error: true   # a Yahoo hiccup keeps the previous data, never blocks the deploy
         run: |

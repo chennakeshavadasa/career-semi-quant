@@ -18,7 +18,9 @@
     };
   }
   const NAMED = ['accent', 'up', 'down', 'warn', 'violet', 'teal', 'pink', 'ink', 'ink2', 'ink3', 'ink4'];
-  const col = (t, c) => (NAMED.includes(c) ? t[c] : c);
+  // Series colours. In the Terminal theme --ink-3 is the amber label colour, so a neutral series
+  // asked for as 'ink3' is drawn grey there (else it looks like the main, amber series).
+  const col = (t, c) => (c === 'ink3' && t.dark ? '#a3a3a3' : NAMED.includes(c) ? t[c] : c);
   // Terminal: orange, cyan, yellow, violet... so neighbouring series never look alike.
   const palette = (t) => (t.dark ? [t.accent, t.teal, t.warn, t.violet, t.pink, t.up, t.down, t.ink2]
     : [t.accent, t.warn, t.violet, t.teal, t.pink, t.up, t.down, t.ink3, t.ink2]);
@@ -59,13 +61,45 @@
       const t = theme();
       const spec = build(t);
       const layout = merge(baseLayout(t), spec.layout || {});
+      if (el.clientWidth && el.clientWidth < 560) { // phones: tighter margins, no colliding point labels
+        const m = layout.margin || {};
+        layout.margin = { ...m, l: Math.min(m.l ?? 50, 44), r: Math.min(m.r ?? 14, 10) };
+        for (const tr of spec.data || []) {
+          if (tr.type === 'scatter' && /text/.test(tr.mode || '') && (tr.x || []).length > 2) { // names stay in the tap label
+            tr.mode = (tr.mode || '').replace(/\+?text/, '').replace(/^\+/, '') || 'markers'; // names stay in the tap label
+            if (!tr.hovertemplate) tr.hovertemplate = '%{text}<extra></extra>';
+          }
+          if (tr.textfont && tr.textfont.size && tr.textfont.size < 11 && tr.type !== 'heatmap') tr.textfont = { ...tr.textfont, size: 11 };
+        }
+      } else if (el.clientWidth && el.clientWidth < 900 && window.innerWidth <= 980) { // tablets, landscape phones
+        for (const tr of spec.data || []) {
+          if (tr.type === 'scatter' && /text/.test(tr.mode || '') && (tr.x || []).length > 2) {
+            tr.mode = (tr.mode || '').replace(/\+?text/, '').replace(/^\+/, '') || 'markers';
+            if (!tr.hovertemplate) tr.hovertemplate = '%{text}<extra></extra>';
+          }
+        }
+      }
+      el._sqDrawnW = el.clientWidth || 0;
       Plotly.react(el, spec.data, layout, { ...CONFIG, ...(spec.config || {}) });
     };
     el._sqDraw = draw;
     draw();
     registry.add(el);
+    if (sizer) sizer.observe(el);
     return el;
   }
+  // Keep every plot exactly as wide as its box (orientation changes, panels drawn while hidden).
+  const sizer = window.ResizeObserver ? new ResizeObserver((entries) => {
+    for (const en of entries) {
+      const el = en.target, w = Math.round(en.contentRect.width);
+      if (!w || el._sqW === w || !el._fullLayout) { el._sqW = w; continue; }
+      el._sqW = w;
+      try { // a real change of width (first layout, rotation) re-fits labels; small ones just resize
+        if (Math.abs(w - (el._sqDrawnW || 0)) > 40 && el._sqDraw) el._sqDraw();
+        Plotly.Plots.resize(el); // react() keeps the size of the first draw; resize re-measures the box
+      } catch (e) { /* purged */ }
+    }
+  }) : null;
   window.addEventListener('sq-theme', () => {
     for (const el of Array.from(registry)) {
       if (!document.body.contains(el)) { registry.delete(el); continue; }
@@ -87,51 +121,111 @@
 
   // ─── Plotly builders ──────────────────────────────────────────────────
   // series: [{name, t, v, color, dash, width, fill, y2, mode, shape, opacity}]
+  // Category labels on narrow plots. "2026-07-31" -> "Jul '26" (null if two periods would merge).
+  const shortDates = (cats) => {
+    if (!cats || !cats.length || !cats.every((v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v))) return null;
+    const f = (v) => { const d = new Date(v.slice(0, 10) + 'T00:00:00Z'); return d.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }) + " '" + String(d.getUTCFullYear()).slice(2); };
+    const out = cats.map(f);
+    return new Set(out).size === out.length ? out : null;
+  };
+  // Would these labels collide on a plot w px wide? (11 px mono ≈ 6.8 px a character)
+  const collide = (labels, w) => {
+    const len = labels.map((v) => Math.min(String(v).length, 30));
+    return len.reduce((a, b) => a + b, 0) * 6.8 + labels.length * 10 > w - 50 || Math.max(...len) * 6.8 + 8 > (w - 60) / labels.length;
+  };
+
   function lines(el, series, o = {}) {
-    return plot(el, (t) => ({
-      data: series.filter((s) => s && s.t && s.t.length).map((s, i) => ({
-        type: 'scatter', mode: s.mode || 'lines', name: s.name, x: s.t, y: s.v, yaxis: s.y2 ? 'y2' : 'y',
-        line: { color: col(t, s.color) || palette(t)[i % 9], width: s.width || 1.6, dash: s.dash || 'solid', shape: s.shape || 'linear' },
-        fill: s.fill || undefined, fillcolor: s.fillcolor ? col(t, s.fillcolor) : undefined, opacity: s.opacity,
-        hovertemplate: s.hover || ('%{y:' + (s.y2 ? (o.y2fmt || o.yfmt || ',.2f') : (o.yfmt || ',.2f')) + '}'),
-        connectgaps: false, showlegend: s.legend !== false,
-      })),
-      layout: merge({
-        yaxis: { tickformat: o.yfmt || undefined, title: o.ytitle ? { text: o.ytitle, font: { size: 11 } } : undefined, type: o.logy ? 'log' : undefined, rangemode: o.zero ? 'tozero' : undefined },
-        yaxis2: o.y2 ? { overlaying: 'y', side: 'right', tickformat: o.y2fmt, showgrid: false, ...axis(t), title: o.y2title ? { text: o.y2title, font: { size: 11 } } : undefined } : undefined,
-        xaxis: { type: o.xtype || undefined, title: o.xtitle ? { text: o.xtitle, font: { size: 11 } } : undefined, tickformat: o.xfmt },
-        shapes: (o.shapes || []).map((sh) => ({ ...sh, line: { color: col(t, (sh.line || {}).color || 'ink4'), width: (sh.line || {}).width || 1, dash: (sh.line || {}).dash || 'dot' } })),
-        annotations: o.annotations || [], showlegend: o.legend !== false, hovermode: o.hovermode || 'x unified',
-        margin: o.margin,
-      }, o.layout || {}),
-    }));
+    return plot(el, (t) => {
+      let ser = series;
+      const lw = el.clientWidth || 0;
+      if (o.xtype === 'category' && lw && lw < 900) { // short period labels when the dates would collide
+        const first = ser.find((x) => x && x.t && x.t.length);
+        const sd = first && collide(first.t, lw) && shortDates(first.t);
+        if (sd) {
+          const map = new Map(first.t.map((c, i) => [c, sd[i]]));
+          ser = ser.map((x) => (x && x.t ? { ...x, t: x.t.map((v) => map.get(v) ?? v) } : x));
+        }
+      }
+      return {
+        data: ser.filter((s) => s && s.t && s.t.length).map((s, i) => ({
+          type: 'scatter', mode: s.mode || 'lines', name: s.name, x: s.t, y: s.v, yaxis: s.y2 ? 'y2' : 'y',
+          line: { color: col(t, s.color) || palette(t)[i % 9], width: s.width || 1.6, dash: s.dash || 'solid', shape: s.shape || 'linear' },
+          fill: s.fill || undefined, fillcolor: s.fillcolor ? col(t, s.fillcolor) : undefined, opacity: s.opacity,
+          hovertemplate: s.hover || ('%{y:' + (s.y2 ? (o.y2fmt || o.yfmt || ',.2f') : (o.yfmt || ',.2f')) + '}'),
+          connectgaps: false, showlegend: s.legend !== false,
+        })),
+        layout: merge({
+          yaxis: { tickformat: o.yfmt || undefined, title: o.ytitle ? { text: o.ytitle, font: { size: 11 } } : undefined, type: o.logy ? 'log' : undefined, rangemode: o.zero ? 'tozero' : undefined },
+          yaxis2: o.y2 ? { overlaying: 'y', side: 'right', tickformat: o.y2fmt, showgrid: false, ...axis(t), title: o.y2title ? { text: o.y2title, font: { size: 11 } } : undefined } : undefined,
+          xaxis: { type: o.xtype || undefined, title: o.xtitle ? { text: o.xtitle, font: { size: 11 } } : undefined, tickformat: o.xfmt },
+          shapes: (o.shapes || []).map((sh) => ({ ...sh, line: { color: col(t, (sh.line || {}).color || 'ink4'), width: (sh.line || {}).width || 1, dash: (sh.line || {}).dash || 'dot' } })),
+          annotations: o.annotations || [], showlegend: o.legend !== false, hovermode: o.hovermode || 'x unified',
+          margin: o.margin,
+        }, o.layout || {}),
+      };
+    });
   }
 
   // bars: {x, y, name, colors: array|'sign'|named, text, horizontal, hover}
-  function bars(el, sets, o = {}) {
-    const arr = Array.isArray(sets) ? sets : [sets];
-    return plot(el, (t) => ({
-      data: arr.map((s, i) => {
-        let c = s.colors;
-        if (c === 'sign') c = (s.horizontal ? s.x : s.y).map((v) => (v >= 0 ? t.up : t.down));
-        else if (Array.isArray(c)) c = c.map((x) => col(t, x));
-        else c = col(t, c) || palette(t)[i % 9];
-        return {
-          type: 'bar', name: s.name, x: s.horizontal ? s.x : s.x, y: s.y, orientation: s.horizontal ? 'h' : 'v',
-          marker: { color: c, opacity: s.opacity ?? 0.85, line: { width: 0 } }, text: s.text, textposition: s.text ? 'outside' : undefined,
-          textfont: { size: 10.5, color: t.ink2 }, cliponaxis: false,
-          hovertemplate: s.hover || (s.horizontal ? '%{y}: %{x:' + (o.xfmt || o.yfmt || ',.2f') + '}<extra></extra>' : '%{x}: %{y:' + (o.yfmt || ',.2f') + '}<extra>' + (s.name || '') + '</extra>'),
-        };
-      }),
-      layout: merge({
-        barmode: o.barmode || 'group', bargap: 0.25, showlegend: arr.length > 1 && o.legend !== false, hovermode: 'closest',
-        yaxis: { tickformat: o.horizontal ? undefined : o.yfmt, automargin: true, autorange: o.horizontal ? 'reversed' : undefined, title: o.ytitle ? { text: o.ytitle, font: { size: 11 } } : undefined,
-          type: o.horizontal ? 'category' : undefined, dtick: o.horizontal ? 1 : undefined, tickfont: o.horizontal ? { size: 10.5 } : undefined },
-        xaxis: { tickformat: o.horizontal ? (o.xfmt || o.yfmt) : undefined, type: o.xtype, title: o.xtitle ? { text: o.xtitle, font: { size: 11 } } : undefined },
-        shapes: (o.shapes || []).map((sh) => ({ ...sh, line: { color: col(t, (sh.line || {}).color || 'ink4'), width: 1, dash: (sh.line || {}).dash || 'dot' } })),
-        margin: o.margin,
-      }, o.layout || {}),
-    }));
+  // Narrow plots (phones, tablets): category names that would collide make the bars horizontal
+  // (names get their own lines), dates get short, and horizontal bars get room per bar and for
+  // their value labels. Decided at draw time, so a rotation re-fits them.
+  function bars(el, sets, o0 = {}) {
+    const arr0 = Array.isArray(sets) ? sets : [sets];
+    if (el._sqH0 === undefined) el._sqH0 = el.style.height || '';
+    const baseH = () => { const prev = el.style.height; el.style.height = el._sqH0; const b = el.clientHeight; el.style.height = prev; return b; };
+    return plot(el, (t) => {
+      let arr = arr0, o = o0, height = null;
+      const w = el.clientWidth || 0;
+      const dates = Array.isArray(arr[0] && arr[0].x) && arr[0].x.every((v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v));
+      if (w && w < 900 && !o.horizontal && arr.length && !arr.some((x) => x.horizontal) && Array.isArray(arr[0].x)
+          && arr[0].x.length && arr[0].x.every((v) => typeof v === 'string') && !(dates && o.xtype !== 'category') // a date axis spaces its own ticks
+          && collide(arr[0].x, w)) {
+        const cats = arr[0].x;
+        const sd = shortDates(cats);
+        if (sd && !collide(sd, w)) {
+          const map = new Map(cats.map((c, i) => [c, sd[i]]));
+          arr = arr.map((x) => ({ ...x, x: x.x.map((v) => map.get(v) ?? v) }));
+        } else if (!(o.shapes || []).length) { // names get their own lines
+          arr = arr.map((x) => ({ ...x, horizontal: true, x: x.y, y: x.x }));
+          o = { ...o, horizontal: true, xfmt: o.xfmt || o.yfmt, xtitle: o.ytitle, ytitle: undefined };
+        } else {
+          o = { ...o, layout: merge(o.layout || {}, { xaxis: { tickangle: -40 } }) };
+        }
+      }
+      if (w && w < 900 && window.innerWidth <= 980 && (o.horizontal || arr.some((x) => x.horizontal))) {
+        const n = Math.max(...arr.map((x) => ((x.horizontal ? x.y : x.x) || []).length), 0);
+        if (n) height = n * (arr.length > 1 ? 10 + 9 * arr.length : 19) + 60;
+        if (arr.some((x) => x.text)) { // value labels sit outside the bar ends: keep room for them
+          const vals = arr.flatMap((x) => (x.horizontal ? x.x : x.y) || []).filter(fmt.ok);
+          const mn = Math.min(0, ...vals), mx = Math.max(0, ...vals), span = mx - mn || 1;
+          o = { ...o, layout: merge({ xaxis: { range: [mn - (mn < 0 ? 0.32 * span : 0), mx + 0.26 * span] } }, o.layout || {}) };
+        }
+      }
+      el.style.height = height ? Math.max(height, baseH()) + 'px' : el._sqH0;
+      return {
+        data: arr.map((s, i) => {
+          let c = s.colors;
+          if (c === 'sign') c = (s.horizontal ? s.x : s.y).map((v) => (v >= 0 ? t.up : t.down));
+          else if (Array.isArray(c)) c = c.map((x) => col(t, x));
+          else c = col(t, c) || palette(t)[i % 9];
+          return {
+            type: 'bar', name: s.name, x: s.x, y: s.y, orientation: s.horizontal ? 'h' : 'v',
+            marker: { color: c, opacity: s.opacity ?? 0.85, line: { width: 0 } }, text: s.text, textposition: s.text ? 'outside' : undefined,
+            textfont: { size: 10.5, color: t.ink2 }, cliponaxis: false,
+            hovertemplate: s.hover || (s.horizontal ? '%{y}: %{x:' + (o.xfmt || o.yfmt || ',.2f') + '}<extra>' + (s.name || '') + '</extra>' : '%{x}: %{y:' + (o.yfmt || ',.2f') + '}<extra>' + (s.name || '') + '</extra>'),
+          };
+        }),
+        layout: merge({
+          barmode: o.barmode || 'group', bargap: 0.25, showlegend: arr.length > 1 && o.legend !== false, hovermode: 'closest',
+          yaxis: { tickformat: o.horizontal ? undefined : o.yfmt, automargin: true, autorange: o.horizontal ? 'reversed' : undefined, title: o.ytitle ? { text: o.ytitle, font: { size: 11 } } : undefined,
+            type: o.horizontal ? 'category' : undefined, dtick: o.horizontal ? 1 : undefined, tickfont: o.horizontal ? { size: w && w < 560 ? 11 : 10.5 } : undefined },
+          xaxis: { tickformat: o.horizontal ? (o.xfmt || o.yfmt) : undefined, type: o.xtype, title: o.xtitle ? { text: o.xtitle, font: { size: 11 } } : undefined },
+          shapes: (o.shapes || []).map((sh) => ({ ...sh, line: { color: col(t, (sh.line || {}).color || 'ink4'), width: 1, dash: (sh.line || {}).dash || 'dot' } })),
+          margin: o.margin,
+        }, o.layout || {}),
+      };
+    });
   }
 
   // heatmap: {z, x, y, text}; o.div (diverging around zmid), o.fmt
@@ -157,8 +251,8 @@
         data: [{
           type: 'heatmap', z, x: d.x, y: d.y, colorscale: o.colors || (o.div === false ? seq : dv), zmin, zmax, xgap: 1.5, ygap: 1.5,
           text: shown, customdata: full,
-          texttemplate: o.showText === false || cw < 16 ? undefined : '%{text}',
-          textfont: { size: compact ? Math.max(8, Math.min(10, cw / 3.2)) : (o.textSize || 10.5), family: t.mono },
+          texttemplate: o.showText === false || cw < 18 ? undefined : '%{text}',
+          textfont: { size: compact ? Math.max(9, Math.min(10.5, cw / 3)) : (o.textSize || 10.5), family: t.mono },
           hovertemplate: '%{y} · %{x}: %{customdata}<extra></extra>', showscale: false,
         }],
         layout: { hovermode: 'closest', showlegend: false, xaxis: { side: o.xtop ? 'top' : 'bottom', type: 'category', showgrid: false },

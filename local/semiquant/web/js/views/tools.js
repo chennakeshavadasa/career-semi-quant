@@ -226,8 +226,8 @@
       const pts = fr.points || [];
       charts.plot(fEl, (t) => ({
         data: [{ type: 'scatter', mode: 'lines', name: 'Frontier', x: pts.map((x) => x.vol), y: pts.map((x) => x.ret), line: { color: t.accent, width: 2 }, hovertemplate: 'vol %{x:.1%} · ret %{y:.1%}<extra></extra>' },
-          { type: 'scatter', mode: 'markers+text', name: 'Assets', x: (fr.assets || []).map((a) => a.vol), y: (fr.assets || []).map((a) => a.ret), text: (fr.assets || []).map((a) => a.ticker), textposition: 'top center', marker: { color: t.ink4, size: 8 }, textfont: { size: 10.5, color: t.ink3 } },
-          { type: 'scatter', mode: 'markers+text', name: 'Optimizers', x: opt.map(([, v]) => v.vol), y: opt.map(([, v]) => v.exp_return), text: opt.map(([k]) => names[k] || k), textposition: 'bottom center', marker: { color: t.warn, size: 10 }, textfont: { size: 10.5, color: t.ink2 } },
+          { type: 'scatter', mode: 'markers+text', name: 'Assets', x: (fr.assets || []).map((a) => a.vol), y: (fr.assets || []).map((a) => a.ret), text: (fr.assets || []).map((a) => a.ticker), textposition: 'top center', marker: { color: t.ink4, size: 8 }, textfont: { size: 10.5, color: t.ink3 }, hovertemplate: '%{text}: vol %{x:.1%} · ret %{y:.1%}<extra></extra>' },
+          { type: 'scatter', mode: 'markers+text', name: 'Optimizers', x: opt.map(([, v]) => v.vol), y: opt.map(([, v]) => v.exp_return), text: opt.map(([k]) => names[k] || k), textposition: 'bottom center', marker: { color: t.warn, size: 10 }, textfont: { size: 10.5, color: t.ink2 }, hovertemplate: '%{text}: vol %{x:.1%} · ret %{y:.1%}<extra></extra>' },
           { type: 'scatter', mode: 'markers', name: 'Current', x: [r.vol], y: [r.exp_return], marker: { color: t.down, size: 14, symbol: 'diamond' } }],
         layout: { hovermode: 'closest', xaxis: { tickformat: '.0%', title: { text: 'volatility' } }, yaxis: { tickformat: '.0%', title: { text: 'expected return' } } },
       }));
@@ -547,7 +547,9 @@
     const st = h('div');
     g.appendChild(ui.panel('Data & storage', st));
     ui.async(st, () => api('/api/status'), (b, d) => b.appendChild(ui.kv([['Version', d.version], ['Data source', 'Yahoo Finance via yfinance ' + ((d.data || {}).yfinance || '')],
-      ['Saved in', d.home], ['Cache hits / misses', `${(d.data.cache || {}).hits} / ${(d.data.cache || {}).misses}`], ['Served stale (Yahoo throttled)', String((d.data.cache || {}).stale_served)],
+      ['Saved in', d.home],
+      (d.data.cache || {}).hits != null ? ['Cache hits / misses', `${d.data.cache.hits} / ${d.data.cache.misses}`] : null,
+      (d.data.cache || {}).stale_served != null ? ['Served stale (Yahoo throttled)', String(d.data.cache.stale_served)] : null,
       ['US market', (d.market || {}).message || '–']])), 120);
     g.appendChild(ui.panel('Share with a friend', h('div', { class: 'note' },
       h('p', null, h('b', null, 'Share a result: '), 'every company page has a ', h('b', null, 'Share'), ' button that saves one HTML file with all tabs (interactive charts, frozen numbers). It opens in any browser, no install needed. ', h('b', null, 'Excel'), ' saves the raw data.'),

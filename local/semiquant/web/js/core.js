@@ -7,6 +7,8 @@
   SQ.views = SQ.views || {};
   const SNAP = window.SQ_SNAPSHOT || null;
   SQ.snapshot = SNAP;
+  const STATIC = window.SQ_STATIC || null; // published website (see static.js)
+  SQ.static = STATIC;
 
   // ─── DOM ──────────────────────────────────────────────────────────────
   const $ = (s, r = document) => r.querySelector(s);
@@ -155,6 +157,7 @@
     throw new Error('This view is not included in the shared snapshot. Run the tool locally for live data.');
   }
   async function api(path, opts = {}) {
+    if (STATIC) return SQ.staticApi(path, opts);
     if (SNAP) return snapLookup(path);
     const key = (opts.method || 'GET') + ' ' + path + (opts.body ? JSON.stringify(opts.body) : '');
     if (!opts.body && inflight.has(key)) return inflight.get(key);
@@ -303,7 +306,7 @@
       view.innerHTML = '';
       $('#main').scrollTop = 0;
     }
-    $$('#nav a').forEach((a) => a.classList.toggle('on', a.dataset.r === name));
+    $$('#nav a, #bnav a').forEach((a) => a.classList.toggle('on', a.dataset.r === name));
     const fn = SQ.views[name === 't' ? 'ticker' : name];
     current = { name, sym: (parts[1] || '').toUpperCase() };
     if (!fn) { view.innerHTML = '<div class="empty">Page not found.</div>'; return; }
@@ -425,7 +428,7 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   };
   ui.download = (url) => {
-    if (SNAP) { ui.toast('Downloads need the local tool (this is a snapshot).'); return; }
+    if (SNAP || STATIC) { ui.toast(STATIC ? SQ.LOCAL_ONLY : 'Downloads need the local tool (this is a snapshot).', 5000); return; }
     const a = h('a', { href: url, download: '' }); document.body.appendChild(a); a.click(); a.remove();
   };
 

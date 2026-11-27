@@ -325,6 +325,20 @@ def cmd_report(a) -> None:
         webbrowser.open(p.resolve().as_uri())
 
 
+def cmd_publish(a) -> None:
+    from .publish import publish
+
+    c = _console()
+    tick = _syms(a.tickers.split(",")) if a.tickers else None
+    with c.status("Publishing the static dashboard (first run fetches everything: several minutes)…"):
+        r = publish(a.out, tickers=tick, force=a.force, market=not a.no_market, budget_minutes=a.budget)
+    c.print(f"Published to [bold]{a.out}[/] in {r['seconds']} s · data {r['data_mb']} MB · "
+            f"{r['written']} files written, {r['reused']} reused, {r['failed']} failed, "
+            f"{r['deferred']} tickers' heavy analytics deferred · {r['tickers']} tickers")
+    for e in r["errors"]:
+        c.print(f"[dim]  {e}[/]")
+
+
 def cmd_export(a) -> None:
     from .service import export
 
@@ -400,6 +414,14 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("--out", help="output file or folder (default ~/.semiquant/exports)")
     s.add_argument("--no-open", action="store_true")
     s.set_defaults(fn=cmd_report)
+
+    s = sub.add_parser("publish", help="build the static website (UI + precomputed data) into a folder")
+    s.add_argument("--out", required=True, help="output folder, e.g. dist/quant-terminal")
+    s.add_argument("--tickers", help="comma list of tickers to publish with full pages (default: semis + US mega caps)")
+    s.add_argument("--force", action="store_true", help="rebuild every payload, ignoring refresh tiers")
+    s.add_argument("--no-market", action="store_true", help="skip the market, screener and calendar pages")
+    s.add_argument("--budget", type=float, help="minutes after which heavy analytics are left for the next run")
+    s.set_defaults(fn=cmd_publish)
 
     s = sub.add_parser("export", help="Excel workbook for one ticker")
     s.add_argument("symbol")

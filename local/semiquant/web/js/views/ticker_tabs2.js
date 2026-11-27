@@ -11,7 +11,7 @@
   function loadInto(body, path, render, skel = 420) {
     const box = h('div');
     body.appendChild(box);
-    ui.async(box, () => api(path), render, skel);
+    ui.async(box, () => api(path), (b, d) => (d && d.unavailable ? b.appendChild(ui.empty(d.message)) : render(b, d)), skel);
   }
   const label = (k) => String(k).replace(/_/g, ' ').replace(/\b(pct|yoy|ttm|roe|roa|roic|eps|ebitda|fcf|sbc|rnd|dso)\b/gi, (m) => m.toUpperCase()).replace(/^\w/, (c) => c.toUpperCase());
 

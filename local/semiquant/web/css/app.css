@@ -63,9 +63,9 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--rule-str
 .nowrap { white-space: nowrap; }
 
 /* ─── App shell ─────────────────────────────────────────────────────────── */
-.app { display: grid; grid-template-columns: var(--side-w) 1fr; grid-template-rows: var(--top-h) 1fr; height: 100vh; }
+.app { display: grid; grid-template-columns: var(--side-w) 1fr; grid-template-rows: calc(var(--top-h) + env(safe-area-inset-top)) 1fr; height: 100vh; height: 100dvh; }
 .topbar {
-  grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 0 16px 0 14px;
+  grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: env(safe-area-inset-top) 16px 0 14px;
   background: var(--card); border-bottom: 1px solid var(--rule); z-index: 20;
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: calc(var(--side-w) - 30px); color: var(--ink); }
@@ -303,10 +303,57 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
 
 /* Responsive */
 @media (max-width: 1250px) { .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g-main { grid-template-columns: minmax(0, 1fr); } }
+/* Bottom tab bar + app pages (phones, tablets, installed app) */
+.bnav { display: none; }
+.menu-list { display: grid; gap: 8px; }
+.menu-list a, .menu-list button { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 10px;
+  background: var(--card); color: var(--ink); font-size: 16px; text-align: left; cursor: pointer; }
+.menu-list a:hover, .menu-list button:hover { border-color: var(--accent); text-decoration: none; }
+.menu-list svg { width: 20px; height: 20px; stroke: var(--accent); fill: none; stroke-width: 1.6; flex: none; }
+.menu-list small { display: block; color: var(--ink-3); font-size: 12.5px; margin-top: 2px; }
+.wl-page .wl-row { padding: 11px 10px; border-bottom: 1px solid var(--rule); border-radius: 0; grid-template-columns: 1fr auto 72px; }
+.wl-page .wl-row .s { font-size: 14.5px; }
+.wl-page .wl-row .p, .wl-page .wl-row .c { font-size: 14px; }
+.wl-page .wl-row .n { grid-column: 1; }
+.wl-page .wl-row .x { grid-row: 1 / span 2; grid-column: 3; justify-self: end; align-self: center; }
 @media (max-width: 980px) {
-  :root { --side-w: 0px; }
-  .side { display: none; } .brand { min-width: 0; } .brand small { display: none; }
+  :root { --side-w: 0px; --top-h: 52px; }
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .main { grid-column: 1 / -1; }
+  .side { display: none; } .brand { min-width: 0; flex: none; } .brand > span:last-child { display: none; }
+  .topbar { gap: 8px; padding-left: 10px; padding-right: 10px; }
+  .search { min-width: 0; flex: 1 1 auto; }
+  .top-right { gap: 6px; min-width: 0; flex: 0 1 auto; }
+  .mstatus { min-width: 0; }
+  .mstatus .txt { display: block; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #theme-btn { display: none; } #install-btn { padding: 0 8px; font-size: 12.5px; }
   .g2, .g3 { grid-template-columns: minmax(0, 1fr); } .span2 { grid-column: auto; }
-  .mstatus .txt { display: none; } .view { padding: 16px 14px 50px; }
+  .mstatus .txt { font-size: 11px; } #live-time, #refresh-btn { display: none; }
+  html, body { max-width: 100%; overflow-x: hidden; }
+  .view { padding: 14px 12px 24px; }
+  .main { padding-bottom: calc(62px + env(safe-area-inset-bottom)); }
+  .bnav { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 60;
+    background: var(--card); border-top: 1px solid var(--rule); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+  .bnav a { display: flex; flex-direction: column; align-items: center; gap: 3px; font: 10.5px var(--mono); color: var(--ink-3); padding: 3px 0; }
+  .bnav a svg { width: 21px; height: 21px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+  .bnav a.on { color: var(--accent); }
+  .bnav a:hover { text-decoration: none; }
+  .search input, input.inp, select.inp, .wl-add input, textarea.inp { font-size: 16px; } /* iOS zooms smaller inputs */
+  .search kbd { display: none; } .search input { padding-right: 10px; }
+  .page-h h1, .th-name h1 { font-size: 21px; }
+  .th-wrap { gap: 10px; } .th-price .px { font-size: 28px; } .th-price .chg { font-size: 14px; }
+  .th-actions { margin-left: 0; width: 100%; } .th-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi .v { font-size: 17px; }
+  .kv { grid-template-columns: minmax(0, 1fr); }
+  .pc-main { height: 300px; } .pc-sub { height: 92px; }
+  .pc-tools > .seg + .seg, .pc-tools > span:last-child { display: none; }
+  .pc-legend { font-size: 11px; gap: 2px 10px; }
+  .chart { height: 260px; } .chart.tall { height: 340px; } .chart.short { height: 210px; }
+  .qb-row { grid-template-columns: minmax(0, 1fr) auto 68px 46px; gap: 8px; }
+  .tabs a { padding: 9px 11px; font-size: 14px; }
+  .loading-line { left: 0; }
+  .toast { left: 12px; right: 12px; bottom: calc(74px + env(safe-area-inset-bottom)); }
 }
+@media (max-width: 420px) { .qb-row svg.spark { display: none; } .qb-row { grid-template-columns: minmax(0, 1fr) auto 64px; } }
 @media print { .side, .topbar { display: none; } .app { display: block; } body { overflow: visible; } .main { overflow: visible; } }

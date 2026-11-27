@@ -28,10 +28,12 @@
   SQ.views.market = async function (view) {
     view.appendChild(h('div', { class: 'page-h' },
       h('div', null, h('h1', null, 'Markets'),
-        h('div', { class: 'sub' }, 'Live Yahoo Finance quotes, refreshed automatically (every ', String(SQ.settings.quote_refresh_seconds), ' s while markets are open). Semiconductors, US large caps across all sectors, global leaders and ETFs. Click anything to open it.')),
+        h('div', { class: 'sub' }, SQ.static
+          ? 'Yahoo Finance data published every ~15 minutes in market hours; this page checks for a new build every minute. Semiconductors, US large caps across all sectors, global leaders and ETFs. Tap anything to open it.'
+          : ['Live Yahoo Finance quotes, refreshed automatically (every ', String(SQ.settings.quote_refresh_seconds), ' s while markets are open). Semiconductors, US large caps across all sectors, global leaders and ETFs. Click anything to open it.'])),
       h('div', { class: 'actions' },
-        h('button', { class: 'btn', onclick: () => ui.download('/api/export/snapshot.html?market=true') , title: 'One HTML file with this dashboard and the screener: send it to a friend, it opens in any browser' },
-          h('span', { html: '<svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12m0-12l-4 4m4-4l4 4"/></svg>' }), 'Share snapshot'),
+        h('button', { class: 'btn', onclick: () => (SQ.static ? SQ.shareLink('Semi Quant Terminal: markets') : ui.download('/api/export/snapshot.html?market=true')), title: 'One HTML file with this dashboard and the screener: send it to a friend, it opens in any browser' },
+          h('span', { html: '<svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12m0-12l-4 4m4-4l4 4"/></svg>' }), SQ.static ? 'Share' : 'Share snapshot'),
         h('a', { class: 'btn', href: '#/screener' }, 'Open screener'))));
 
     // Global strip

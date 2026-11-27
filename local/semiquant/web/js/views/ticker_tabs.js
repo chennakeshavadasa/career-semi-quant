@@ -107,7 +107,7 @@
     const mo = d.monthly;
     if (mo && mo.matrix) {
       const mEl = charts.div('chart'), sEl = charts.div('chart xs');
-      g2.appendChild(ui.panel('Monthly returns', h('div', null, mEl, sEl), { cap: 'Rows are years, last column the calendar-year total. Bottom: average return by month and the share of positive years.' }));
+      g2.appendChild(ui.panel('Monthly returns', h('div', null, mEl, sEl), { cap: 'Rows are years, last column the calendar-year total; on narrow screens cells show whole percent (tap for the exact value). Bottom: average return by month and the share of positive years.' }));
       const z = mo.matrix.map((r, i) => r.concat([mo.year_total[i]]));
       mEl.style.height = Math.max(220, 26 * mo.years.length + 40) + 'px';
       charts.heatmap(mEl, { z, x: mo.months.concat(['Year']), y: mo.years.map(String) }, { xtop: true, d: 1, textSize: 9.5, margin: { l: 44, r: 6, t: 26, b: 6 } });

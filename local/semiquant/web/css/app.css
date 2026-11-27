@@ -614,3 +614,20 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
   [data-theme="dark"] .search input { height: 38px; }
   [data-theme="dark"] .grid { gap: 10px; }
 }
+
+/* ─── Form fit (phones found inputs wider than their grid cells) ────────── */
+.form > *, .field { min-width: 0; }
+.form .inp, .field .inp { width: 100%; min-width: 0; }
+.panel > .ph .r { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.panel > .ph .r select.inp { min-width: 0; max-width: 38vw; }
+@media (max-width: 980px) {
+  .form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .field > span { overflow-wrap: anywhere; }
+  /* Holdings editor: text boxes, so no pinned column; fixed widths that fit a phone. */
+  table.holdings th:first-child, table.holdings td:first-child { position: static; box-shadow: none; }
+  table.holdings td:nth-child(1) input { width: 86px; text-transform: uppercase; }
+  table.holdings td:nth-child(2) input { width: 70px; }
+  table.holdings td:nth-child(3) input { width: 100%; min-width: 76px; }
+  table.holdings th:nth-child(3) { white-space: normal; }
+}
+@media (max-width: 980px) { [data-theme="dark"] table.t th.sorted:first-child { background: var(--amber); color: #000; } }

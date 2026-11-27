@@ -168,6 +168,26 @@
   // Phones: a short command-line prompt instead of the long desktop hint.
   if (window.matchMedia && matchMedia('(max-width: 980px)').matches) $('#q').placeholder = 'Ticker or company…';
 
+  // Swipeable tab rows: bring the active tab into view whenever a row is (re)drawn.
+  const centerActive = (row) => {
+    const on = row.querySelector('.on');
+    if (!on || row.scrollWidth <= row.clientWidth) return;
+    const r = on.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    row.scrollLeft += (r.left - rr.left) - (row.clientWidth - r.width) / 2;
+  };
+  new MutationObserver((muts) => {
+    const rows = new Set();
+    for (const m of muts) {
+      if (m.target.nodeType === 1 && m.target.matches('.tabs, .seg')) rows.add(m.target); // tabs filled in after the row
+      for (const n of m.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.matches('.tabs, .seg')) rows.add(n);
+        n.querySelectorAll('.tabs, .seg').forEach((r) => rows.add(r));
+      }
+    }
+    if (rows.size) requestAnimationFrame(() => rows.forEach(centerActive));
+  }).observe($('#view'), { childList: true, subtree: true });
+
   let installEvt = null;
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('#install-btn').classList.remove('hidden'); });
   SQ.install = async () => {

@@ -155,7 +155,7 @@
     (p.holdings || []).forEach(row);
     if (!(p.holdings || []).length) row();
     const bench = h('input', { class: 'inp', value: p.benchmark || 'SPY', style: { width: '90px' } });
-    const maxw = h('input', { class: 'inp', type: 'number', value: p.max_weight || 35, step: 5, style: { width: '80px' } });
+    const maxw = h('input', { class: 'inp', type: 'number', value: p.max_weight ? Math.round((p.max_weight <= 1 ? p.max_weight * 100 : p.max_weight) * 10) / 10 : 35, /* stored as a fraction */ step: 5, style: { width: '80px' } });
     const read = () => ({ ...p, benchmark: bench.value.trim().toUpperCase() || 'SPY', max_weight: (parseFloat(maxw.value) || 35) / 100,
       holdings: Array.from(tb.querySelectorAll('tr')).map((tr) => {
         const g = (k) => tr.querySelector(`[data-k="${k}"]`).value;

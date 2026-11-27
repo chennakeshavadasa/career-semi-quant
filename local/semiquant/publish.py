@@ -130,7 +130,18 @@ class Publisher:
             return True
         key = file_key(path)
         built = self.index.get(key)
-        return built is None or not (self.data / key).exists() or self.now - built >= TIERS[tier] - 60
+        if built is None or not (self.data / key).exists() or self.now - built >= TIERS[tier] - 60:
+            return True
+        return self._empty_answer(key)
+
+    def _empty_answer(self, key: str) -> bool:
+        """A published 'not available' answer is retried every run (it is often a Yahoo hiccup)."""
+        try:
+            with open(self.data / key, "rb") as f:
+                head = f.read(160)
+        except OSError:
+            return True
+        return b'"available":false' in head.replace(b" ", b"") or b'"unavailable":true' in head.replace(b" ", b"")
 
     def put(self, path: str, tier: str, fn: Callable[[], Any], kind: str | None = None) -> None:
         if not self.due(path, tier):
@@ -149,8 +160,9 @@ class Publisher:
                 return
             # First time and nothing to show (e.g. an ETF has no analysts): publish an explicit
             # empty state so the page explains it instead of failing; retried next run.
-            text = json.dumps({"unavailable": True, "message": "Yahoo has no data for this section of this symbol "
-                               "(ETFs and indices have no analysts, statements or insiders)."})
+            text = json.dumps({"unavailable": True, "message": "Not available yet: Yahoo did not return this section at the last "
+                               "refresh; it is retried at every refresh (about every 15 minutes). ETFs and indices have "
+                               "no analysts, statements or insiders."})
             p = self.data / key
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_text(text, encoding="utf-8")

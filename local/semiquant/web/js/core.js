@@ -287,7 +287,7 @@
   // ─── Theme ────────────────────────────────────────────────────────────
   SQ.setTheme = (t) => {
     document.documentElement.setAttribute('data-theme', t);
-    try { localStorage.setItem('theme', t); } catch (e) { /* private mode */ }
+    try { localStorage.setItem('sq-theme', t); } catch (e) { /* private mode */ }
     window.dispatchEvent(new CustomEvent('sq-theme', { detail: t }));
   };
   SQ.toggleTheme = () => SQ.setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');

@@ -30,11 +30,11 @@
     return out;
   }
   function axis(t) {
-    return { gridcolor: t.rule, zerolinecolor: t.ruleStrong, linecolor: t.ruleStrong, tickfont: { size: 10.5, color: t.ink3 }, automargin: true, showspikes: false };
+    return { gridcolor: t.rule, zerolinecolor: t.ruleStrong, linecolor: t.ruleStrong, tickfont: { size: 11, color: t.dark ? t.ink2 : t.ink3 }, automargin: true, showspikes: false };
   }
   function baseLayout(t) {
     return {
-      paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { family: t.mono, size: 11, color: t.ink3 },
+      paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: { family: t.mono, size: 11.5, color: t.dark ? t.ink2 : t.ink3 },
       margin: { l: 50, r: 14, t: 8, b: 32 }, colorway: palette(t), xaxis: axis(t), yaxis: axis(t),
       legend: { orientation: 'h', y: 1.02, yanchor: 'bottom', x: 0, font: { size: 11, color: t.ink2 }, bgcolor: 'rgba(0,0,0,0)' },
       hoverlabel: { bgcolor: t.card, bordercolor: t.ruleStrong, font: { family: t.mono, size: 12, color: t.ink } },
@@ -135,8 +135,8 @@
   // heatmap: {z, x, y, text}; o.div (diverging around zmid), o.fmt
   function heatmap(el, d, o = {}) {
     return plot(el, (t) => {
-      const seq = [[0, t.dark ? '#16233a' : '#eef2fb'], [1, t.accent]];
-      const dv = [[0, t.down], [0.5, t.dark ? '#1c2636' : '#f3f5f8'], [1, t.up]];
+      const seq = [[0, t.dark ? '#1a1108' : '#eef2fb'], [1, t.accent]];
+      const dv = [[0, t.down], [0.5, t.dark ? '#1e1e1e' : '#f3f5f8'], [1, t.up]];
       const z = d.z;
       let zmin = o.zmin, zmax = o.zmax;
       if (o.div !== false && (zmin == null || zmax == null)) {
@@ -206,7 +206,7 @@
           branchvalues: 'total', maxdepth: 3, level: 'root',
           text: [''].concat(d.text), customdata: [''].concat(d.custom), textinfo: 'label+text',
           textfont: { family: t.mono, size: 12, color: [t.ink].concat(d.colors.map((v) => (Math.abs(v || 0) > m * 0.55 ? '#ffffff' : t.ink))) },
-          marker: { colors: [0].concat(d.colors), colorscale: [[0, t.down], [0.5, t.dark ? '#253045' : '#e9edf3'], [1, t.up]], cmin: -m, cmax: m, cmid: 0,
+          marker: { colors: [0].concat(d.colors), colorscale: [[0, t.down], [0.5, t.dark ? '#262626' : '#e9edf3'], [1, t.up]], cmin: -m, cmax: m, cmid: 0,
             line: { color: t.page, width: 1.5 }, pad: { t: 18, l: 2, r: 2, b: 2 } },
           pathbar: { visible: false }, tiling: { packing: 'squarify', pad: 2 },
           hovertemplate: '<b>%{label}</b><br>%{customdata}<extra></extra>',
@@ -224,11 +224,11 @@
   function lwcOptions(t, intraday) {
     return {
       autoSize: true,
-      layout: { background: { type: 'solid', color: 'transparent' }, textColor: t.ink3, fontFamily: t.mono, fontSize: 11, attributionLogo: true },
+      layout: { background: { type: 'solid', color: 'transparent' }, textColor: t.dark ? t.ink2 : t.ink3, fontFamily: t.mono, fontSize: 11.5, attributionLogo: true },
       grid: { vertLines: { color: t.rule }, horzLines: { color: t.rule } },
       rightPriceScale: { borderColor: t.ruleStrong },
       timeScale: { borderColor: t.ruleStrong, timeVisible: intraday, secondsVisible: false, rightOffset: 3 },
-      crosshair: { mode: 0, vertLine: { color: t.ink4, labelBackgroundColor: t.ink2 }, horzLine: { color: t.ink4, labelBackgroundColor: t.ink2 } },
+      crosshair: { mode: 0, vertLine: { color: t.ink4, labelBackgroundColor: t.dark ? '#fb8b1e' : t.ink2 }, horzLine: { color: t.ink4, labelBackgroundColor: t.dark ? '#fb8b1e' : t.ink2 } },
       localization: { priceFormatter: (p) => fmt.price(p) },
       handleScroll: { vertTouchDrag: false }, // vertical swipes scroll the page, horizontal ones pan the chart
     };

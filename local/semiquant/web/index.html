@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0c121b" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,8 +14,9 @@
 <meta name="description" content="Local, institutional-grade quant terminal: live Yahoo Finance data, options, fundamentals, risk, portfolio and offer analytics.">
 <script>
   (function () {
-    var t; try { t = localStorage.getItem('theme'); } catch (e) {}
-    if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    // "dark" is the Terminal theme, the default; "light" only when chosen.
+    var t; try { t = localStorage.getItem('sq-theme'); } catch (e) {}
+    if (t !== 'light') t = 'dark';
     document.documentElement.setAttribute('data-theme', t);
   })();
 </script>
@@ -41,7 +41,7 @@
       <div class="mstatus" title="Quotes refresh automatically"><span id="live-dot" class="dot"></span><span id="stream-badge" class="sbadge" hidden>LIVE</span><span class="txt" id="mkt-text">Connecting…</span><span class="dim" id="live-time"></span></div>
       <button class="btn icon" id="refresh-btn" title="Refresh now (R)"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
       <button class="btn hidden" id="install-btn" title="Install as an app on this device">Install app</button>
-      <button class="btn icon" id="theme-btn" title="Light / dark theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
+      <button class="btn icon" id="theme-btn" title="Terminal / light theme (T)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
     </div>
   </header>
   <aside class="side">

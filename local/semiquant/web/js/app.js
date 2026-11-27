@@ -165,6 +165,9 @@
     draw();
   };
 
+  // Phones: a short command-line prompt instead of the long desktop hint.
+  if (window.matchMedia && matchMedia('(max-width: 980px)').matches) $('#q').placeholder = 'Ticker or company…';
+
   let installEvt = null;
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; $('#install-btn').classList.remove('hidden'); });
   SQ.install = async () => {
@@ -190,7 +193,7 @@
     ];
     const list = h('div', { class: 'menu-list' }, items.map(([href, t, sub, d]) => h('a', { href }, icon(d), h('span', null, t, h('small', null, sub)))),
       h('button', { type: 'button', onclick: SQ.toggleTheme }, icon('<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z"/>'),
-        h('span', null, 'Light / dark theme', h('small', null, 'Follows your choice on every page'))),
+        h('span', null, 'Terminal / light theme', h('small', null, 'Black Bloomberg-style terminal or paper light; follows your choice everywhere'))),
       standalone() ? null : h('button', { type: 'button', onclick: SQ.install }, icon('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>'),
         h('span', null, 'Install as an app', h('small', null, 'Home-screen icon, opens full screen, keeps the last data offline'))),
       SQ.static && !inAndroidApp && /android/i.test(navigator.userAgent)

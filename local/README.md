@@ -1,6 +1,6 @@
 # Semi Quant Terminal: local edition
 
-A quant terminal that runs on your own computer. It pulls **live data from Yahoo Finance** (quotes refreshed every 30 s, 1-minute intraday bars, option chains, statements, analyst estimates, insider trades, earnings and economic calendars) and computes **institutional-style analytics locally**: risk and tail models, volatility forecasting, options positioning, factor exposures, regime detection, valuation, portfolio optimization and an RSU / stock-option offer simulator.
+A quant terminal that runs on your own computer. It pulls **live data from Yahoo Finance** (prices streamed trade by trade, 1-minute intraday bars, option chains, statements, analyst estimates, insider trades, earnings and economic calendars) and computes **institutional-style analytics locally**: risk and tail models, volatility forecasting, options positioning, factor exposures, regime detection, valuation, portfolio optimization and an RSU / stock-option offer simulator.
 
 It covers four built-in universes, and any other Yahoo symbol you type:
 
@@ -96,20 +96,23 @@ With the one-click launchers, put the command after the file name, for example `
 
 `semiquant publish --out DIR` writes the same dashboard as static files plus precomputed data (`DIR/data/*.json`), so it can be hosted anywhere without a server. The portfolio site runs it every 15 minutes on weekdays (every 30 minutes overnight) and serves it at [nithinpuru.github.io/quant-terminal/app/](https://nithinpuru.github.io/quant-terminal/app/). Each run only redoes what is due: quotes, heatmaps, screeners and intraday charts every run; scores and longer charts hourly; risk, options and factors every 3 hours; fundamentals daily.
 
-The web edition installs as an app on a phone: open it in Safari (iPhone: Share, then **Add to Home Screen**) or Chrome (Android: menu, then **Install app**). It opens full screen with a bottom tab bar, checks for new data every minute, and keeps the last data for offline use. Watchlists, settings and your portfolio stay on the device. Full analysis tabs are published for the semiconductor universe and the US mega caps; every other ticker shows its live quote, and the local edition analyses anything.
+The web edition installs as an app on a phone: open it in Safari (iPhone: Share, then **Add to Home Screen**) or Chrome (Android: menu, then **Install app**). It opens full screen with a bottom tab bar, **streams prices live from Yahoo** (see below), checks for a new analytics build every minute, and keeps the last data for offline use. Watchlists, settings and your portfolio stay on the device. Full analysis tabs are published for the semiconductor universe and the US mega caps; every other ticker shows its live quote, and the local edition analyses anything.
 
 ## How fresh is the data?
 
 | Data | Refresh |
 |---|---|
-| Quotes (price, change, pre/after-hours) | every 30 s while a market is open (one batched request for everything on screen), every 5 min when closed; adjustable under Settings |
-| Intraday chart | 1-minute bars, reloaded every 60 s on the 1-day view |
+| Prices (price, day change, pre-market, after-hours and overnight prints) | **real time**: every trade is streamed from Yahoo's live feed to the browser (about once a second per active symbol) |
+| Full quotes (market cap, P/E, volume, 52-week range…) | every 30 s while a market is open (one batched request for everything on screen), every 5 min when closed; adjustable under Settings |
+| Intraday chart | 1-minute bars that grow with every streamed trade; reloaded every 60 s on the 1-day view |
 | Daily bars and every daily statistic | today's bar is patched with the live quote on every read |
 | Option chains | 2 min |
 | News | 5 min |
 | Analyst estimates | 1 h; fundamentals and ownership 6-12 h (they change quarterly) |
 
-Exchange delays come from Yahoo: US stocks are real-time on most venues, some foreign exchanges are delayed 15-20 minutes (shown on the company header). If Yahoo throttles your connection, the tool switches quotes to a second Yahoo endpoint and serves the last good copy of everything else, then recovers by itself.
+**Streaming.** The browser holds one connection to Yahoo's streaming feed (`wss://streamer.finance.yahoo.com`) for every symbol on screen: the company page, watchlists, the market page, heatmaps and the screener. The top bar shows **LIVE** while trades arrive. It works the same in the local edition and the web edition / phone app (the phone talks to Yahoo directly, no server in between), pauses while the page is in the background and reconnects by itself. It uses mobile data while a market trades (about 110 bytes per trade); turn it off under Settings, Real-time prices.
+
+Exchange delays come from Yahoo: US stocks are real-time on most venues, some foreign exchanges are delayed 15-20 minutes (shown on the company header), and the stream carries the same delay. If Yahoo throttles your connection, the tool switches quotes to a second Yahoo endpoint and serves the last good copy of everything else, then recovers by itself.
 
 ## Where things are saved
 

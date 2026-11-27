@@ -110,6 +110,7 @@
         case 'big': return fmt.big(x);
         case 'x': return fmt.x(x, d ?? 1);
         case 'date': return fmt.date(x);
+        case 'datetime': return x ? fmt.dateTime(x) : DASH;
         case 'score': return ok(x) ? Math.round(x).toString() : DASH;
         default: return x == null || x === '' ? DASH : String(x);
       }
@@ -199,9 +200,10 @@
     unregister(id) { this.regs.delete(id); },
     onQuotes(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
     symbols() { const s = new Set(); for (const v of this.regs.values()) v.forEach((x) => s.add(x)); return Array.from(s); },
-    apply(root = document) {
+    apply(root = document, only = null) { // only: a Set of symbols that changed (stream ticks)
       for (const el of $$('[data-live]', root)) {
         const [sym, field, kind] = el.dataset.live.split(':');
+        if (only && !only.has(sym)) continue;
         const q = this.quotes[sym];
         if (!q) continue;
         let v = q[field];
@@ -224,7 +226,15 @@
           el.classList.toggle('down', fmt.ok(sv) && sv < 0);
         }
       }
+      // data-show="SYM:field": visible only while the quote has that number (e.g. an after-hours price).
+      for (const el of $$('[data-show]', root)) {
+        const [sym, field] = el.dataset.show.split(':');
+        if (only && !only.has(sym)) continue;
+        const q = this.quotes[sym];
+        if (q) el.hidden = !fmt.ok(q[field]);
+      }
     },
+    emit(qs) { this.listeners.forEach((fn) => { try { fn(qs); } catch (e) { console.error(e); } }); },
     async tick(force) {
       if (SNAP) return;
       clearTimeout(this.timer);
@@ -235,12 +245,13 @@
         try {
           const qs = await api('/api/quotes?symbols=' + encodeURIComponent(syms.join(',')));
           Object.assign(this.quotes, qs);
+          if (SQ.stream) SQ.stream.reapply(qs); // keep streamed prices that are newer than the poll
           this.last = new Date();
           this.anyOpen = Object.values(qs).some((q) => ['REGULAR', 'PRE', 'POST'].includes(q.market_state));
           this.apply();
-          this.listeners.forEach((fn) => { try { fn(qs); } catch (e) { console.error(e); } });
+          this.emit(qs);
           const t = $('#live-time');
-          if (t) t.textContent = '· ' + this.last.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+          if (t && !(SQ.stream && SQ.stream.fresh())) t.textContent = '· ' + this.last.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' });
         } catch (e) {
           console.warn('quote refresh failed', e);
         } finally {

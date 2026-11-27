@@ -17,9 +17,11 @@
 
   function header(sym, q) {
     const m = (q && q.meta) || {};
-    const ext = q && q.ext_price ? h('span', { class: 'ext' }, `${q.ext_label}: `,
-      h('span', { dataset: { live: sym + ':ext_price:price' } }, fmt.price(q.ext_price)), ' ',
-      h('span', { class: fmt.cls(q.ext_change_pct), dataset: { live: sym + ':ext_change_pct:pct', sign: 'ext_change_pct' } }, fmt.pct(q.ext_change_pct, 2))) : null;
+    // Always built, shown while there is an extended-hours price (the stream can start one later).
+    const ext = h('span', { class: 'ext', hidden: !(q && fmt.ok(q.ext_price)), dataset: { show: sym + ':ext_price' } },
+      h('span', { dataset: { live: sym + ':ext_label:text' } }, (q && q.ext_label) || ''), ': ',
+      h('span', { dataset: { live: sym + ':ext_price:price' } }, fmt.price(q && q.ext_price)), ' ',
+      h('span', { class: fmt.cls(q && q.ext_change_pct), dataset: { live: sym + ':ext_change_pct:pct', sign: 'ext_change_pct' } }, fmt.pct(q && q.ext_change_pct, 2)));
     const state_ = (q && q.market_state) || '';
     const stateLabel = { REGULAR: 'Market open', PRE: 'Pre-market', POST: 'After hours', POSTPOST: 'Closed', PREPRE: 'Closed', CLOSED: 'Closed' }[state_] || state_;
     return h('div', { class: 'th-wrap' },
@@ -34,7 +36,8 @@
           h('span', { class: 'chg ' + fmt.cls(q && q.change_pct), dataset: { live: sym + ':change:num', sign: 'change_pct' } }, fmt.num(q && q.change, 2)),
           h('span', { class: 'chg ' + fmt.cls(q && q.change_pct), dataset: { live: sym + ':change_pct:pct', sign: 'change_pct' } }, fmt.pct(q && q.change_pct, 2)), ext),
         h('div', { class: 'dim mono', style: { fontSize: '11.5px', marginTop: '4px' } },
-          stateLabel, q && q.time ? ' · last trade ' + fmt.dateTime(q.time) : '', q && q.delay_min ? ` · delayed ${q.delay_min} min` : '')),
+          stateLabel, q && q.time ? [' · last trade ', h('span', { dataset: { live: sym + ':time:datetime' } }, fmt.dateTime(q.time))] : '',
+          q && q.delay_min ? ` · delayed ${q.delay_min} min` : '')),
       SQ.static ? h('div', { class: 'th-actions' },
         h('button', { class: 'btn', title: 'Add to your watchlist (saved on this device)', onclick: () => SQ.addToWatchlist(sym) }, '☆ Watch'),
         SQ.isPublished(sym) ? h('a', { class: 'btn', href: '#/compare?s=' + encodeURIComponent(sym + ',SOXX,SPY') }, 'Compare') : null,
@@ -67,6 +70,7 @@
       SQ.live.register('ticker', [sym]);
       try {
         const qs = await api('/api/quotes?symbols=' + encodeURIComponent(sym));
+        if (SQ.stream) SQ.stream.reapply(qs);
         state.quote = qs[sym];
         if (!state.quote) throw new Error(`Yahoo has no quote for "${sym}". Check the symbol: international listings need a suffix (005930.KS, 8035.T, ASML.AS), crypto uses BTC-USD, indices ^GSPC.`);
         head.innerHTML = '';
@@ -158,13 +162,22 @@
         const d = await api(`/api/ticker/${encodeURIComponent(sym)}/chart?range=${prefs.range}&ind=${encodeURIComponent((intra && !ind.includes('vwap') ? ind.concat('vwap') : ind).join(','))}`);
         chartBox.innerHTML = '';
         inst = charts.priceChart(chartBox, d, { style: prefs.style === 'auto' ? undefined : prefs.style, log: prefs.log });
+        if (inst && SQ.stream) inst.replay(SQ.stream.tape(sym)); // streamed trades since the data was built
+        push(SQ.live.quotes[sym]);
         if (d.intraday && !SQ.snapshot) timer = setTimeout(load, Math.max(30, SQ.settings.intraday_refresh_seconds || 60) * 1000);
       } catch (e) {
         chartBox.innerHTML = '';
         chartBox.appendChild(h('div', { style: { padding: '14px' } }, ui.error(e, load)));
       }
     }
-    const off = SQ.live.onQuotes((qs) => { const q = qs[sym]; if (q && inst) inst.tickLast(q.price); });
+    // The newest print (regular or extended hours) extends the chart in place, without a refetch.
+    function push(q) {
+      if (!q || !inst) return;
+      const regT = (q.time_epoch || 0) * 1000, extT = q.ext_time ? Date.parse(q.ext_time) : 0;
+      if (fmt.ok(q.ext_price) && extT > regT) inst.tickLast(q.ext_price, extT, q.ext_label === 'Overnight' ? 'overnight' : 'ext');
+      else inst.tickLast(q.price, regT || null, 'regular');
+    }
+    const off = SQ.live.onQuotes((qs) => push(qs[sym]));
     SQ.onCleanup(() => { off(); clearTimeout(timer); if (inst) inst.destroy(); });
     load();
     return host;

@@ -493,13 +493,35 @@
       s[k] = parseInt(e.target.value, 10);
       try { Object.assign(SQ.settings, await SQ.put('/api/settings', { [k]: s[k] })); ui.toast('Saved'); SQ.live.tick(true); } catch (err) { ui.toast(err.message); }
     } });
+    const sInfo = h('div', { class: 'dim mono', style: { fontSize: '12px', marginTop: '8px' } });
+    const showStream = () => {
+      const i = SQ.stream ? SQ.stream.info() : {};
+      sInfo.textContent = !i.enabled ? 'Off: prices update with each refresh.'
+        : i.connected ? `Connected · ${i.symbols} symbols · ${fmt.int(i.ticks)} trades received` + (i.last ? ' · last ' + new Date(i.last).toLocaleTimeString() : '')
+          : 'Connecting…';
+    };
+    const streamTimer = setInterval(showStream, 2000);
+    SQ.onCleanup(() => clearInterval(streamTimer));
+    showStream();
+    g.appendChild(ui.panel('Real-time prices', h('div', null,
+      h('label', { style: { display: 'flex', gap: '10px', alignItems: 'center', cursor: 'pointer' } },
+        h('input', { type: 'checkbox', checked: s.stream !== false, onchange: async (e) => {
+          const v = e.target.checked;
+          try { Object.assign(SQ.settings, await SQ.put('/api/settings', { stream: v })); } catch (err) { SQ.settings.stream = v; }
+          if (SQ.stream) SQ.stream.restart();
+          setTimeout(showStream, 300);
+          ui.toast(v ? 'Streaming on' : 'Streaming off: prices update with each refresh');
+        } }),
+        h('span', null, 'Stream prices from Yahoo Finance (every trade, about once a second)')), sInfo),
+    { cap: 'Prices, day changes, pre-market, after-hours and overnight prints and the intraday chart update as trades happen, for every symbol on screen. ' +
+      'The connection goes straight from this device to Yahoo and pauses while the page is in the background. It uses mobile data while a market trades: turn it off to save data.' }));
     if (SQ.static) {
       const m = (SQ.st && SQ.st.meta) || {};
       g.appendChild(ui.panel('Data & updates', h('div', null, ui.kv([['Published', fmt.dateTime(m.built_at)], ['Companies with full analysis', String((m.full || []).length)],
         ['Quotes, heatmaps, screener, 1-day charts', 'every ~15 min in market hours'], ['Scores, longer charts, breadth', 'hourly'],
         ['Risk, volatility, options, factors, analysts', 'every 3 hours'], ['Fundamentals, ownership, filings', 'daily']]),
       h('div', { class: 't-tools', style: { marginTop: '10px' } }, h('button', { class: 'btn primary', type: 'button', onclick: SQ.install }, 'Install as an app'))),
-      { cap: 'This page checks for a new data build every minute and updates prices in place. Exchange delays from Yahoo still apply.' }));
+      { cap: 'Prices stream in real time (see Real-time prices). The analytics come from the latest build; this page checks for a new one every minute. Exchange delays from Yahoo still apply.' }));
     }
     if (!SQ.static) g.appendChild(ui.panel('Refresh', h('div', { class: 'form' },
       h('label', { class: 'field' }, h('span', null, 'Quotes while a market is open (s)'), num('quote_refresh_seconds')),

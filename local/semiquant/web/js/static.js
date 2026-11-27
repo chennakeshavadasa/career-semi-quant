@@ -59,7 +59,7 @@
     'US mega caps': ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'AVGO', 'TSLA', 'BRK-B', 'JPM', 'LLY', 'V', 'WMT', 'XOM'],
   };
   const DEFAULT_PORTFOLIO = { name: 'My portfolio', benchmark: 'SPY', holdings: [{ ticker: 'NVDA', shares: 10 }, { ticker: 'AVGO', shares: 5 }, { ticker: 'TSM', shares: 8 }] };
-  const SETTINGS = { quote_refresh_seconds: 60, closed_refresh_seconds: 120, intraday_refresh_seconds: 300 };
+  const SETTINGS = { quote_refresh_seconds: 60, closed_refresh_seconds: 120, intraday_refresh_seconds: 300, stream: true };
 
   // ─── search (published names + every universe member) ─────────────────
   async function search(q) {
@@ -192,7 +192,8 @@
     const st = m.market || {};
     const open = (st.status || '').toLowerCase() === 'open';
     if (dot) dot.className = 'dot ' + (open ? 'open' : '');
-    if (txt) txt.textContent = `Data ${fmt.time(m.built_at)} · ${ago(m.built_at)} · ${open ? 'US market open' : st.message || 'US market closed'}`;
+    const streaming = SQ.stream && SQ.stream.fresh(); // prices are live; the analytics are from the build
+    if (txt) txt.textContent = `${streaming ? 'Analytics' : 'Data'} ${fmt.time(m.built_at)} · ${ago(m.built_at)} · ${open ? 'US market open' : st.message || 'US market closed'}`;
   };
   async function poll() {
     let changed = false;

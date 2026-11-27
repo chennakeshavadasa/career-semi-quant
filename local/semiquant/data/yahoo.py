@@ -637,18 +637,41 @@ def holders(symbol: str) -> dict[str, Any]:
     return cache.cached(f"holders:{sym}", TTL["holders"], load_checked, disk=True)
 
 
-def option_expiries(symbol: str) -> list[str]:
-    sym = norm_symbol(symbol)
+_US_OPTION_VENUES = {"NMS", "NGM", "NCM", "NAS", "NYQ", "NYS", "ASE", "PCX", "BTS", "BATS", "NasdaqGS", "NasdaqGM",
+                     "NasdaqCM", "NYSE", "NYSEArca", "NYSE American", "Cboe BZX", "BATS Trading"}
+
+
+def _expects_options(sym: str) -> bool:
+    """US-listed stocks and ETFs have listed options; an empty answer for one of them is a
+    Yahoo hiccup (throttling, crumb), not a fact."""
+    if any(c in sym for c in ".=^") or sym.endswith("-USD"):
+        return False
     try:
-        def load():
-            exps = tuple(_call(lambda: _ticker(sym).options) or ())
-            if not exps:
-                raise DataError(f"no option expiries for {sym}")
-            return exps
-        today = date.today().isoformat()
-        return [e for e in cache.cached(f"exp:{sym}", TTL["expiries"], load, disk=True) if e >= today]
+        q = quote(sym) or {}
     except Exception:  # noqa: BLE001
-        return []
+        return False
+    return q.get("type") in ("EQUITY", "ETF") and q.get("exchange") in _US_OPTION_VENUES
+
+
+def option_expiries(symbol: str) -> list[str]:
+    """Future expiries; [] when the symbol has no listed options. Raises DataError when Yahoo
+    failed or answered empty for a symbol that should have options (so callers keep the last
+    good data and retry, instead of reporting 'no options')."""
+    sym = norm_symbol(symbol)
+
+    def load():
+        exps = tuple(_call(lambda: _ticker(sym).options) or ())
+        if not exps:
+            raise DataError(f"no option expiries for {sym}")
+        return exps
+    today = date.today().isoformat()
+    try:
+        exps = cache.cached(f"exp:{sym}", TTL["expiries"], load, disk=True)
+    except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, DataError) and not _expects_options(sym):
+            return []
+        raise DataError(f"Options for {sym} are temporarily unavailable from Yahoo; try again in a few minutes.") from exc
+    return [e for e in exps if e >= today]
 
 
 def option_chain(symbol: str, expiry: str) -> dict[str, Any]:

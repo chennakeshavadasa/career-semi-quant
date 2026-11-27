@@ -15,3 +15,18 @@ def test_file_key_matches_the_browser_scheme():
 def test_rounding_keeps_six_significant_digits_and_drops_nan():
     assert _round({"a": [1.23456789, float("nan")], "b": 3605147173690.796, "c": 5}) == {
         "a": [1.23457, None], "b": 3605150000000.0, "c": 5}
+
+
+def test_not_available_answers_are_retried_every_run(tmp_path):
+    from semiquant.publish import Publisher, file_key
+    pub = Publisher(tmp_path)
+    good, empty, unav = "/api/ticker/NVDA/risk", "/api/ticker/NVDA/options", "/api/ticker/NVDA/analysts"
+    for path, body in ((good, '{"symbol":"NVDA","vol":0.5}'), (empty, '{"symbol":"NVDA","available":false,"message":"x"}'),
+                       (unav, '{"unavailable": true, "message": "x"}')):
+        f = pub.data / file_key(path)
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(body)
+        pub.index[file_key(path)] = pub.now
+    assert not pub.due(good, "slow")
+    assert pub.due(empty, "slow")
+    assert pub.due(unav, "daily")

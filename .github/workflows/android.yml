@@ -1,0 +1,76 @@
+name: Android app
+
+# Builds the Android app (android/: a WebView on the web edition) and, on master,
+# publishes it as the "android" release:
+#   https://github.com/chennakeshavadasa/career-semi-quant/releases/download/android/SemiQuant.apk
+# Signing: set the repository secrets ANDROID_KEYSTORE_B64 (base64 of a .jks),
+# ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS so every build carries the same
+# key and installs as an update. Without them the APK is signed with the runner's
+# debug key, which changes between runs (uninstall before installing a new build).
+
+on:
+  push:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "Signing with the release key."
+          else
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret: signing with a debug key (updates need an uninstall first)."
+          fi
+
+      - name: Build APK
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          gradle --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/SemiQuant.apk"
+          ls -l "$GITHUB_WORKSPACE/SemiQuant.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SemiQuant-apk
+          path: SemiQuant.apk
+
+      - name: Publish release
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android --yes --cleanup-tag || true
+          gh release create android SemiQuant.apk --target "$GITHUB_SHA" --latest \
+            --title "Semi Quant for Android (build ${{ github.run_number }})" \
+            --notes "Download SemiQuant.apk on your phone, open it and allow installs from this source. The app shows the web edition (live Yahoo prices, analytics refreshed every 15 minutes) full screen; exports save to Downloads/SemiQuant."

@@ -174,7 +174,10 @@
       : 'Open the browser menu and choose "Install app" or "Add to Home screen".', 7000);
   };
   $('#install-btn').addEventListener('click', SQ.install);
-  const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  // Inside the Android app (a WebView that tags its user agent) there is nothing to install.
+  const inAndroidApp = /SemiQuantAndroid/.test(navigator.userAgent);
+  const standalone = () => inAndroidApp || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const APK = 'https://github.com/chennakeshavadasa/career-semi-quant/releases/download/android/SemiQuant.apk';
 
   SQ.views.more = async function (view) {
     const icon = (d) => h('span', { html: '<svg viewBox="0 0 24 24">' + d + '</svg>' });
@@ -189,7 +192,11 @@
       h('button', { type: 'button', onclick: SQ.toggleTheme }, icon('<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z"/>'),
         h('span', null, 'Light / dark theme', h('small', null, 'Follows your choice on every page'))),
       standalone() ? null : h('button', { type: 'button', onclick: SQ.install }, icon('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>'),
-        h('span', null, 'Install as an app', h('small', null, 'Home-screen icon, opens full screen, keeps the last data offline'))));
+        h('span', null, 'Install as an app', h('small', null, 'Home-screen icon, opens full screen, keeps the last data offline'))),
+      SQ.static && !inAndroidApp && /android/i.test(navigator.userAgent)
+        ? h('a', { href: APK, rel: 'noopener' }, icon('<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>'),
+          h('span', null, 'Android app (APK)', h('small', null, 'Download and install the native app')))
+        : null);
     view.appendChild(list);
   };
 

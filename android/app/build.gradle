@@ -1,0 +1,52 @@
+plugins {
+    id 'com.android.application'
+}
+
+// CI passes VERSION_CODE (the workflow run number) and, when the signing secrets are
+// set, KEYSTORE_FILE / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD. Without them the
+// release APK is signed with the debug key (fine for a local test build).
+def versionCodeEnv = Integer.parseInt(System.getenv('VERSION_CODE') ?: '1')
+def keystoreFile = System.getenv('KEYSTORE_FILE')
+
+android {
+    namespace 'io.github.nithinpuru.semiquant'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'io.github.nithinpuru.semiquant'
+        minSdk 26
+        targetSdk 35
+        versionCode versionCodeEnv
+        versionName "1.0.${versionCodeEnv}"
+    }
+
+    signingConfigs {
+        release {
+            if (keystoreFile) {
+                storeFile file(keystoreFile)
+                storePassword System.getenv('KEYSTORE_PASSWORD')
+                keyAlias System.getenv('KEY_ALIAS')
+                keyPassword System.getenv('KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystoreFile ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures { buildConfig true }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}

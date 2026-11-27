@@ -192,6 +192,7 @@ class Publisher:
         build = h.hexdigest()[:10]
         cfg = {"base": "data/", "build": build, "version": __version__}
         html = (WEB / "index.html").read_text(encoding="utf-8")
+        html = html.replace("<title>Semi Quant Terminal · Local</title>", "<title>Semi Quant Terminal</title>", 1)
         html = html.replace("<!--SNAPSHOT-->", "<script>window.SQ_STATIC=" + json.dumps(cfg) + ";</script>", 1)
         html = re.sub(r'(src|href)="((?:css|js)/[^"]+)"', lambda m: f'{m.group(1)}="{m.group(2)}?v={build}"', html)
         (self.out / "index.html").write_text(html, encoding="utf-8")

@@ -96,6 +96,8 @@ With the one-click launchers, put the command after the file name, for example `
 
 `semiquant publish --out DIR` writes the same dashboard as static files plus precomputed data (`DIR/data/*.json`), so it can be hosted anywhere without a server. The portfolio site runs it every 15 minutes on weekdays (every 30 minutes overnight) and serves it at [nithinpuru.github.io/quant-terminal/app/](https://nithinpuru.github.io/quant-terminal/app/). Each run only redoes what is due: quotes, heatmaps, screeners and intraday charts every run; scores and longer charts hourly; risk, options and factors every 3 hours; fundamentals daily.
 
+**Android app.** Download [SemiQuant.apk](https://github.com/chennakeshavadasa/career-semi-quant/releases/download/android/SemiQuant.apk) on the phone, open it and allow installs from that source. It is the web edition in a native shell (`android/`, built by GitHub Actions on every change): same live stream and data, plus CSV / Excel / chart exports saved to Downloads/SemiQuant, the Android share sheet, outside links opening in your browser and the back button.
+
 The web edition installs as an app on a phone: open it in Safari (iPhone: Share, then **Add to Home Screen**) or Chrome (Android: menu, then **Install app**). It opens full screen with a bottom tab bar, **streams prices live from Yahoo** (see below), checks for a new analytics build every minute, and keeps the last data for offline use. Watchlists, settings and your portfolio stay on the device. Full analysis tabs are published for the semiconductor universe and the US mega caps; every other ticker shows its live quote, and the local edition analyses anything.
 
 ## How fresh is the data?

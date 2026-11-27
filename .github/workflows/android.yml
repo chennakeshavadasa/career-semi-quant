@@ -4,7 +4,7 @@ name: Android app
 # publishes it as the "android" release:
 #   https://github.com/chennakeshavadasa/career-semi-quant/releases/download/android/SemiQuant.apk
 # Signing: android/signing/release.p12, unlocked by the repository secret
-# ANDROID_KEYSTORE_PASSWORD. Every published APK carries that key, so the app can update
+# ANDROID_KEYSTORE_PASSWORD (or "skey"). Every published APK carries that key, so the app can update
 # itself (version.json in the release tells it a newer build exists). Without the secret
 # the build is debug-signed and NOT published.
 
@@ -38,7 +38,7 @@ jobs:
 
       - name: Signing
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.skey }}
         run: |
           if [ -n "$KEYSTORE_PASSWORD" ]; then
             echo "SIGNED=1" >> "$GITHUB_ENV"
@@ -51,7 +51,7 @@ jobs:
         working-directory: android
         env:
           VERSION_CODE: ${{ github.run_number }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.skey }}
         run: |
           gradle --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/SemiQuant.apk"

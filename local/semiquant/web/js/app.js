@@ -209,13 +209,14 @@
     }
     if (SQ.static) {
       const sub = $('.brand small');
-      if (sub) sub.textContent = 'Web edition · updated every ~15 min';
+      if (sub) sub.textContent = 'Web edition · live prices · analytics every ~15 min';
     }
     if (SQ.snapshot) {
       Object.assign(SQ.live.quotes, SQ.snapshot.quotes || {});
       if (!location.hash && SQ.snapshot.home) history.replaceState(null, '', '#/' + SQ.snapshot.home);
     }
     await SQ.loadSettings();
+    if (SQ.stream) SQ.stream.sync(); // honour a saved "streaming off"
     await loadWatchlists();
     SQ.updateStatus();
     if (!SQ.snapshot) setInterval(SQ.updateStatus, 60000);

@@ -20,6 +20,7 @@ DEFAULT_SETTINGS = {
     "quote_refresh_seconds": 30,     # browser polling of live quotes while a market is open
     "closed_refresh_seconds": 300,   # ... and while every market shown is closed
     "intraday_refresh_seconds": 60,  # 1-minute chart refresh
+    "stream": True,                  # real-time prices streamed from Yahoo to the browser
     "default_range": "6M",
     "risk_free_fallback": 0.04,
     "theme": "auto",

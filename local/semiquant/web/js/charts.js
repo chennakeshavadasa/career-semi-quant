@@ -211,7 +211,7 @@
           pathbar: { visible: false }, tiling: { packing: 'squarify', pad: 2 },
           hovertemplate: '<b>%{label}</b><br>%{customdata}<extra></extra>',
         }],
-        layout: { margin: { l: 0, r: 0, t: 0, b: 0 }, showlegend: false },
+        layout: { margin: { l: 0, r: 0, t: 0, b: 0 }, showlegend: false, uirevision: 'treemap' }, // live redraws keep a zoomed sector
         config: { displayModeBar: false },
       };
     });
@@ -238,7 +238,8 @@
     const LW = window.LightweightCharts;
     if (!LW) { root.appendChild(SQ.ui.empty('Chart library failed to load.')); return null; }
     const t0 = theme();
-    const bars = data.bars, n = bars.t.length;
+    const bars = data.bars;
+    let n = bars.t.length;
     const style = o.style || (data.intraday && data.range === '1D' ? 'area' : 'candles');
     const legend = h('div', { class: 'pc-legend' });
     const mainEl = h('div', { class: 'pc-main' });
@@ -255,14 +256,20 @@
       return m >= 570 && m < 960;
     };
     let series;
-    const candleData = [], lineData = [];
+    const candleData = [], lineData = [], candleIdx = []; // candleIdx: index in bars of each candle
+    const paint = (c) => { // extended-hours candles are drawn faded
+      if (inSession(c.time)) return;
+      const a = c.close >= c.open ? `rgba(${t0.upRgb},.45)` : `rgba(${t0.downRgb},.45)`;
+      c.color = a; c.wickColor = a; c.borderColor = a;
+    };
     for (let i = 0; i < n; i++) {
       if (!fmt.ok(bars.c[i])) continue;
       const time = bars.t[i];
       const c = { time, open: bars.o[i] ?? bars.c[i], high: bars.h[i] ?? bars.c[i], low: bars.l[i] ?? bars.c[i], close: bars.c[i] };
-      if (!inSession(time)) { const up = c.close >= c.open; const a = up ? `rgba(${t0.upRgb},.45)` : `rgba(${t0.downRgb},.45)`; c.color = a; c.wickColor = a; c.borderColor = a; }
+      paint(c);
       candleData.push(c);
       lineData.push({ time, value: bars.c[i] });
+      candleIdx.push(i);
     }
     function makeMain(t) {
       if (style === 'candles') {
@@ -366,17 +373,81 @@
         `C <b>${fmt.price(c1)}</b>`, `<span class="${fmt.cls(ch)}">${fmt.pct(ch, 2)}</span>`];
       if (bars.v && bars.v.length) parts.push(`Vol ${fmt.big(bars.v[i])}`);
       for (const [name, d] of Object.entries(ind)) {
-        if (d.v && !PANES.includes(name)) parts.push(`<span style="color:${col(theme(), OVERLAYS[name] || 'teal')}">${name.toUpperCase()} ${fmt.price(d.v[i])}</span>`);
+        if (d.v && !PANES.includes(name) && d.v[i] !== undefined) parts.push(`<span style="color:${col(theme(), OVERLAYS[name] || 'teal')}">${name.toUpperCase()} ${fmt.price(d.v[i])}</span>`);
       }
       if (ind.rsi && ind.rsi.v) parts.push(`RSI ${fmt.num(ind.rsi.v[i], 1)}`);
       if (ind.macd && ind.macd.macd) parts.push(`MACD ${fmt.num(ind.macd.macd[i], 2)}`);
       legend.innerHTML = parts.map((p) => `<span>${p}</span>`).join('');
     }
     showLegend();
+    let hover = false;
     charts.forEach((c) => c.subscribeCrosshairMove((p) => {
-      if (!p || p.time === undefined) { showLegend(); return; }
+      if (!p || p.time === undefined) { hover = false; showLegend(); return; }
+      hover = true;
       showLegend(idxByTime.get(typeof p.time === 'object' ? JSON.stringify(p.time) : p.time));
     }));
+
+    // ── live updates (stream ticks and polled quotes) ──
+    // Intraday bars are on the exchange's wall clock encoded as UTC epoch seconds (see
+    // service/common.epoch_local), so a tick's time is converted the same way before it is
+    // bucketed into the chart's interval. Daily bars are 'YYYY-MM-DD' strings.
+    const IV = { '1m': 60, '2m': 120, '5m': 300, '15m': 900, '30m': 1800, '60m': 3600, '1h': 3600, '90m': 5400 }[data.interval] || 60;
+    const prepost = data.intraday && (data.range === '1D' || data.range === '5D');
+    let zone = null;
+    try {
+      if (data.tz) zone = new Intl.DateTimeFormat('en-US', { timeZone: data.tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch (e) { zone = null; }
+    const wall = (ms) => {
+      const p = {};
+      zone.formatToParts(new Date(ms)).forEach((x) => { p[x.type] = x.value; });
+      return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) / 1000;
+    };
+    function addBar(time, price) {
+      const c = { time, open: price, high: price, low: price, close: price };
+      paint(c);
+      candleData.push(c); lineData.push({ time, value: price });
+      bars.t.push(time); bars.o.push(price); bars.h.push(price); bars.l.push(price); bars.c.push(price);
+      if (bars.v && bars.v.length) bars.v.push(null);
+      n = bars.t.length;
+      candleIdx.push(n - 1);
+      idxByTime.set(time, n - 1);
+      return c;
+    }
+    // kind: 'regular' | 'ext' (pre-market / after hours) | 'overnight'. ms: trade time (epoch ms).
+    function tick(price, ms, kind, quiet) {
+      if (!fmt.ok(price) || !candleData.length || kind === 'overnight') return; // overnight prints are not on Yahoo's charts
+      let last = candleData[candleData.length - 1];
+      if (ms && zone) {
+        const w = wall(ms);
+        if (data.intraday) {
+          if (kind === 'ext' && !prepost) return;
+          const bt = Math.floor(w / IV) * IV;
+          if (bt < last.time) return; // already inside an earlier bar
+          if (bt > last.time) {
+            if (bt - last.time > 4 * 86400) return; // the chart is days old: wait for its reload
+            last = addBar(bt, price);
+          }
+        } else {
+          if (kind === 'ext') return; // daily bars hold the regular session only
+          const day = new Date(w * 1000).toISOString().slice(0, 10);
+          if (typeof last.time !== 'string' || day < last.time) return;
+          if (day > last.time) {
+            if (Date.parse(day) - Date.parse(last.time) >= 7 * 864e5) return; // old chart or a new week: wait for its reload
+            if (data.interval !== '1wk') last = addBar(day, price); // a new trading day
+          }
+        }
+      }
+      last.close = price;
+      if (price > last.high) last.high = price;
+      if (price < last.low) last.low = price;
+      paint(last);
+      const i = candleIdx[candleIdx.length - 1];
+      bars.c[i] = price; bars.h[i] = last.high; bars.l[i] = last.low;
+      lineData[lineData.length - 1].value = price;
+      // A copy: series.update() rewrites the object it gets (its time becomes {year, month, day}).
+      if (style === 'candles') series.update({ ...last }); else series.update({ time: last.time, value: price });
+      if (!hover && !quiet) showLegend();
+    }
     main.timeScale().fitContent();
     const inst = {
       root, charts,
@@ -396,12 +467,16 @@
         const cv = main.takeScreenshot();
         cv.toBlob((b) => SQ.ui.saveBlob(b, (name || 'chart') + '.png'));
       },
-      // Live update of the last bar from a quote (no refetch).
-      tickLast(price) {
-        if (!fmt.ok(price) || !candleData.length) return;
-        const last = candleData[candleData.length - 1];
-        last.close = price; last.high = Math.max(last.high, price); last.low = Math.min(last.low, price);
-        if (style === 'candles') series.update(last); else series.update({ time: last.time, value: price });
+      // Live update from a quote or a streamed trade: extends the chart, no refetch.
+      tickLast(price, ms, kind) { tick(price, ms, kind || 'regular'); },
+      // Replay streamed 1-minute bars [minute, open, high, low, close, kind 0/1/2] newer than the data.
+      replay(tape) {
+        if (!tape || !tape.length) return;
+        for (const [m, o, hi, lo, c, k] of tape) {
+          const ms = m * 60000, kind = k === 0 ? 'regular' : k === 2 ? 'overnight' : 'ext';
+          tick(o, ms, kind, true); tick(hi, ms, kind, true); tick(lo, ms, kind, true); tick(c, ms + 59000, kind, true);
+        }
+        if (!hover) showLegend();
       },
     };
     lwcs.add(inst);

@@ -130,11 +130,14 @@
           if (p && p.id && !String(p.id).startsWith('s:') && p.id !== 'root') SQ.go('#/t/' + encodeURIComponent(p.id));
         });
         SQ.live.register('market-heat', d.tiles.map((t) => t.ticker));
+        let redraw = null, drawn = 0;
         const off = SQ.live.onQuotes((qs) => {
           let changed = false;
           d.tiles.forEach((t) => { const q = qs[t.ticker]; if (q && q.change_pct !== t.change_pct) { t.change_pct = q.change_pct; t.price = q.price; changed = true; } });
-          if (changed) draw(d.tiles);
+          if (!changed || redraw) return; // streamed ticks: redraw at most every 4 s
+          redraw = setTimeout(() => { redraw = null; drawn = Date.now(); if (el.isConnected) draw(d.tiles); }, Math.max(0, 4000 - (Date.now() - drawn)));
         });
+        uniCleanup.push(() => clearTimeout(redraw));
         uniCleanup.push(off, () => SQ.live.unregister('market-heat'));
         const tot = d.advancers + d.decliners;
         sideBox.appendChild(ui.kpis([

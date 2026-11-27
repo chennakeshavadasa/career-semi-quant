@@ -98,6 +98,10 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--rule-str
 .dot.open { background: var(--up); box-shadow: 0 0 0 3px rgba(var(--up-rgb), .18); }
 .dot.ext { background: var(--warn); box-shadow: 0 0 0 3px rgba(var(--warn-rgb), .18); }
 .dot.busy { animation: pulse 1s infinite; }
+.sbadge { font: 600 10px/1 var(--mono); letter-spacing: .08em; padding: 3px 6px; border-radius: 4px; color: var(--ink-3); border: 1px solid var(--rule-strong); }
+.sbadge.on { color: var(--up); border-color: rgba(var(--up-rgb), .45); background: rgba(var(--up-rgb), .1); }
+.sbadge.on::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--up); margin-right: 5px; vertical-align: 1px; animation: pulse 1.6s infinite; }
+.sbadge[hidden] { display: none; }
 @keyframes pulse { 50% { opacity: .35; } }
 .btn {
   display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid var(--rule-strong);

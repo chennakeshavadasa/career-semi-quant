@@ -38,7 +38,7 @@
       <div id="suggest" class="suggest hidden" role="listbox"></div>
     </div>
     <div class="top-right">
-      <div class="mstatus" title="Quotes refresh automatically"><span id="live-dot" class="dot"></span><span class="txt" id="mkt-text">Connecting…</span><span class="dim" id="live-time"></span></div>
+      <div class="mstatus" title="Quotes refresh automatically"><span id="live-dot" class="dot"></span><span id="stream-badge" class="sbadge" hidden>LIVE</span><span class="txt" id="mkt-text">Connecting…</span><span class="dim" id="live-time"></span></div>
       <button class="btn icon" id="refresh-btn" title="Refresh now (R)"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
       <button class="btn hidden" id="install-btn" title="Install as an app on this device">Install app</button>
       <button class="btn icon" id="theme-btn" title="Light / dark theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor"/></svg></button>
@@ -77,6 +77,7 @@
 <script src="vendor/plotly.min.js"></script>
 <script src="js/core.js"></script>
 <script src="js/static.js"></script>
+<script src="js/stream.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/ta.js"></script>
 <script src="js/views/market.js"></script>

@@ -12,6 +12,9 @@
     ['factors', 'Factors & regimes'], ['events', 'Filings & news'],
   ];
   SQ.TICKER_TABS = TABS;
+  // Phone labels (the tabs are a grid of keys there).
+  const SHORT = { risk: 'Risk', tail: 'Tail risk', fundamentals: 'Financials', analysts: 'Analysts', ownership: 'Owners', factors: 'Factors', events: 'News' };
+  const two = (long, short) => [h('span', { class: 'bl' }, long), h('span', { class: 'bs' }, short)];
   const state = { sym: null, quote: null, overview: null };
   SQ.tickerState = state;
 
@@ -41,13 +44,13 @@
       SQ.static ? h('div', { class: 'th-actions' },
         h('button', { class: 'btn', title: 'Add to your watchlist (saved on this device)', onclick: () => SQ.addToWatchlist(sym) }, '☆ Watch'),
         SQ.isPublished(sym) ? h('a', { class: 'btn', href: '#/compare?s=' + encodeURIComponent(sym + ',SOXX,SPY') }, 'Compare') : null,
-        SQ.isPublished(sym) ? h('a', { class: 'btn', href: '#/offer?t=' + encodeURIComponent(sym) }, 'Value a grant') : null,
+        SQ.isPublished(sym) ? h('a', { class: 'btn', href: '#/offer?t=' + encodeURIComponent(sym) }, two('Value a grant', 'Grant')) : null,
         h('button', { class: 'btn primary', title: 'Share a link to this page', onclick: () => SQ.shareLink(`${sym} on Semi Quant Terminal`) },
           h('span', { html: '<svg viewBox="0 0 24 24"><path d="M4 12v7h16v-7M12 3v12m0-12l-4 4m4-4l4 4"/></svg>' }), 'Share')) :
       h('div', { class: 'th-actions' },
         h('button', { class: 'btn', title: 'Add to the current watchlist', onclick: () => SQ.addToWatchlist(sym) }, '☆ Watch'),
         h('a', { class: 'btn', href: '#/compare?s=' + encodeURIComponent(sym + ',SOXX,SPY') }, 'Compare'),
-        h('a', { class: 'btn', href: '#/offer?t=' + encodeURIComponent(sym) }, 'Value a grant'),
+        h('a', { class: 'btn', href: '#/offer?t=' + encodeURIComponent(sym) }, two('Value a grant', 'Grant')),
         h('button', { class: 'btn', title: 'Excel workbook with prices, risk, options, statements, estimates and ownership', onclick: () => ui.download('/api/export/ticker/' + encodeURIComponent(sym) + '.xlsx') },
           h('span', { html: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 19h14"/></svg>' }), 'Excel'),
         h('button', { class: 'btn primary', title: 'One self-contained HTML file with every tab: send it to a friend, it opens in any browser', onclick: () => {
@@ -85,7 +88,7 @@
     const tabs = SQ.$('#tt'), body = SQ.$('#tb');
     tabs.innerHTML = '';
     if (SQ.static && !SQ.isPublished(sym)) { body.innerHTML = ''; body.appendChild(quoteCard(sym, state.quote || {})); return; }
-    TABS.forEach(([k, label]) => tabs.appendChild(h('a', { href: `#/t/${encodeURIComponent(sym)}/${k}`, class: k === tab ? 'on' : '' }, label)));
+    TABS.forEach(([k, label]) => tabs.appendChild(h('a', { href: `#/t/${encodeURIComponent(sym)}/${k}`, class: k === tab ? 'on' : '' }, two(label, SHORT[k] || label))));
     SQ.cleanups.splice(0).forEach((fn) => { try { fn(); } catch (e) { /* ignore */ } });
     charts.disposeAll(body);
     body.innerHTML = '';
@@ -256,7 +259,7 @@
       const pos = ((sg.score || 0) + 1) / 2 * 100;
       const key = (sg.signals || []).filter((s) => /SMA 50|SMA 200|RSI|MACD|ADX|cross/i.test(s.name)).slice(0, 7);
       side.appendChild(ui.panel('Technical rating', h('div', null,
-        h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' } },
+        h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: '2px 12px' } },
           h('b', { class: /buy/i.test(sg.rating) ? 'up' : /sell/i.test(sg.rating) ? 'down' : '', style: { fontSize: '19px' } }, sg.rating),
           h('span', { class: 'mono dim', style: { fontSize: '12px' } }, `${sg.counts.buy} buy · ${sg.counts.neutral} neutral · ${sg.counts.sell} sell`)),
         h('div', { class: 'meter' }, h('i', { style: { left: pos + '%' } })),

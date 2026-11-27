@@ -66,12 +66,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
 ::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
 @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
 b, strong { font-weight: 700; }
+pre { overflow-wrap: anywhere; } /* long commands and URLs wrap instead of widening the page */
 kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--rule-strong); border-bottom-width: 2px; border-radius: 4px; color: var(--ink-3); background: var(--card); }
 .mono { font-family: var(--mono); }
 .up { color: var(--up); } .down { color: var(--down); } .warn { color: var(--warn); } .acc { color: var(--accent); }
 .muted { color: var(--ink-3); } .dim { color: var(--ink-4); }
 .label { font: 400 10.5px/1.3 var(--mono); letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3); }
 .hidden { display: none !important; }
+.bs { display: none; } /* short label, shown on phones instead of .bl */
 .nowrap { white-space: nowrap; }
 
 /* ─── App shell ─────────────────────────────────────────────────────────── */
@@ -192,9 +194,11 @@ h2.sec::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
 .kv > div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed var(--rule); font-size: 13.5px; min-width: 0; }
 .kv > div span:first-child { color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kv > div span:last-child { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+.kv > div { flex-wrap: wrap; } /* a long value moves under its label instead of running over the next column */
+.kv > div span:last-child { margin-left: auto; text-align: right; white-space: normal; overflow-wrap: anywhere; }
 
 /* Tabs & segmented controls */
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--rule); margin: 14px 0 16px; overflow-x: auto; }
+.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--rule); margin: 14px 0 16px; }
 .tabs a { padding: 9px 13px; color: var(--ink-3); border-bottom: 2px solid transparent; white-space: nowrap; font-size: 14.5px; margin-bottom: -1px; }
 .tabs a:hover { color: var(--ink); text-decoration: none; }
 .tabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
@@ -242,7 +246,7 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
 .th-name h1 { font-size: 26px; line-height: 1.15; }
 .th-name .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 5px; color: var(--ink-3); font: 12px var(--mono); }
 .th-price { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.th-price .px { font: 34px/1 var(--mono); }
+.th-price .px { font: 34px/1.12 var(--mono); }
 .th-price .chg { font: 16px var(--mono); }
 .th-price .ext { font: 13px var(--mono); color: var(--ink-3); }
 .th-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
@@ -631,3 +635,87 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
   table.holdings th:nth-child(3) { white-space: normal; }
 }
 @media (max-width: 980px) { [data-theme="dark"] table.t th.sorted:first-child { background: var(--amber); color: #000; } }
+
+/* ═══ Phones (≤980px) v2: one page that scrolls, nothing wider than the screen ═════════════
+ * The page itself scrolls (no inner scroll panel): native momentum, one scroll position, and
+ * nothing moves on its own. Controls wrap into rows of keys instead of sliding sideways; only
+ * wide data tables keep a sideways swipe (first column pinned), and never scroll vertically.
+ * ":root" raises specificity above the theme rules so both themes get the same layout. */
+@media (max-width: 980px) {
+  :root { height: auto; overflow: visible; }
+  :root body { height: auto; min-height: 100%; overflow: visible; overflow-x: clip; max-width: none; }
+  :root .app { display: block; height: auto; }
+  :root .topbar { position: sticky; top: 0; height: calc(var(--top-h) + env(safe-area-inset-top)); }
+  :root .main { overflow: visible; height: auto; padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  :root .loading-line { top: calc(var(--top-h) + env(safe-area-inset-top)); }
+  :root .bl { display: none; } :root .bs { display: inline; }
+
+  /* Everything may shrink to the screen width */
+  :root .grid > *, :root .pc-tools > *, :root .th-wrap > *, :root .page-h > *, :root .panel > .ph > *, :root .t-tools > * { min-width: 0; }
+  :root .panel, :root .tw, :root .kpis, :root .kv, :root .chart { max-width: 100%; }
+
+  /* Top bar: the search box gives way so the status badge always fits */
+  :root .search { flex: 1 1 0; min-width: 0; }
+  :root .top-right { flex: none; }
+
+  /* Tabs: a grid of keys with short labels */
+  :root .tabs { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.4em, 1fr)); gap: 4px; overflow: visible;
+    border-bottom: 0; margin: 10px 0 12px; font-size: 12px; }
+  :root .tabs a { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 36px; padding: 5px 4px;
+    margin: 0; white-space: normal; line-height: 1.15; font-size: 1em; border: 1px solid var(--rule-strong); border-radius: 7px; }
+  :root .tabs a.on { border-color: var(--accent); background: var(--accent-wash); }
+  [data-theme="dark"] .tabs a { border: 1px solid #3a3a3a; }
+  [data-theme="dark"] .tabs a.on { border-color: var(--amber); background: var(--amber); }
+
+  /* Segmented controls: full-width rows of equal keys that wrap */
+  :root .seg { display: flex; flex-wrap: wrap; width: 100%; max-width: 100%; overflow: visible; gap: 1px; background: var(--rule-strong); }
+  :root .seg button { flex: 1 1 auto; min-height: 34px; padding: 4px 8px; border: 0; background: var(--card); white-space: nowrap; }
+  :root .seg button.on { background: linear-gradient(var(--accent-wash), var(--accent-wash)), var(--card); }
+  [data-theme="dark"] .seg { background: #3a3a3a; }
+  [data-theme="dark"] .seg button { background: #000; }
+  [data-theme="dark"] .seg button.on { background: var(--amber); }
+  :root .pc-tools .seg:first-child { flex-wrap: nowrap; }
+  :root .pc-tools .seg:first-child button { flex: 1 1 0; min-width: 0; padding: 0; }
+  :root .panel > .ph .r { width: 100%; margin-left: 0; }
+  :root .panel > .ph .r > * { width: 100%; flex-wrap: wrap; }
+
+  /* Action rows: keys that fit, never a sideways strip */
+  :root .th-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(5.2em, 1fr)); gap: 6px; width: 100%; margin-left: 0;
+    overflow: visible; padding: 0; }
+  :root .th-actions .btn { width: 100%; min-width: 0; height: auto; min-height: 38px; padding: 4px 6px; justify-content: center;
+    white-space: normal; text-align: center; line-height: 1.15; }
+  :root .page-h .actions { flex-wrap: wrap; overflow: visible; }
+  :root .page-h .sub { cursor: pointer; }
+  :root .page-h .sub.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+
+  /* Tables: no inner vertical scrolling; taller rows where a row opens something */
+  :root .tw.max { max-height: none; }
+  :root table.t tr.click td { padding-top: 10px; padding-bottom: 10px; }
+
+  /* Key/value rows: a long value wraps under its label instead of running over it */
+  :root .kv > div { flex-wrap: wrap; column-gap: 12px; row-gap: 0; }
+  :root .kv > div span:first-child { white-space: normal; overflow: visible; flex: 1 1 auto; min-width: 0; }
+  :root .kv > div span:last-child { white-space: normal; text-align: right; margin-left: auto; overflow-wrap: anywhere; max-width: 100%; }
+
+  /* Touch targets */
+  :root .btn { height: auto; min-height: 36px; }
+  :root .btn.sm { min-height: 34px; padding: 0 10px; }
+  :root .btn.icon { width: 36px; min-width: 36px; }
+  :root .panel > .ph .btn { min-height: 32px; height: auto; }
+  :root .pc-tools label { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 6px; }
+  :root .qb-row { min-height: 40px; }
+  :root .wl-page .btn.sm { min-width: 36px; justify-content: center; }
+
+  /* Small print stays readable */
+  :root .label, :root .field > span, :root table.t th, :root .meter-l, :root .chip, :root .tile .lb span:last-child, :root .qb-l small,
+  :root .pc-sub .tag, :root .pc-main .tag, :root .sbadge, :root .suggest .it .t, :root .news a .src { font-size: 11px; }
+
+  /* Bottom tab bar: labels never run into each other */
+  :root .bnav a { font-size: 11px; min-width: 0; padding-left: 2px; padding-right: 2px; }
+  :root .bnav a span { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :root .th-price .px { line-height: 1.12; }
+  :root select.inp, :root input.inp, :root .wl-head select, :root .wl-add input { height: 38px; }
+  :root .holdings .btn.sm, :root .t-tools .btn.sm { min-width: 36px; justify-content: center; }
+  :root label:has(> input[type=checkbox]) { min-height: 36px; display: inline-flex; align-items: center; gap: 8px; }
+  :root .brand .logo { width: 34px; height: 34px; }
+}

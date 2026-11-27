@@ -316,6 +316,7 @@
       for (const id of Array.from(live.regs.keys())) if (id !== 'sidebar') live.unregister(id);
       view.innerHTML = '';
       $('#main').scrollTop = 0;
+      window.scrollTo(0, 0); // phones: the page itself scrolls
     }
     $$('#nav a, #bnav a').forEach((a) => a.classList.toggle('on', a.dataset.r === name));
     const fn = SQ.views[name === 't' ? 'ticker' : name];

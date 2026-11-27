@@ -168,6 +168,8 @@
   // Phones: a short command-line prompt instead of the long desktop hint.
   if (window.matchMedia && matchMedia('(max-width: 980px)').matches) $('#q').placeholder = 'Ticker or company…';
 
+  // Phones clamp page intros to two lines: a tap shows the whole text.
+  document.addEventListener('click', (e) => { const s = e.target.closest('.page-h .sub'); if (s) s.classList.toggle('open'); });
   // Swipeable tab rows: bring the active tab into view whenever a row is (re)drawn.
   const centerActive = (row) => {
     const on = row.querySelector('.on');

@@ -33,7 +33,8 @@ permissions:
   id-token: write
 
 concurrency:
-  group: webapp
+  # Restores (page_build) get their own queue so they never wait behind a publish run.
+  group: ${{ github.event_name == 'page_build' && 'webapp-restore' || 'webapp' }}
   cancel-in-progress: false
 
 jobs:

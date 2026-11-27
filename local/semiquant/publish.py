@@ -26,6 +26,7 @@ import math
 import os
 import re
 import shutil
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -98,7 +99,8 @@ def _ser_tail(s: dict | None, n: int) -> dict | None:
 
 
 class Publisher:
-    def __init__(self, out: str | Path, full: list[str] | None = None, force: bool = False, workers: int = 6):
+    def __init__(self, out: str | Path, full: list[str] | None = None, force: bool = False, workers: int = 6,
+                 budget: float | None = None):
         self.out = Path(out)
         self.data = self.out / "data"
         self.force = force
@@ -110,8 +112,12 @@ class Publisher:
         except (OSError, ValueError):
             self.index = {}
         self.now = time.time()
-        self.stats = {"written": 0, "reused": 0, "failed": 0}
+        # Stop starting heavy work after `budget` seconds; the next run continues (tiers).
+        self.deadline = self.now + budget if budget else None
+        self.stats = {"written": 0, "reused": 0, "failed": 0, "deferred": 0}
         self.errors: list[str] = []
+        self._lock = threading.Lock()
+        self._unsaved = 0
 
     @staticmethod
     def _default_full() -> list[str]:
@@ -154,8 +160,21 @@ class Publisher:
         tmp = p.with_suffix(".tmp")
         tmp.write_text(text, encoding="utf-8")
         os.replace(tmp, p)
-        self.index[key] = self.now
-        self.stats["written"] += 1
+        with self._lock:
+            self.index[key] = self.now
+            self.stats["written"] += 1
+            self._unsaved += 1
+            if self._unsaved >= 20:  # a killed run keeps its progress
+                self.save_index()
+
+    def save_index(self) -> None:
+        tmp = self.index_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.index, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, self.index_path)
+        self._unsaved = 0
+
+    def over_budget(self) -> bool:
+        return bool(self.deadline and time.time() > self.deadline)
 
     # ── static app ──────────────────────────────────────────────────────
     def copy_app(self) -> str:
@@ -216,6 +235,7 @@ class Publisher:
             self.put(f"/api/market/breadth?u={u}", "hourly", lambda u=u: mkt.breadth(u))
 
     def ticker(self, sym: str) -> None:
+        """Quick pass: everything that changes intraday (always done)."""
         enc = urlq(sym, safe="")
         base = f"/api/ticker/{enc}"
         self.put(f"{base}/overview", "live", lambda: tk.overview(sym))
@@ -226,6 +246,13 @@ class Publisher:
         self.put(f"{base}/chart?range=MAX", "daily", lambda: tk.chart(sym, "MAX", []), "chart")
         self.put(f"{base}/score", "hourly", lambda: tk.score(sym))
         self.put(f"{base}/news?count=40", "hourly", lambda: tk.news(sym, 40))
+
+    def ticker_slow(self, sym: str) -> None:
+        """Heavy pass (risk models, options, statements): stops at the time budget."""
+        if self.over_budget():
+            self.stats["deferred"] += 1
+            return
+        base = f"/api/ticker/{urlq(sym, safe='')}"
         for tab, fn in (("risk", tk.risk), ("volatility", tk.volatility), ("tail", tk.tail), ("options", tk.options),
                         ("factors", tk.factors), ("analysts", tk.analysts)):
             self.put(f"{base}/{tab}", "slow", lambda fn=fn: fn(sym), tab)
@@ -249,7 +276,8 @@ class Publisher:
         strip = {s: lbl for g in MARKET_GROUPS.values() for s, lbl in g}
         search += [[s, lbl, "Market", "Index / macro"] for s, lbl in strip.items() if s not in ALL_META]
         (self.data / "search.json").write_text(json.dumps(search, separators=(",", ":")), encoding="utf-8")
-        self.index_path.write_text(json.dumps(self.index, separators=(",", ":")), encoding="utf-8")
+        with self._lock:
+            self.save_index()
 
     def run(self, tickers: list[str] | None = None, market: bool = True) -> dict:
         t0 = time.time()
@@ -260,7 +288,10 @@ class Publisher:
             self.market()
         names = tickers if tickers is not None else self.full
         with ThreadPoolExecutor(max_workers=self.workers) as ex:
-            list(ex.map(self.ticker, names))
+            list(ex.map(self.ticker, names))  # quick pass for every ticker first
+        self.meta(build)  # publish what is ready before the heavy pass
+        with ThreadPoolExecutor(max_workers=self.workers) as ex:
+            list(ex.map(self.ticker_slow, names))
         self.meta(build)
         size = sum(f.stat().st_size for f in self.data.rglob("*.json")) / 1e6
         return {"seconds": round(time.time() - t0, 1), "data_mb": round(size, 1), "build": build, **self.stats,
@@ -268,6 +299,7 @@ class Publisher:
 
 
 def publish(out: str, full: list[str] | None = None, tickers: list[str] | None = None, force: bool = False,
-            market: bool = True) -> dict:
+            market: bool = True, budget_minutes: float | None = None) -> dict:
     config.ensure_dirs()
-    return Publisher(out, full=full, force=force).run(tickers=tickers, market=market)
+    budget = budget_minutes * 60 if budget_minutes else None
+    return Publisher(out, full=full, force=force, budget=budget).run(tickers=tickers, market=market)

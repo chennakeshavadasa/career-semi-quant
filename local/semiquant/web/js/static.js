@@ -175,7 +175,9 @@
     try {
       return await get(SQ.fileKey(path), built());
     } catch (e) {
-      if (e.status === 404) throw new Error('Not published on the website. The local edition (free, runs on your computer) has this for any ticker.');
+      if (e.status === 404) throw new Error(SQ.isPublished(decodeURIComponent((p.match(/^\/api\/ticker\/([^/]+)/) || [])[1] || ''))
+        ? 'This section is still being prepared: new analytics are added at every refresh (about every 15 minutes). The local edition computes it instantly.'
+        : 'Not published on the website. The local edition (free, runs on your computer) has this for any ticker.');
       throw e;
     }
   };

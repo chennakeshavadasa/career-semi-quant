@@ -2,4 +2,5 @@
 build/
 local.properties
 *.jks
+!signing/release.p12
 *.keystore

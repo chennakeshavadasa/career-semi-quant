@@ -109,7 +109,7 @@
         { label: 'Volume', value: fmt.big(q.volume) },
       ]),
       ui.panel('Full analysis', h('div', { class: 'note' },
-        h('p', null, `Charts, risk, volatility, options, fundamentals, analyst estimates and ownership are published for the semiconductor universe and the US mega caps (refreshed every ~15 minutes in market hours). ${sym} shows its live quote here and appears in the heatmaps and screener.`),
+        h('p', null, `Charts, risk, volatility, options, fundamentals, analyst estimates and ownership are published for the semiconductor universe and the US large caps (refreshed every ~15 minutes in market hours). ${sym} shows its live quote here and appears in the heatmaps and screener.`),
         h('p', { style: { marginTop: '8px' } }, 'For every tab on any ticker, run the free local edition on your computer: ',
           h('a', { href: 'https://github.com/chennakeshavadasa/career-semi-quant/tree/master/local', target: '_blank', rel: 'noopener' }, 'how to install it'), '.'))));
   }

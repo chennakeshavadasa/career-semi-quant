@@ -1,14 +1,22 @@
 package io.github.nithinpuru.semiquant;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Base64;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
@@ -23,9 +31,15 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
  * Semi Quant Terminal for Android: a full-screen WebView on the web edition
@@ -42,6 +56,8 @@ public class MainActivity extends Activity {
     static final String HOME = "https://" + HOST + APP_PATH + "/";
     static final String OFFLINE = "file:///android_asset/offline.html";
     static final int BG = 0xFF000000;
+    static final String RELEASE = "https://github.com/chennakeshavadasa/career-semi-quant/releases/download/android/";
+    static final long AUTO_CHECK_MS = 6L * 3600 * 1000; // check for a new app build at most every 6 hours
 
     /**
      * Injected after each page load. Downloads made by the page (CSV, Excel, chart PNG)
@@ -66,6 +82,9 @@ public class MainActivity extends Activity {
 
     private WebView web;
     private boolean clearHistoryOnLoad = false;
+    private long downloadId = -1;
+    private String pendingApk = null; // waiting for "install unknown apps" permission
+    private BroadcastReceiver downloadDone;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -104,8 +123,114 @@ public class MainActivity extends Activity {
             }
         });
 
+        downloadDone = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent intent) {
+                long id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                if (id == downloadId) installDownloaded(id);
+            }
+        };
+        IntentFilter f = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(downloadDone, f, Context.RECEIVER_EXPORTED);
+        else registerReceiver(downloadDone, f);
+
+        SharedPreferences prefs = getSharedPreferences("sq", MODE_PRIVATE);
+        if (System.currentTimeMillis() - prefs.getLong("lastUpdateCheck", 0) > AUTO_CHECK_MS) {
+            prefs.edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply();
+            checkForUpdate(false);
+        }
+
         if (state != null && web.restoreState(state) != null) return;
         web.loadUrl(startUrl(getIntent()));
+    }
+
+    // ── app updates: version.json next to the APK in the "android" release ──
+    /** manual = from the "Update app" button: also report "up to date" and errors. */
+    void checkForUpdate(boolean manual) {
+        if (manual) toast("Checking for updates…");
+        new Thread(() -> {
+            try {
+                JSONObject j = new JSONObject(fetch(RELEASE + "version.json"));
+                int code = j.getInt("versionCode");
+                String name = j.optString("versionName", String.valueOf(code));
+                String apk = j.optString("apk", RELEASE + "SemiQuant.apk");
+                String notes = j.optString("notes", "");
+                if (code > BuildConfig.VERSION_CODE) runOnUiThread(() -> promptUpdate(name, notes, apk));
+                else if (manual) toast("You have the latest version (" + BuildConfig.VERSION_NAME + ").");
+            } catch (Exception e) {
+                if (manual) toast("Could not check for updates: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    static String fetch(String url) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url + "?t=" + System.currentTimeMillis()).openConnection();
+        c.setInstanceFollowRedirects(true); // GitHub answers with a redirect to its download host (https to https)
+        c.setConnectTimeout(15000);
+        c.setReadTimeout(15000);
+        c.setRequestProperty("Cache-Control", "no-cache");
+        if (c.getResponseCode() != 200) throw new Exception("HTTP " + c.getResponseCode());
+        try (InputStream in = c.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            for (int n; (n = in.read(buf)) > 0; ) out.write(buf, 0, n);
+            return out.toString("UTF-8");
+        } finally {
+            c.disconnect();
+        }
+    }
+
+    private void promptUpdate(String name, String notes, String apk) {
+        if (isFinishing()) return;
+        new AlertDialog.Builder(this)
+            .setTitle("Update available")
+            .setMessage("Semi Quant " + name + " is ready (you have " + BuildConfig.VERSION_NAME + ")."
+                + (notes.isEmpty() ? "" : "\n\n" + notes) + "\n\nYour watchlists and portfolio are kept.")
+            .setPositiveButton("Update now", (d, w) -> startUpdate(apk))
+            .setNegativeButton("Later", null)
+            .show();
+    }
+
+    private void startUpdate(String apk) {
+        if (Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
+            pendingApk = apk; // resumed in onResume once allowed
+            toast("Allow Semi Quant to install updates, then press back.");
+            try {
+                startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + getPackageName())));
+            } catch (ActivityNotFoundException e) {
+                openExternal(Uri.parse(apk));
+            }
+            return;
+        }
+        try {
+            File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+            File old = new File(dir, "SemiQuant-update.apk");
+            if (old.exists()) old.delete();
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            DownloadManager.Request r = new DownloadManager.Request(Uri.parse(apk))
+                .setTitle("Semi Quant update")
+                .setMimeType("application/vnd.android.package-archive")
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "SemiQuant-update.apk");
+            downloadId = dm.enqueue(r);
+            toast("Downloading the update…");
+        } catch (Exception e) {
+            toast("Download failed (" + e.getMessage() + "): opening it in the browser.");
+            openExternal(Uri.parse(apk));
+        }
+    }
+
+    private void installDownloaded(long id) {
+        DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+        int status = -1;
+        try (Cursor c = dm.query(new DownloadManager.Query().setFilterById(id))) {
+            if (c != null && c.moveToFirst()) status = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+        } catch (Exception ignored) { }
+        if (status != DownloadManager.STATUS_SUCCESSFUL) { toast("The update download failed; try again."); return; }
+        Uri uri = dm.getUriForDownloadedFile(id);
+        Intent i = new Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        try { startActivity(i); } catch (ActivityNotFoundException e) { toast("No installer found on this device."); }
     }
 
     // ── layout ───────────────────────────────────────────────────────────
@@ -188,6 +313,11 @@ public class MainActivity extends Activity {
         super.onResume();
         web.onResume();
         web.resumeTimers();
+        if (pendingApk != null && (Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls())) {
+            String apk = pendingApk;
+            pendingApk = null;
+            startUpdate(apk);
+        }
     }
 
     @Override
@@ -205,6 +335,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        try { unregisterReceiver(downloadDone); } catch (Exception ignored) { }
         web.destroy();
         super.onDestroy();
     }
@@ -236,6 +367,16 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void toast(String msg) {
             MainActivity.this.toast(msg);
+        }
+
+        @JavascriptInterface
+        public void checkUpdate() {
+            runOnUiThread(() -> checkForUpdate(true));
+        }
+
+        @JavascriptInterface
+        public String appVersion() {
+            return BuildConfig.VERSION_NAME;
         }
     }
 

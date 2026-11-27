@@ -50,7 +50,7 @@ TIERS = {"live": 0, "hourly": 3600, "slow": 3 * 3600, "daily": 20 * 3600}
 QUOTE_FIELDS = ("price", "change", "change_pct", "prev_close", "market_state", "time", "high", "low", "volume",
                 "ext_label", "ext_price", "ext_change_pct", "high_52w", "low_52w", "market_cap", "currency",
                 "pe", "fpe", "inactive")
-DEFAULT_FULL = ("semis", "mega")
+DEFAULT_FULL = ("semis", "mega", "us_large")
 MEGA = ("AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "AVGO", "TSLA", "BRK-B", "JPM", "LLY", "V", "WMT", "XOM",
         "SPY", "QQQ", "SOXX")
 
@@ -121,7 +121,7 @@ class Publisher:
 
     @staticmethod
     def _default_full() -> list[str]:
-        syms = list(universe_tickers("semis")) + list(MEGA)
+        syms = list(universe_tickers("semis")) + list(MEGA) + list(universe_tickers("us_large"))
         return list(dict.fromkeys(syms))
 
     # ── bookkeeping ─────────────────────────────────────────────────────

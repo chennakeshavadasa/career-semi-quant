@@ -141,7 +141,7 @@
   SQ.views.portfolio = async function (view) {
     let p;
     try { p = await api('/api/portfolio'); } catch (e) { p = { holdings: [], benchmark: 'SPY' }; }
-    view.appendChild(pageHead('Portfolio', 'Live value, risk decomposition, crisis replays, optimizers and a backtest. Holdings are saved on this computer only.'));
+    view.appendChild(pageHead('Portfolio', 'Live value, risk decomposition, crisis replays, optimizers, efficient frontier, backtest and Monte Carlo. Holdings are saved on this device only.'));
     const tb = h('tbody');
     const ed = h('table', { class: 't holdings' }, h('thead', null, h('tr', null, ['Ticker', 'Shares', 'Cost / share (optional)', ''].map((x) => h('th', { class: 'l' }, x)))), tb);
     const row = (x = {}) => {
@@ -165,7 +165,10 @@
     const analyze = async () => {
       const body = read();
       try { await SQ.put('/api/portfolio', body); } catch (e) { /* snapshot or offline */ }
-      if (SQ.static) { ui.async(out, () => staticPortfolio(body), renderStaticPortfolio, 300); return; }
+      if (SQ.static) { // web edition / Android app: the full analysis runs on this device
+        ui.async(out, async () => SQ.quant.portfolio(await staticPortfolio(body), body), (b, d) => renderPortfolio(b, d, body), 300);
+        return;
+      }
       ui.async(out, () => SQ.post('/api/portfolio/analyze', body), (b, d) => renderPortfolio(b, d, body), 600);
     };
     const xlsx = async () => {
@@ -188,6 +191,7 @@
 
   function renderPortfolio(b, d, input) {
     const r = d.risk || {};
+    (d.warnings || []).forEach((w) => b.appendChild(h('div', { class: 'note', style: { marginBottom: '10px' } }, w)));
     b.appendChild(ui.kpis([
       { label: 'Value (USD)', value: fmt.money(d.nav), sub: d.cash ? 'incl. cash ' + fmt.money(d.cash) : '' },
       { label: 'Today', value: fmt.money(d.day_change), cls: fmt.cls(d.day_change), sub: fmt.pct(d.day_change_pct, 2) },
@@ -297,7 +301,7 @@
         h('label', { class: 'field' }, h('span', null, 'Vesting start'), h('input', { class: 'inp', type: 'date', value: o.start, oninput: (e) => { o.start = e.target.value; } })),
         field(o, 'years', 'Vesting years', 'number'), field(o, 'cliff_months', 'Cliff (months)', 'number'),
         field(o, 'frequency', 'Then vests', 'text', [['monthly', 'monthly'], ['quarterly', 'quarterly'], ['semiannual', 'every 6 months'], ['annual', 'yearly']]),
-        field(o, 'method', 'Model', 'text', SQ.static ? [['bootstrap', 'Bootstrap (history)']] : [['bootstrap', 'Bootstrap (history)'], ['garch', 'GARCH-t'], ['gbm', 'Lognormal (GBM)']]),
+        field(o, 'method', 'Model', 'text', [['bootstrap', 'Bootstrap (history)'], ['garch', 'GARCH-t'], ['gbm', 'Lognormal (GBM)']]),
         field(o, 'drift', 'Drift', 'text', [['zero', 'Zero (conservative)'], ['riskfree', 'Risk-free rate'], ['historical', 'Historical average']])),
       { right: offers.length > 1 ? h('button', { class: 'btn sm', type: 'button', onclick: () => { offers.splice(i, 1); drawForms(); } }, 'Remove') : null })));
     }
@@ -419,13 +423,16 @@
     const strike = isOpt ? (fmt.ok(o.strike) ? +o.strike : spot) : null;
     const tdays = (d) => Math.max(0, Math.round((new Date(d + 'T12:00:00') - new Date(today + 'T12:00:00')) / 864e5 * 252 / 365));
     const steps = sched.map((v) => tdays(v.date)), P = 4000, block = 5;
+    const model = SQ.quant.offerModel(o.method, lr, drift); // null = block bootstrap
     const vals = sched.map(() => new Float64Array(P)), tot = new Float64Array(P);
     const closeOn = (d) => { let k = -1; for (let i = 0; i < t.length; i++) { if (t[i] <= d) k = i; else break; } return k >= 0 ? c[k] : null; };
     for (let p = 0; p < P; p++) {
       let logS = Math.log(spot), day = 0, pos = 0, left = 0;  // block bootstrap: 5-day blocks of demeaned returns
+      const st = model ? model.start() : null;
       const order = steps.map((s, i) => [s, i]).sort((a, b) => a[0] - b[0]);
       for (const [s, i] of order) {
         while (day < s) {
+          if (model) { logS += model.step(st); day++; continue; }
           if (left === 0) { pos = Math.floor(Math.random() * (resid.length - block)); left = block; }
           logS += resid[pos] + drift; pos++; left--; day++;
         }
@@ -445,7 +452,7 @@
     });
     const T = stat(tot);
     const total = { mean: T.mean, p5: T.p5, p25: T.p25, p50: T.p50, p75: T.p75, p95: T.p95 };
-    const result = { units, grant_price: grantPrice, grant_value: grantValue, spot, vests, total, method: 'bootstrap (browser)', drift: o.drift || 'zero' };
+    const result = { units, grant_price: grantPrice, grant_value: grantValue, spot, vests, total, method: model ? model.label : 'bootstrap (browser)', drift: o.drift || 'zero' };
     if (isOpt) {
       const vol = sd * Math.sqrt(252), Tm = +o.expiry_years || 10, r = 0.04;
       const d1 = (Math.log(spot / strike) + (r + vol * vol / 2) * Tm) / (vol * Math.sqrt(Tm)), d2 = d1 - vol * Math.sqrt(Tm);
@@ -459,7 +466,7 @@
     let pk = -Infinity, mdd = 0; tail.forEach((v) => { pk = Math.max(pk, v); mdd = Math.min(mdd, v / pk - 1); });
     const q = await api('/api/quotes?symbols=' + enc(sym)).catch(() => ({}));
     return { input: { ...o, ticker: sym }, schedule: sched, result,
-      context: { ticker: sym, name: (q[sym] || {}).name, price: spot, currency: ch.currency, vol_1y: sd * Math.sqrt(252), garch_long_run: null, max_drawdown_5y: mdd } };
+      context: { ticker: sym, name: (q[sym] || {}).name, price: spot, currency: ch.currency, vol_1y: sd * Math.sqrt(252), garch_long_run: model && model.garch ? model.vol : null, max_drawdown_5y: mdd } };
   }
 
   // ─── Calendar ─────────────────────────────────────────────────────────

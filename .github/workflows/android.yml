@@ -3,10 +3,10 @@ name: Android app
 # Builds the Android app (android/: a WebView on the web edition) and, on master,
 # publishes it as the "android" release:
 #   https://github.com/chennakeshavadasa/career-semi-quant/releases/download/android/SemiQuant.apk
-# Signing: set the repository secrets ANDROID_KEYSTORE_B64 (base64 of a .jks),
-# ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS so every build carries the same
-# key and installs as an update. Without them the APK is signed with the runner's
-# debug key, which changes between runs (uninstall before installing a new build).
+# Signing: android/signing/release.p12, unlocked by the repository secret
+# ANDROID_KEYSTORE_PASSWORD. Every published APK carries that key, so the app can update
+# itself (version.json in the release tells it a newer build exists). Without the secret
+# the build is debug-signed and NOT published.
 
 on:
   push:
@@ -36,16 +36,15 @@ jobs:
         with:
           gradle-version: "8.11.1"
 
-      - name: Signing key
+      - name: Signing
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-            echo "Signing with the release key."
+          if [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+            echo "Signing with the release key (android/signing/release.p12)."
           else
-            echo "::warning::No ANDROID_KEYSTORE_B64 secret: signing with a debug key (updates need an uninstall first)."
+            echo "::warning::Secret ANDROID_KEYSTORE_PASSWORD is not set: debug-signed build, not published (it could not update the installed app)."
           fi
 
       - name: Build APK
@@ -53,24 +52,30 @@ jobs:
         env:
           VERSION_CODE: ${{ github.run_number }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           gradle --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/SemiQuant.apk"
           ls -l "$GITHUB_WORKSPACE/SemiQuant.apk"
+          cat > "$GITHUB_WORKSPACE/version.json" <<JSON
+          {"versionCode": ${{ github.run_number }}, "versionName": "1.0.${{ github.run_number }}",
+           "apk": "https://github.com/${{ github.repository }}/releases/download/android/SemiQuant.apk",
+           "notes": "$(git log -1 --pretty=%s | tr -d '"\\' | cut -c1-140)"}
+          JSON
+          cat "$GITHUB_WORKSPACE/version.json"
 
       - uses: actions/upload-artifact@v4
         with:
           name: SemiQuant-apk
-          path: SemiQuant.apk
+          path: |
+            SemiQuant.apk
+            version.json
 
       - name: Publish release
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master' && env.SIGNED == '1'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete android --yes --cleanup-tag || true
-          gh release create android SemiQuant.apk --target "$GITHUB_SHA" --latest \
+          gh release create android SemiQuant.apk version.json --target "$GITHUB_SHA" --latest \
             --title "Semi Quant for Android (build ${{ github.run_number }})" \
-            --notes "Download SemiQuant.apk on your phone, open it and allow installs from this source. The app shows the web edition (live Yahoo prices, analytics refreshed every 15 minutes) full screen; exports save to Downloads/SemiQuant."
+            --notes "Download SemiQuant.apk on your phone, open it and allow installs from this source. Installed apps update themselves (More > Update app, or the prompt on launch). The app shows the web edition (live Yahoo prices, analytics refreshed every 15 minutes) full screen; exports save to Downloads/SemiQuant."

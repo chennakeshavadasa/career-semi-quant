@@ -94,7 +94,7 @@
   // ─── compare, computed in the browser from published 10-year bars ─────
   async function compare(symbols, rng, bench) {
     const syms = symbols.filter((s) => SQ.isPublished(s)).slice(0, 12);
-    if (!syms.length) throw new Error('Compare works with tickers that have full analysis on the website (semiconductors and US mega caps). Use the local edition for any other ticker.');
+    if (!syms.length) throw new Error('Compare works with tickers that have full analysis on the website (semiconductors and US large caps). Use the local edition for any other ticker.');
     const all = syms.concat(syms.includes(bench) ? [] : [bench]);
     const data = await Promise.all(all.map((s) => chart(s, '10Y', []).catch(() => null)));
     const series = {};
@@ -169,7 +169,7 @@
     const m = p.match(/^\/api\/ticker\/([^/]+)\/chart$/);
     if (m) {
       const sym = decodeURIComponent(m[1]);
-      if (!SQ.isPublished(sym)) throw new Error(`${sym}: full charts are published for semiconductors and US mega caps. The local edition charts any ticker.`);
+      if (!SQ.isPublished(sym)) throw new Error(`${sym}: full charts are published for semiconductors and US large caps. The local edition charts any ticker.`);
       return chart(sym, q.get('range') || '6M', (q.get('ind') || '').split(',').filter(Boolean));
     }
     try {

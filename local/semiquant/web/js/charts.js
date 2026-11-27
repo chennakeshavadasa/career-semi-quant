@@ -19,7 +19,9 @@
   }
   const NAMED = ['accent', 'up', 'down', 'warn', 'violet', 'teal', 'pink', 'ink', 'ink2', 'ink3', 'ink4'];
   const col = (t, c) => (NAMED.includes(c) ? t[c] : c);
-  const palette = (t) => [t.accent, t.warn, t.violet, t.teal, t.pink, t.up, t.down, t.ink3, t.ink2];
+  // Terminal: orange, cyan, yellow, violet... so neighbouring series never look alike.
+  const palette = (t) => (t.dark ? [t.accent, t.teal, t.warn, t.violet, t.pink, t.up, t.down, t.ink2]
+    : [t.accent, t.warn, t.violet, t.teal, t.pink, t.up, t.down, t.ink3, t.ink2]);
 
   function merge(a, b) {
     const out = { ...a };
@@ -136,7 +138,7 @@
   function heatmap(el, d, o = {}) {
     return plot(el, (t) => {
       const seq = [[0, t.dark ? '#1a1108' : '#eef2fb'], [1, t.accent]];
-      const dv = [[0, t.down], [0.5, t.dark ? '#1e1e1e' : '#f3f5f8'], [1, t.up]];
+      const dv = t.dark ? [[0, '#b3261e'], [0.5, '#1e1e1e'], [1, '#12804a']] : [[0, t.down], [0.5, '#f3f5f8'], [1, t.up]]; // deep ends keep white labels legible
       const z = d.z;
       let zmin = o.zmin, zmax = o.zmax;
       if (o.div !== false && (zmin == null || zmax == null)) {
@@ -144,12 +146,20 @@
         const m = Math.max(...flat.map((v) => Math.abs(v - (o.zmid || 0))), 1e-9);
         zmin = (o.zmid || 0) - m; zmax = (o.zmid || 0) + m;
       }
+      const full = d.text || z.map((r) => r.map((v) => (fmt.ok(v) ? (o.fmt === 'num' ? v.toFixed(2) : fmt.pct(v, o.d ?? 1)) : '')));
+      // Narrow cells (phones): whole numbers in a smaller font so labels never overlap; the
+      // exact value is in the tap/hover label. Below ~16 px per cell, colour only.
+      const cw = ((el.clientWidth || 700) - 80) / Math.max(1, (d.x || []).length);
+      const compact = cw < 52;
+      const shown = !compact || d.text ? full : z.map((r) => r.map((v) => (!fmt.ok(v) ? ''
+        : o.fmt === 'num' ? v.toFixed(1) : (v > 0 ? '+' : '') + Math.round(v * 100))));
       return {
         data: [{
           type: 'heatmap', z, x: d.x, y: d.y, colorscale: o.colors || (o.div === false ? seq : dv), zmin, zmax, xgap: 1.5, ygap: 1.5,
-          text: d.text || z.map((r) => r.map((v) => (fmt.ok(v) ? (o.fmt === 'num' ? v.toFixed(2) : fmt.pct(v, o.d ?? 1)) : ''))),
-          texttemplate: o.showText === false ? undefined : '%{text}', textfont: { size: o.textSize || 10.5, family: t.mono },
-          hovertemplate: '%{y} · %{x}: %{text}<extra></extra>', showscale: false,
+          text: shown, customdata: full,
+          texttemplate: o.showText === false || cw < 16 ? undefined : '%{text}',
+          textfont: { size: compact ? Math.max(8, Math.min(10, cw / 3.2)) : (o.textSize || 10.5), family: t.mono },
+          hovertemplate: '%{y} · %{x}: %{customdata}<extra></extra>', showscale: false,
         }],
         layout: { hovermode: 'closest', showlegend: false, xaxis: { side: o.xtop ? 'top' : 'bottom', type: 'category', showgrid: false },
           yaxis: { autorange: 'reversed', type: 'category', showgrid: false }, margin: o.margin || { l: 70, r: 10, t: o.xtop ? 30 : 8, b: 40 } },
@@ -206,7 +216,7 @@
           branchvalues: 'total', maxdepth: 3, level: 'root',
           text: [''].concat(d.text), customdata: [''].concat(d.custom), textinfo: 'label+text',
           textfont: { family: t.mono, size: 12, color: [t.ink].concat(d.colors.map((v) => (Math.abs(v || 0) > m * 0.55 ? '#ffffff' : t.ink))) },
-          marker: { colors: [0].concat(d.colors), colorscale: [[0, t.down], [0.5, t.dark ? '#262626' : '#e9edf3'], [1, t.up]], cmin: -m, cmax: m, cmid: 0,
+          marker: { colors: [0].concat(d.colors), colorscale: t.dark ? [[0, '#b3261e'], [0.5, '#262626'], [1, '#12804a']] : [[0, t.down], [0.5, '#e9edf3'], [1, t.up]], cmin: -m, cmax: m, cmid: 0,
             line: { color: t.page, width: 1.5 }, pad: { t: 18, l: 2, r: 2, b: 2 } },
           pathbar: { visible: false }, tiling: { packing: 'squarify', pad: 2 },
           hovertemplate: '<b>%{label}</b><br>%{customdata}<extra></extra>',

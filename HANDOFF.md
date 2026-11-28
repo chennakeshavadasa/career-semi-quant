@@ -1,6 +1,6 @@
 # Handoff: Semi Quant Terminal
 
-State at 2026-11-28 11:46 UTC. Read this first, then `git log --oneline -20 origin/master`.
+State at 2026-11-28 15:15 UTC (master `d9c433a` + this note). Read this first, then `git log --oneline -20 origin/master`.
 
 ## What this is
 
@@ -13,7 +13,7 @@ One codebase, four ways to use it:
 | **Android app** (WebView on the URL above) | release `android` (`SemiQuant.apk`, `version.json`) | `.github/workflows/android.yml`, only when `android/**` changes on master |
 | **Website** | https://nithinpuru.github.io/quant-terminal/ → forwards to `/quant-terminal/app/` | repo **NithinPuru/nithinpuru.github.io**, `deploy.yml` pip-installs `semiquant` from this repo's `master` and publishes it. The old single-page terminal (`public/quant-terminal/`, mirrored by its `quant-terminal-sync.yml`) is served at `/quant-terminal/classic.html` |
 
-`master` is production. Working branch for Claude sessions: `claude/pensive-einstein-jrrduh` (fast-forward master to it).
+`master` is production. Each Claude session works on its own branch and fast-forwards master to it (last one: `claude/institutional-grade-models-4wo7m3`).
 
 ## Shipped today (newest first)
 
@@ -31,24 +31,22 @@ One codebase, four ways to use it:
 - Earlier today: quant pack (crash risk/PSR, liquidity & impact, HAR-RV, random-walk tests, implied distribution, model-free IV, systemic risk, factor lab) and its tests.
 - Website repo (NithinPuru/nithinpuru.github.io, `main`): `3a04c4c` `/quant-terminal/` forwards to the app (classic page at `classic.html`; smoke test updated), `d849176` `deploy.yml` input `quick` and 2-min budget on pushes.
 
-## In flight at handoff (verify first)
+## Live at handoff (verified 15:12 UTC, both sites)
 
-- World risk deploys: the webapp push run and a website `deploy.yml` run with `quick: true`. Check:
-  ```bash
-  curl -sI https://chennakeshavadasa.github.io/career-semi-quant/app/data/world.json | head -1
-  curl -sI https://nithinpuru.github.io/quant-terminal/app/data/world.json | head -1
-  ```
-  then open `#/world` on both. Flashpoint headlines fill over the first runs (GDELT has a time cap per run, see below); cards say "Headlines are being prepared" until then.
-- First Congress runs leave a few filings "pending"; each run reads more (4-min cap). `stats` in `data/congress__days-90.json` shows it.
+- `data/congress__days-90.json` (as_of 14:57): 1,366 filings, 116 paper scans read with OCR, 54 unreadable (14 of them handwritten), 0 pending; `stats.bargo` checked 100, matched 90, added 10. Ro Khanna: 22 NVDA rows in `data/ticker/NVDA/smartmoney.json` (incl. the spouse's 10/07/26 partial sale).
+- World risk page live on both (`#/world`).
+- No check-ins or scheduled tasks are pending from the last session.
 
 ## Open items
 
 1. **Owner setting (recommended):** career-semi-quant → Settings → Pages → Source: **GitHub Actions**. Stops the branch-based Pages builds that blank the app for a minute after every push to master (the restore dance in `webapp.yml`).
 2. **Every fund ≥0.5% (13F) and exact 5%+ stake percentages** need SEC archive access, which requires a contact email in the User-Agent. Only with the owner's explicit OK and an address they choose; today `data/sec.py` uses the search API, which needs none.
-3. Executive-branch officials' trades (OGE 278-T) are not covered: no clean feed.
+3. Executive-branch officials' trades (OGE 278-T) are not covered: no clean feed. Offered to the owner, not chosen yet: Disclosed Capitol's free API key (owner signs up; key as a `DISCLOSED_CAPITOL_KEY` secret). The owner wants free sources only for now.
 4. Polish: chart annotation text 9-10.5 px on a few heatmaps (risk, factor lab) is flagged "tiny" by the phone audit.
 5. World risk: GDELT rate-limits GitHub's build servers too (the first website build got 429s), so flashpoint headlines come from Yahoo's news search first and GDELT only tops them up and gives the coverage trend (the "Coverage 2x its recent norm" badge). If that badge never appears, the trend is not getting through; look at GDELT's other feeds. The notes in `world.py` are judgement; review them now and then.
 6. Congress: Senate paper filings and handwritten House rows are still unread (`stats.unreadable`, `stats.handwritten` in `data/congress__days-90.json`). Every typed version of the House form is read. Handwritten dates would need a handwriting model (Tesseract reads print); Bargo's cross-check fills recent ones.
+7. Congress OCR caveat: `paper_ptr._fix_year` moves a trade's year when it is over a year before its notification (meant for OCR slips like 25/26). On a typed form it can change what the filer wrote: Mann 9116292 says traded 08/20/2024, notified 08/04/2026, shown as 2025-08-20. Consider applying it only when the year's digits were OCR-uncertain.
+8. Offered, not requested yet: the firm or trust behind each trade (annual financial disclosures list business ties); World risk headlines from Google News RSS (needs `news.google.com` allowed in the environment).
 
 ## How to work here (learned the hard way)
 
@@ -62,12 +60,13 @@ One codebase, four ways to use it:
 - **World risk sources**: PortWatch is an ArcGIS service (`services9.arcgis.com/weJ1QsnbMYJlCHdG/.../Daily_Chokepoints_Data`, `PortWatch_chokepoints_database`, `portwatch_disruptions_database`); `date` is a DateOnly field, filter with `date >= 'YYYY-MM-DD'`, 10,000 rows per answer. GDELT DOC API: `data/gdelt.py` throttles to one call per 5.5 s, retries once, pauses 10 min after 4 failures (`gdelt.paused()`); headlines come from `yahoo.search_news` first (each flashpoint has a `search` phrase), GDELT tops up below 3; the publisher caps the news at 200 s per run (less on budgeted push runs) and a partial answer carries `"available": false` so it is retried next run. The cloud environment "Semi Quant Terminal" allows both github.io hosts, `api.gdeltproject.org`, `services9.arcgis.com`, `disclosures-clerk.house.gov` and `www.bargo.ai`; Yahoo is not reachable from it, so build a static copy with synthetic prices to test UI (see the World risk commit).
 - **Checks before shipping**:
   ```bash
-  cd local && pytest -q                        # 279 tests
+  cd local && pytest -q                        # 356 tests; OCR ones need tesseract (apt install tesseract-ocr)
   for f in semiquant/web/js/*.js semiquant/web/js/views/*.js; do node --check "$f"; done
   semiquant serve --no-browser &               # then the phone audit:
   node devtools/uitest.js http://127.0.0.1:8050/ /tmp/ui a360,p412,zoom130,se375light,land800,tab768 market,nvda_smart,congress,world
   ```
-  `uitest.js` (Playwright) reports overflow, overlapping text, clipping, small tap targets and tiny text per page and screen size; `scrl` (table scrollers) is expected.
+  `uitest.js` (Playwright) reports overflow, overlapping text, clipping, small tap targets and tiny text per page and screen size; `scrl` (table scrollers) is expected; desktop `small`/`tiny` counts are a known baseline (congress 7/7, light 7/12; nvda_smart 5/8).
+  Where `semiquant serve` can't get data (the cloud environment reaches neither Yahoo nor the members list on `unitedstates.github.io`), audit this checkout's UI with the live website's data: `python devtools/liveproxy.py /tmp/site 8060`, then point `uitest.js` at `http://127.0.0.1:8060/`.
 - **Static check without a deploy**: `Publisher(out, full=[...])` + `copy_app()`, `quotes()`, `put(...)` for the pages you changed, `meta()`; serve `out` and open it (see `0a2cefa` for the routes).
 
 ## Owner's preferences (from this conversation)
@@ -76,3 +75,5 @@ One codebase, four ways to use it:
 - Logo is settled: bell of candles. Rejected: chip, Q (looks like a search icon), fan of paths, "worm" curves, black swan (a metaphor, not quant).
 - Phone UI quality matters: test every screen size before shipping.
 - Wants the newest information fastest: show both "traded" and "public since" dates, flag NEW items.
+- Prefers short answers: the outcome first, no long explanations.
+- Free data sources only for now (Bargo's keyless tier: 30 requests a day is plenty).

@@ -274,6 +274,9 @@ class Publisher:
         self.put(f"{base}/chart?range=MAX", "daily", lambda: tk.chart(sym, "MAX", []), "chart")
         self.put(f"{base}/score", "hourly", lambda: tk.score(sym))
         self.put(f"{base}/news?count=40", "hourly", lambda: tk.news(sym, 40))
+        # who else is trading it (fresh SEC Form 4 / 144 / 13D filings and Congress): hourly, and outside the
+        # heavy pass's time budget so the tab is there after every run
+        self.put(f"{base}/smartmoney", "hourly", lambda: sm.ticker(sym))
 
     def ticker_slow(self, sym: str) -> None:
         """Heavy pass (risk models, options, statements): stops at the time budget."""
@@ -286,8 +289,6 @@ class Publisher:
             self.put(f"{base}/{tab}", "slow", lambda fn=fn: fn(sym), tab)
         for tab, fn in (("fundamentals", tk.fundamentals), ("ownership", tk.ownership), ("events", tk.events)):
             self.put(f"{base}/{tab}", "daily", lambda fn=fn: fn(sym), tab)
-        # who else is trading it: fresh SEC filings (Form 4 / 144 / 13D) and Congress, checked hourly
-        self.put(f"{base}/smartmoney", "hourly", lambda: sm.ticker(sym))
 
     def published(self) -> list[str]:
         """Tickers with a full page = those whose overview file exists (robust to partial runs)."""

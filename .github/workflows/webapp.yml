@@ -93,9 +93,12 @@ jobs:
         if: github.event_name != 'page_build'  # a restore redeploys the cached build as it is
         timeout-minutes: 22
         continue-on-error: true   # a Yahoo hiccup keeps the previous data, never blocks the deploy
+        # A push is a code change: the heavy analytics pass (risk, options, statements) gets 2 minutes,
+        # so a new layout goes live within minutes instead of after a full data refresh. What it skips
+        # stays due and the next scheduled run (12 minutes) does it. Quotes, charts and scores always run.
         run: |
           python -m pip install --quiet ./local
-          semiquant publish --out .qt-out --budget 12
+          semiquant publish --out .qt-out --budget ${{ github.event_name == 'push' && 2 || 12 }}
 
       - name: Assemble site
         run: |

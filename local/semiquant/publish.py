@@ -199,10 +199,13 @@ class Publisher:
         shutil.copy2(Path(plotly.__file__).parent / "package_data" / "plotly.min.js", self.out / "vendor" / "plotly.min.js")
         h = hashlib.sha1()
         for f in sorted((self.out).rglob("*")):
-            if f.is_file() and "data" not in f.relative_to(self.out).parts and f.suffix in (".js", ".css", ".html"):
+            if f.is_file() and "data" not in f.relative_to(self.out).parts and f.name not in ("index.html", "sw.js"):
+                h.update(f.relative_to(self.out).as_posix().encode())
                 h.update(f.read_bytes())
+        for f in ("index.html", "sw.js", "manifest.webmanifest"):  # the sources (the outputs embed the old build)
+            h.update((WEB / f).read_bytes())
         build = h.hexdigest()[:10]
-        cfg = {"base": "data/", "build": build, "version": __version__}
+        cfg = {"base": "data/", "build": build, "built_at": self.stamp(), "version": __version__}
         html = (WEB / "index.html").read_text(encoding="utf-8")
         html = html.replace("<title>Semi Quant Terminal · Local</title>", "<title>Semi Quant Terminal</title>", 1)
         html = html.replace("<!--SNAPSHOT-->", "<script>window.SQ_STATIC=" + json.dumps(cfg) + ";</script>", 1)
@@ -282,9 +285,12 @@ class Publisher:
             return []
         return sorted(unquote(d.name.replace("_", "%")) for d in root.iterdir() if (d / "overview.json").exists())
 
+    def stamp(self) -> str:
+        """This run's time, as meta.json's built_at and the page's SQ_STATIC.built_at."""
+        return datetime.fromtimestamp(self.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     def meta(self, build: str) -> None:
-        built = datetime.fromtimestamp(self.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        meta = {"built_at": built, "build": build, "version": __version__, "full": self.published(),
+        meta = {"built_at": self.stamp(), "build": build, "version": __version__, "full": self.published(),
                 "stats": self.stats, "errors": self.errors[:40], "market": yahoo.market_status("US")}
         (self.data / "meta.json").write_text(json.dumps(meta, separators=(",", ":")), encoding="utf-8")
         search = [[t, m["name"], UNIVERSES[m["universe"]]["label"], m["sector"]] for t, m in ALL_META.items()]

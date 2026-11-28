@@ -137,7 +137,7 @@ public class MainActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences("sq", MODE_PRIVATE);
         if (System.currentTimeMillis() - prefs.getLong("lastUpdateCheck", 0) > AUTO_CHECK_MS) {
             prefs.edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply();
-            checkForUpdate(false);
+            checkForUpdate(false, false);
         }
 
         if (state != null && web.restoreState(state) != null) return;
@@ -145,8 +145,15 @@ public class MainActivity extends Activity {
     }
 
     // ── app updates: version.json next to the APK in the "android" release ──
-    /** manual = from the "Update app" button: also report "up to date" and errors. */
-    void checkForUpdate(boolean manual) {
+    // The app has two parts that update separately: this shell (the APK, rebuilt only when android/
+    // changes) and the layout (the web edition, redeployed on every push to master).
+    /**
+     * manual = from the "Update app" button: also report "up to date" and errors.
+     * reloadLayout = when this build is current, also reload the page so a newly deployed layout
+     * shows. Current pages check their layout themselves (static.js) and call checkAppUpdate();
+     * pages from before that only call checkUpdate(), which asks for the reload.
+     */
+    void checkForUpdate(boolean manual, boolean reloadLayout) {
         if (manual) toast("Checking for updates…");
         new Thread(() -> {
             try {
@@ -156,11 +163,24 @@ public class MainActivity extends Activity {
                 String apk = j.optString("apk", RELEASE + "SemiQuant.apk");
                 String notes = j.optString("notes", "");
                 if (code > BuildConfig.VERSION_CODE) runOnUiThread(() -> promptUpdate(name, notes, apk));
-                else if (manual) toast("You have the latest version (" + BuildConfig.VERSION_NAME + ").");
+                else {
+                    if (manual) toast("You have the latest app version (" + BuildConfig.VERSION_NAME + ")."
+                        + (reloadLayout ? " Loading the newest layout…" : ""));
+                    if (reloadLayout) reloadPage();
+                }
             } catch (Exception e) {
                 if (manual) toast("Could not check for updates: " + e.getMessage());
             }
         }).start();
+    }
+
+    /** Reload the web edition; a reload revalidates the page with the server, so a new layout loads. */
+    private void reloadPage() {
+        runOnUiThread(() -> {
+            String url = web.getUrl();
+            if (url != null && isApp(Uri.parse(url))) web.reload();
+            else web.loadUrl(HOME); // e.g. on the offline page
+        });
     }
 
     static String fetch(String url) throws Exception {
@@ -369,9 +389,16 @@ public class MainActivity extends Activity {
             MainActivity.this.toast(msg);
         }
 
+        /** "Update app" on pages from before the layout check: newest app build, then the newest layout. */
         @JavascriptInterface
         public void checkUpdate() {
-            runOnUiThread(() -> checkForUpdate(true));
+            runOnUiThread(() -> checkForUpdate(true, true));
+        }
+
+        /** "Update app" on current pages, which reload into the newest layout themselves (static.js). */
+        @JavascriptInterface
+        public void checkAppUpdate() {
+            runOnUiThread(() -> checkForUpdate(true, false));
         }
 
         @JavascriptInterface

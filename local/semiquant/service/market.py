@@ -9,8 +9,8 @@ import pandas as pd
 
 from ..analytics._util import clean, jsonable, safe
 from ..data import yahoo
-from ..universe import (MARKET_GROUPS, SECTOR_ETFS, STOCK_UNIVERSES, UNIVERSES, VIX_TERM, YIELD_CURVE, get_universe,
-                        universe_key, universe_meta, universe_tickers)
+from ..universe import (ALL_META, MARKET_GROUPS, SECTOR_ETFS, STOCK_UNIVERSES, UNIVERSES, VIX_TERM, YIELD_CURVE,
+                        get_universe, universe_key, universe_meta, universe_tickers)
 from .common import memo, returns, universe_closes
 
 
@@ -130,6 +130,37 @@ def breadth(u: str = "semis") -> dict:
             reg = {k: reg.get(k) for k in ("states", "current_label", "current_probs", "transition", "n_states")}
         return jsonable({"universe": u, "label": UNIVERSES[u]["label"], "regime_ref": ref, "breadth": b, "regime": reg})
     return memo(f"mkt:breadth:{u}", 600, build)
+
+
+def systemic(u: str = "semis") -> dict:
+    """Absorption ratio and turbulence index of a universe (cached 1 h)."""
+    u = universe_key(u)
+
+    def build():
+        from ..analytics import systemic as sy
+
+        c = universe_closes("5y", u)
+        names = c[[t for t in universe_tickers(u) if t in c.columns]]
+        return jsonable({"universe": u, "label": UNIVERSES[u]["label"],
+                         "absorption": safe(sy.absorption_ratio, names, default=None),
+                         "turbulence": safe(sy.turbulence, names, default=None)})
+    return memo(f"mkt:systemic:{u}", 3600, build)
+
+
+def factorlab(u: str = "semis") -> dict:
+    """Factor research loop on a universe (cached 6 h)."""
+    u = universe_key(u)
+
+    def build():
+        from ..analytics import factorlab as fl
+
+        c = universe_closes("10y", u)
+        tick = [t for t in universe_tickers(u) if t in c.columns]
+        names = {t: (ALL_META.get(t) or {}).get("name") for t in tick}
+        res = safe(fl.factor_lab, c[tick], 10, 5, 15 if len(tick) >= 40 else 8, names, default=None) or {
+            "available": False, "message": "Factor research failed for this universe."}
+        return jsonable({"universe": u, "label": UNIVERSES[u]["label"], **res})
+    return memo(f"factorlab:{u}", 6 * 3600, build)
 
 
 def movers() -> dict:

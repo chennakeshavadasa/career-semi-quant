@@ -246,6 +246,8 @@ class Publisher:
             self.put(f"/api/market/heatmap?u={u}", "live", lambda u=u: mkt.heatmap(u))
             self.put(f"/api/screener?u={u}", "live", lambda u=u: scr.table(None, None, u))
             self.put(f"/api/market/breadth?u={u}", "hourly", lambda u=u: mkt.breadth(u))
+            self.put(f"/api/market/systemic?u={u}", "slow", lambda u=u: mkt.systemic(u))
+            self.put(f"/api/factorlab?u={u}", "daily", lambda u=u: mkt.factorlab(u))
 
     def ticker(self, sym: str) -> None:
         """Quick pass: everything that changes intraday (always done)."""

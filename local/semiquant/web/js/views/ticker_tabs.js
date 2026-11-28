@@ -114,6 +114,7 @@
       const se = mo.seasonality || [];
       charts.bars(sEl, { x: se.map((s) => s.month), y: se.map((s) => s.mean), colors: 'sign', text: se.map((s) => fmt.pctu(s.hit_rate, 0)) }, { yfmt: '.1%', margin: { l: 46, r: 8, t: 14, b: 24 } });
     }
+    if (SQ.qp) SQ.qp.riskExtras(box, d);
   });
 
   // ─── Volatility ───────────────────────────────────────────────────────
@@ -172,6 +173,7 @@
         g.params ? h('div', { style: { marginTop: '10px' } }, ui.kv(Object.entries(p).map(([k, v]) => [k, fmt.num(v, 4)]).concat([
           ['AIC / BIC', `${fmt.num(g.aic, 0)} / ${fmt.num(g.bic, 0)}`], ['Ljung-Box p (squared resid.)', fmt.num(g.ljung_box_sq_p, 3), g.ljung_box_sq_p < 0.05 ? 'warn' : 'up']]))) : null)));
     }
+    if (SQ.qp) SQ.qp.volExtras(box, d);
   });
 
   // ─── Tail risk & stress ───────────────────────────────────────────────
@@ -306,6 +308,7 @@
     charts.bars(gxEl, { x: gb.map((r) => r.strike), y: gb.map((r) => r.net), colors: 'sign', name: 'Net GEX' },
       { yfmt: '$.2s', shapes: [vline(d.spot, 'ink3'), fmt.ok(gx.flip) ? vline(gx.flip, 'warn') : null].filter(Boolean) });
 
+    if (SQ.qp) SQ.qp.optionsExtras(box, d);
     if (d.surface && d.surface.iv && d.surface.iv.length > 1) {
       box.appendChild(sec('Implied volatility surface'));
       const sEl = charts.div('chart tall');

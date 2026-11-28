@@ -38,7 +38,7 @@ _SQRT2 = math.sqrt(2.0)
 _NAN = float("nan")
 
 __all__ = ["bs_price", "bs_greeks", "implied_vol", "implied_vol_vec", "time_to_expiry", "chain_analytics",
-           "term_structure", "iv_surface"]
+           "term_structure", "iv_surface", "risk_neutral_density", "model_free_iv"]
 
 
 # =============================================================================== BSM core
@@ -808,3 +808,153 @@ def iv_surface(chains: dict, spot: float, asof, r: float = 0.04, q: float = 0.0,
         dtes.append(round(core["T"] * 365.0, 4))
         grid.append(row)
     return jsonable({"moneyness": m.tolist(), "dte": dtes, "expiries": exps, "iv": grid, "warnings": warns})
+
+
+# =============================================================================== risk-neutral density
+def _svi(k, a, b, rho, m, s):
+    return a + b * (rho * (k - m) + np.sqrt((k - m) ** 2 + s * s))
+
+
+def _fit_total_variance(k: np.ndarray, w: np.ndarray):
+    """Smooth total implied variance w(k), k = ln(K/F): raw SVI (Gatheral 2004) by least squares,
+    falling back to a quadratic in k. Returns (callable, method)."""
+    from scipy.optimize import least_squares
+
+    wmax = float(np.max(w))
+    x0 = [float(np.min(w)) * 0.9, 0.1, -0.3, 0.0, 0.1]
+    lo = [-wmax, 1e-6, -0.999, float(k.min()) - 0.5, 1e-4]
+    hi = [2 * wmax, 10.0, 0.999, float(k.max()) + 0.5, 3.0]
+    try:
+        fit = least_squares(lambda p: _svi(k, *p) - w, x0, bounds=(lo, hi), max_nfev=4000)
+        a, b, rho, m, s = fit.x
+        if fit.success and a + b * s * math.sqrt(1 - rho * rho) > 0:
+            return (lambda kk: _svi(kk, a, b, rho, m, s)), "svi"
+    except Exception:  # noqa: BLE001
+        pass
+    c = np.polyfit(k, w, 2)
+    floor = 0.25 * float(np.min(w))
+    return (lambda kk: np.maximum(np.polyval(c, kk), floor)), "quadratic"
+
+
+def risk_neutral_density(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, expiry: str, asof,
+                         r: float = 0.04, q: float = 0.0, n: int = 401) -> dict:
+    """The market's implied probability distribution of the price at expiry (Breeden-Litzenberger 1978).
+
+    The OTM smile of ``chain_analytics`` (IVs re-solved from mid quotes, implied forward F) is smoothed
+    as total variance w(k) = iv^2 T in log-moneyness k = ln(K/F) with raw SVI; call prices on a fine
+    strike grid follow from Black-76 at the fitted vols, and the density is f(K) = e^{rT} d2C/dK2.
+    Small negative values (butterfly arbitrage in noisy quotes) are set to 0 and the density is
+    normalised over the grid (``mass_in_grid`` reports the share captured before normalising).
+    These are risk-neutral probabilities: they include the market's risk premia, not a forecast.
+
+    Returns {"expiry", "dte", "T", "spot", "forward", "method", "mass_in_grid", "negative_mass",
+    "curve": {"k" (strikes), "pdf", "lognormal" (same-forward lognormal at the ATM vol)},
+    "quantiles": {p5, p25, p50, p75, p95} (prices), "mean", "sd", "skew", "kurtosis" (of S_T / S - 1),
+    "prob": {"up", "down_10", "down_20", "up_10", "up_20"} (P(S_T > S), P(S_T < 0.9 S), ...),
+    "atm_iv", "n_quotes"} or {"available": False, "message"} when the smile is too thin.
+    """
+    core = _core(calls, puts, spot, expiry, asof, r, q)
+    S, F, T, rr = core["S"], core["F"], core["T"], core["r"]
+    k_obs, iv_obs = np.asarray(core["sm_lm"], float), np.asarray(core["sm_iv"], float)
+    ok = np.isfinite(k_obs) & np.isfinite(iv_obs) & (iv_obs > 0)
+    k_obs, iv_obs = k_obs[ok], iv_obs[ok]
+    if k_obs.size < 6 or not (np.isfinite(F) and F > 0 and np.isfinite(T) and T > 0):
+        return {"available": False, "message": "Too few clean option quotes at this expiry for a distribution."}
+    o = np.argsort(k_obs)
+    k_obs, w_obs = k_obs[o], (iv_obs[o] ** 2) * T
+    wfun, method = _fit_total_variance(k_obs, w_obs)
+    atm_w = float(wfun(np.array([0.0]))[0])
+    sd = math.sqrt(max(atm_w, 1e-8))
+    k_lo = max(min(float(k_obs.min()) - sd, -4.5 * sd), -2.5)
+    k_hi = min(max(float(k_obs.max()) + sd, 4.5 * sd), 2.5)
+    K = np.linspace(F * math.exp(k_lo), F * math.exp(k_hi), n)
+    dK = K[1] - K[0]
+    w = np.maximum(wfun(np.log(K / F)), 1e-10)
+    sig_sqrt_t = np.sqrt(w)
+    d1 = (np.log(F / K) + 0.5 * w) / sig_sqrt_t
+    d2 = d1 - sig_sqrt_t
+    disc = math.exp(-rr * T)
+    C = disc * (F * ndtr(d1) - K * ndtr(d2))
+    pdf = np.zeros_like(K)
+    pdf[1:-1] = (C[2:] - 2 * C[1:-1] + C[:-2]) / (dK * dK) / disc
+    neg = float(-pdf[pdf < 0].sum() * dK)
+    pdf = np.clip(pdf, 0, None)
+    mass = float(pdf.sum() * dK)
+    if not mass > 0:
+        return {"available": False, "message": "The fitted smile does not give a valid distribution."}
+    pdf /= mass
+    cdf = np.cumsum(pdf) * dK
+    quant = {f"p{int(p * 100)}": float(np.interp(p, cdf, K)) for p in (0.05, 0.25, 0.5, 0.75, 0.95)}
+    x = K / S - 1
+    mean = float((x * pdf).sum() * dK)
+    var = float((((x - mean) ** 2) * pdf).sum() * dK)
+    sdx = math.sqrt(var) if var > 0 else float("nan")
+    skew = float((((x - mean) ** 3) * pdf).sum() * dK) / sdx ** 3 if sdx > 0 else None
+    kurt = float((((x - mean) ** 4) * pdf).sum() * dK) / sdx ** 4 if sdx > 0 else None
+
+    def p_below(level):
+        return float(np.interp(level, K, cdf, left=0.0, right=1.0))
+
+    sa = sd  # ATM sigma * sqrt(T)
+    ln_pdf = np.exp(-0.5 * ((np.log(K / F) + 0.5 * sa * sa) / sa) ** 2) / (K * sa * math.sqrt(2 * math.pi))
+    step = max(1, n // 160)
+    return jsonable({
+        "available": True, "expiry": core["expiry"], "T": T, "dte": T * 365.0, "spot": S, "forward": F, "method": method,
+        "mass_in_grid": mass, "negative_mass": neg, "atm_iv": sd / math.sqrt(T), "n_quotes": int(k_obs.size),
+        "curve": {"k": K[::step].tolist(), "pdf": pdf[::step].tolist(), "lognormal": ln_pdf[::step].tolist()},
+        "quantiles": quant, "mean": mean, "sd": sdx, "skew": skew, "kurtosis": kurt,
+        "prob": {"up": 1 - p_below(S), "down_10": p_below(0.9 * S), "down_20": p_below(0.8 * S),
+                 "up_10": 1 - p_below(1.1 * S), "up_20": 1 - p_below(1.2 * S)},
+    })
+
+
+def model_free_iv(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, expiry: str, asof,
+                  r: float = 0.04, q: float = 0.0) -> dict:
+    """Model-free implied volatility (the CBOE VIX method applied to one stock and one expiry): the
+    fair strike of a variance swap from the whole strip of OTM options, not just the ATM.
+
+    sigma^2 = (2/T) sum_i dK_i / K_i^2 e^{rT} Q(K_i) - (1/T) (F/K0 - 1)^2, K0 = the first strike at or
+    below the forward F, Q = put mid below K0, call mid above, their average at K0, only strikes with
+    two-sided quotes, stopping after two consecutive strikes without a bid (VIX rule).
+    Returns {"expiry", "T", "dte", "mfiv", "variance", "n_strikes", "k_min", "k_max", "forward"}.
+    """
+    core = _core(calls, puts, spot, expiry, asof, r, q)
+    K, c, p, F, T, rr = core["K"], core["c"], core["p"], core["F"], core["T"], core["r"]
+    out = {"expiry": core["expiry"], "T": T, "dte": T * 365.0 if np.isfinite(T) else None, "mfiv": None,
+           "variance": None, "n_strikes": 0, "forward": F}
+    if K.size < 4 or not (np.isfinite(F) and F > 0 and np.isfinite(T) and T > 0):
+        return jsonable(out)
+    below = np.flatnonzero(K <= F)
+    if not below.size:
+        return jsonable(out)
+    i0 = int(below[-1])
+    use: dict[int, float] = {}
+    cv, pv = c["valid"], p["valid"]
+    if cv[i0] and pv[i0]:
+        use[i0] = 0.5 * (c["mid"][i0] + p["mid"][i0])
+    elif pv[i0]:
+        use[i0] = p["mid"][i0]
+    elif cv[i0]:
+        use[i0] = c["mid"][i0]
+    for step, side in ((-1, p), (1, c)):
+        miss, i = 0, i0 + step
+        while 0 <= i < K.size and miss < 2:
+            if side["valid"][i] and side["mid"][i] > 0:
+                use[i] = side["mid"][i]
+                miss = 0
+            else:
+                miss += 1
+            i += step
+    idx = np.array(sorted(use))
+    if idx.size < 4:
+        return jsonable(out)
+    Ks = K[idx]
+    Q = np.array([use[i] for i in idx])
+    dK = np.empty_like(Ks)
+    dK[1:-1] = (Ks[2:] - Ks[:-2]) / 2
+    dK[0], dK[-1] = Ks[1] - Ks[0], Ks[-1] - Ks[-2]
+    var = (2 / T) * float(np.sum(dK / Ks ** 2 * math.exp(rr * T) * Q)) - (1 / T) * (F / K[i0] - 1) ** 2
+    if var > 0:
+        out.update(mfiv=math.sqrt(var), variance=var)
+    out.update(n_strikes=int(idx.size), k_min=float(Ks.min()), k_max=float(Ks.max()))
+    return jsonable(out)

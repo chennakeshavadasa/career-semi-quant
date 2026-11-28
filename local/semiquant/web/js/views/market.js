@@ -97,6 +97,9 @@
       const hmBox = h('div'), sideBox = h('div'), brHead = h('div'), brBox = h('div');
       hmGrid.appendChild(hmBox); hmGrid.appendChild(sideBox);
       uniBox.appendChild(hmGrid); uniBox.appendChild(brHead); uniBox.appendChild(brBox);
+      const syBox = h('div');
+      uniBox.appendChild(syBox);
+      if (SQ.qp) SQ.qp.systemic(syBox, uni);
       ui.async(hmBox, () => api('/api/market/heatmap?u=' + uni), (box, d) => {
         const el = charts.div('chart tall');
         const capped = d.tiles.filter((t) => t.market_cap_usd && !t.missing).length;

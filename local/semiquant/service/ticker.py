@@ -306,9 +306,35 @@ def risk(sym: str) -> dict:
             "distribution": safe(pf.return_distribution, close.tail(1260), 60, 1, default=None),
             "distribution_week": safe(pf.return_distribution, close.tail(1260), 40, 5, default=None),
             "monthly": safe(pf.monthly_returns, close[close.index >= close.index[-1] - pd.DateOffset(years=15)], default=None),
+            **_crash_and_liquidity(sym, df, spy, rf),
         })
 
     return memo(f"risk:{sym}", 600, build)
+
+
+def _crash_and_liquidity(sym: str, df: pd.DataFrame, spy, rf: float) -> dict:
+    """Crash risk vs the S&P 500, Sharpe-ratio confidence, drawdown risk and execution costs."""
+    from ..analytics import liquidity as liq
+    from ..analytics import robustness as rb
+    from .common import fx_to_usd
+
+    q = yahoo.quote(sym) or {}
+    close = df["close"]
+    # Listings that close at another time than New York: weekly returns (daily ones are out of sync).
+    freq = "D" if (q.get("tz") or "America/New_York").startswith("America/") else "W"
+    five = close.tail(1261)
+    sharpe = {}
+    for w, n in (("1Y", 252), ("3Y", 756), ("5Y", 1260)):
+        if len(close) > n * 0.95:
+            sharpe[w] = safe(rb.sharpe_confidence, close.tail(n + 1), rf, default=None)
+    fx = fx_to_usd([q.get("currency")]).get(q.get("currency"), 1.0) if q.get("currency") else 1.0
+    return {
+        "crash": safe(rb.asymmetric_risk, five, spy, freq, default=None) if spy is not None else None,
+        "sharpe_confidence": sharpe,
+        "drawdown_risk": safe(rb.drawdown_risk, close.tail(2521), default=None),
+        "liquidity": safe(liq.liquidity_profile, df.tail(260), q.get("shares_out"), fx or 1.0,
+                          bid=q.get("bid"), ask=q.get("ask"), quote_live=q.get("market_state") == "REGULAR", default=None),
+    }
 
 
 def _atm_iv_30d(sym: str) -> float | None:
@@ -323,6 +349,7 @@ def volatility(sym: str) -> dict:
     sym = yahoo.norm_symbol(sym)
 
     def build():
+        from ..analytics import randomwalk as rw
         from ..analytics import volatility as vol
 
         df = _daily(sym)
@@ -336,6 +363,8 @@ def volatility(sym: str) -> dict:
             "garch": safe(vol.garch, df["close"], "gjr", "t", 63, 10, default=None),
             "ewma": ser(ew.tail(756)) if isinstance(ew, pd.Series) else None,
             "atm_iv_30d": atm,
+            "har": safe(vol.har_rv, df.tail(1600), default=None),
+            "random_walk": safe(rw.random_walk_tests, df["close"].tail(1261), default=None),
         })
 
     return memo(f"vol:{sym}", 600, build)
@@ -382,6 +411,22 @@ def _pick_term_expiries(exps: list[str], asof: datetime, n: int = 12) -> list[st
     far = [e for e, d in dte if d > 60]
     step = max(1, len(far) // max(1, n - len(near)))
     return near + far[::step][: max(0, n - len(near))]
+
+
+def _vix_style_30d(mf: list[dict]) -> float | None:
+    """30-day model-free implied vol: total variance interpolated between the expiries around 30
+    days (the VIX recipe), or the nearest expiry when 30 days is outside the listed range."""
+    pts = sorted((m["T"], m["variance"]) for m in mf if m.get("T") and m.get("variance") and m["T"] > 2 / 365)
+    if not pts:
+        return None
+    t30 = 30 / 365
+    for (t1, v1), (t2, v2) in zip(pts, pts[1:]):
+        if t1 <= t30 <= t2:
+            w = (t2 - t30) / (t2 - t1)
+            var = (t1 * v1 * w + t2 * v2 * (1 - w)) / t30
+            return float(np.sqrt(var)) if var > 0 else None
+    t, v = min(pts, key=lambda p: abs(p[0] - t30))
+    return float(np.sqrt(v))
 
 
 def options(sym: str, expiry: str | None = None, full: bool = True) -> dict:
@@ -432,6 +477,16 @@ def options(sym: str, expiry: str | None = None, full: bool = True) -> dict:
         }
         if full:
             out["surface"] = safe(op.iv_surface, pairs, spot, asof, r, qy, default=None)
+            out["rnd"] = safe(op.risk_neutral_density, ch["calls"], ch["puts"], spot, sel, asof, r, qy, default=None)
+            mf = [m for m in (safe(op.model_free_iv, c_, p_, spot, e, asof, r, qy, default=None) for e, (c_, p_) in sorted(pairs.items()))
+                  if m and m.get("mfiv")]
+            atm_by = {row.get("expiry"): row.get("atm_iv") for row in ((ts or {}).get("rows") or [])}
+            for m in mf:
+                m["atm_iv"] = atm_by.get(m["expiry"])
+            out["mfiv"] = mf
+            out["mfiv_30d"] = _vix_style_30d(mf)
+            if out["mfiv_30d"] is not None and rv21 is not None:
+                out["vrp_mf"] = out["mfiv_30d"] - rv21
         return jsonable(out)
 
     return memo(f"opt:{sym}:{expiry}:{int(full)}", 120, build)

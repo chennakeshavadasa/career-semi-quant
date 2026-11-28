@@ -208,6 +208,7 @@
     const icon = (d) => h('span', { html: '<svg viewBox="0 0 24 24">' + d + '</svg>' });
     view.appendChild(h('div', { class: 'page-h' }, h('div', null, h('h1', null, 'More'))));
     const items = [
+      ['#/factorlab', 'Factor lab', 'Which signals predict returns: IC, quintile spreads, decay', '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/>'],
       ['#/compare', 'Compare', 'Performance, risk and correlation side by side', '<path d="M4 18l5-6 4 3 7-9"/>'],
       ['#/portfolio', 'Portfolio', 'Risk, optimizers, backtest, Monte Carlo', '<circle cx="12" cy="12" r="8"/><path d="M12 4v8l6 4"/>'],
       ['#/offer', 'Offer & RSU value', 'What an equity grant could be worth at each vest', '<rect x="4" y="7" width="16" height="12" rx="2"/><path d="M9 7V5h6v2"/>'],

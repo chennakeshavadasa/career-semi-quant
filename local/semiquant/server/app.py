@@ -156,6 +156,14 @@ def create_app() -> FastAPI:
     def market_breadth(u: str = "semis"):
         return mkt.breadth(u)
 
+    @app.get("/api/market/systemic")
+    def market_systemic(u: str = "semis"):
+        return mkt.systemic(u)
+
+    @app.get("/api/factorlab")
+    def factorlab(u: str = "semis"):
+        return mkt.factorlab(u)
+
     @app.get("/api/universes")
     def universes():
         from ..universe import UNIVERSES

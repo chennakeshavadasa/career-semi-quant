@@ -18,7 +18,7 @@ from ._util import iso, jsonable, pct_rank, periods_per_year, ser
 from .performance import _prep
 from .technicals import _frame
 
-__all__ = ["realized_vol", "realized_vol_summary", "vol_cone", "ewma_vol", "garch", "vol_summary", "METHODS"]
+__all__ = ["realized_vol", "realized_vol_summary", "vol_cone", "ewma_vol", "garch", "vol_summary", "har_rv", "METHODS"]
 
 METHODS = ["close_to_close", "parkinson", "garman_klass", "rogers_satchell", "yang_zhang"]
 _LN2 = math.log(2.0)
@@ -330,4 +330,65 @@ def vol_summary(df, atm_iv: float | None = None) -> dict:
             out["iv_rv_ratio"] = iv / out["rv_21d_yz"]
     except Exception as exc:  # noqa: BLE001
         out["error"] = str(exc)
+    return jsonable(out)
+
+
+# --------------------------------------------------------------------------- HAR-RV
+def _daily_rv(df) -> pd.Series:
+    """Daily variance proxy: overnight gap^2 + Garman-Klass open-to-close variance (OHLC), else r^2."""
+    if _has_ohlc(df):
+        d = df.rename(columns=str.lower)[["open", "high", "low", "close"]].apply(pd.to_numeric, errors="coerce")
+        d = d[(d > 0).all(axis=1)].dropna()
+        on = np.log(d["open"] / d["close"].shift(1)) ** 2
+        gk = 0.5 * np.log(d["high"] / d["low"]) ** 2 - (2 * _LN2 - 1) * np.log(d["close"] / d["open"]) ** 2
+        rv = (on + gk.clip(lower=0)).iloc[1:]
+    else:
+        c = _prep(df)
+        rv = np.log(c / c.shift(1)).iloc[1:] ** 2
+    return rv.replace([np.inf, -np.inf], np.nan).dropna()
+
+
+def har_rv(df, horizons=(1, 5, 21, 63), window: int = 1000, history: int = 504) -> dict:
+    """HAR-RV volatility forecasts (Corsi 2009): today's variance is explained by the day, the week
+    and the month, the cascade institutional vol desks use next to GARCH.
+
+    RV_t is the daily variance proxy of ``_daily_rv``. For each horizon h, log of the mean future
+    variance mean(RV_{t+1..t+h}) is regressed (OLS) on [1, log RV_t, log mean of the last 5, log mean
+    of the last 22] over the last ``window`` days (log-HAR: earnings gaps and crash days do not
+    dominate the fit as they do in levels; direct forecasts, no iteration). The forecast is
+    exp(fitted + residual variance / 2) at the last day, annualised as sqrt(252 * variance).
+    Returns {"forecasts": [{h, vol, r2, coef: {const, day, week, month}}], "current": {day, week,
+    month} (annualised vols of the three components), "fit": {t, actual, fitted} for h = 21 over the
+    last ``history`` days (realised forward vol vs the model's in-sample forecast)}.
+    """
+    rv = _daily_rv(df)
+    out = {"forecasts": [], "current": None, "fit": None, "n": int(len(rv))}
+    if len(rv) < 150:
+        return out
+    ppy = _ppy(rv.index)
+    floor = max(float(rv[rv > 0].quantile(0.01)) if (rv > 0).any() else 1e-10, 1e-10)
+    rv = rv.clip(lower=floor)
+    X = pd.DataFrame({"day": rv, "week": rv.rolling(5).mean(), "month": rv.rolling(22).mean()})
+    last = X.iloc[-1]
+    out["current"] = {k: math.sqrt(float(last[k]) * ppy) for k in ("day", "week", "month")}
+    for h in horizons:
+        fut = rv.rolling(h).mean().shift(-h)
+        D = pd.concat([np.log(X), np.log(fut).rename("y")], axis=1).dropna().tail(window)
+        if len(D) < 100:
+            continue
+        A = np.column_stack([np.ones(len(D)), D[["day", "week", "month"]].to_numpy(float)])
+        y = D["y"].to_numpy(float)
+        beta, *_ = np.linalg.lstsq(A, y, rcond=None)
+        fitted = A @ beta
+        resid_var = float(np.var(y - fitted, ddof=4))
+        ss = float(((y - y.mean()) ** 2).sum())
+        r2 = 1 - float(((y - fitted) ** 2).sum()) / ss if ss > 0 else None
+        f = math.exp(float(np.dot([1.0, *np.log(last[["day", "week", "month"]].to_numpy(float))], beta)) + resid_var / 2)
+        out["forecasts"].append({"h": h, "vol": math.sqrt(f * ppy), "r2": r2,
+                                 "coef": dict(zip(("const", "day", "week", "month"), map(float, beta)))})
+        if h == 21:
+            tail = D.tail(history)
+            fit = np.exp(A[-len(tail):] @ beta + resid_var / 2)
+            out["fit"] = {"t": [iso(t) for t in tail.index], "actual": [math.sqrt(math.exp(v) * ppy) for v in tail["y"]],
+                          "fitted": [math.sqrt(v * ppy) for v in fit]}
     return jsonable(out)

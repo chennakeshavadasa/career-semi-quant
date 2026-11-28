@@ -15,7 +15,7 @@
   const SIDE = { buy: ['Buy', 'up'], sell: ['Sell', 'down'], sell_partial: ['Sell (part)', 'down'], exchange: ['Exchange', 'dim'] };
   const side = (t) => { const s = SIDE[t] || [t || '–', 'dim']; return `<span class="${s[1]}">${esc(s[0])}</span>`; };
   const who = (r) => `${esc(r.member || '')} <span class="dim">${esc([r.party, r.state].filter(Boolean).join('-'))}${r.chamber ? ' · ' + esc(String(r.chamber)[0] === 'S' ? 'Senate' : 'House') : ''}</span>`;
-  const link = (url, text) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(text || 'Filing')}</a>` : '–');
+  const link = (url, text) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener"${/scan/.test(text || '') ? ' title="A paper report, scanned: read with OCR. Check the filing if a number matters."' : ''}>${esc(text || 'Filing')}</a>` : '–');
   const lag = (d) => (d == null ? '–' : `<span class="${d > 45 ? 'down' : 'dim'}" title="${d > 45 ? 'Later than the 45 days the law allows' : 'Days from trade to disclosure'}">${d}d${d > 45 ? ' late' : ''}</span>`);
   const ROLE = { top: ['Top executive', 'down'], owner: ['10%+ owner', 'warn'], director: ['Director', ''], officer: ['Officer', ''] };
 
@@ -89,10 +89,10 @@
         { key: 'side', label: 'Type', l: true, render: (r) => side(r.type) },
         { key: 'amount_lo', label: 'Amount', render: (r) => range(r.amount_lo, r.amount_hi) },
         { key: 'rel', label: 'Oversight committee', l: true, get: (r) => ((r.relevant || [])[0] || {}).name || '', render: (r) => ((r.relevant || []).length ? `<span class="warn">${esc(r.relevant[0].name.replace(/^(House|Senate|United States Senate) (Select |Permanent Select |Special )?Committee on (the )?/, ''))}${r.relevant[0].title ? ' (' + esc(r.relevant[0].title) + ')' : ''}</span>` : '<span class="dim">–</span>') },
-        { key: 'owner', label: 'Owner', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url) },
+        { key: 'owner', label: 'Owner', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url, r.ocr ? 'Filing (scan)' : 'Filing') },
       ], cg, { sort: 'disclosed', max: true, csv: `${sym}-congress.csv`, rowClass: (r) => ((r.relevant || []).length ? 'flagged' : ''),
         emptyText: 'No member of Congress disclosed a trade in this stock in the last two years.' }),
-      { cap: `Committees that oversee this industry: ${(d.oversight || []).map((c) => c.replace(/^(House|Senate) (Select |Permanent Select )?Committee on (the )?/, (m, ch) => ch + ' ')).join('; ') || '–'}. Amounts are the reported ranges.` }));
+      { cap: `Committees that oversee this industry: ${(d.oversight || []).map((c) => c.replace(/^(House|Senate) (Select |Permanent Select )?Committee on (the )?/, (m, ch) => ch + ' ')).join('; ') || '–'}. Amounts are the reported ranges. Paper reports are scanned images, read with OCR: their link says "scan".` }));
 
       b.appendChild(sec('Company insiders (Form 4)'));
       b.appendChild(ui.panel(null, ui.table([
@@ -108,7 +108,7 @@
       b.appendChild(ui.panel(null, ui.table([
         { key: 'filed', label: 'Filed', fmt: 'date' }, { key: 'what', label: 'Form', l: true, render: (r) => `<span class="${/144/.test(r.form) ? 'warn' : ''}">${esc(r.what)}${/A$/.test(r.form) ? ' (amended)' : ''}</span>` },
         { key: 'party', label: 'Who', l: true, txt: true }, { key: 'period', label: 'Trade date', fmt: 'date' },
-        { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url) },
+        { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url, r.ocr ? 'Filing (scan)' : 'Filing') },
       ], fresh, { sort: 'filed', max: true, emptyText: 'No Form 4 or 144 filed in the last 90 days.' }),
       { cap: 'Straight from SEC EDGAR, minutes after filing. A Form 144 is filed on or before the sale day: the earliest public warning of insider selling.' }));
 
@@ -124,7 +124,7 @@
       b.appendChild(ui.panel(null, ui.table([
         { key: 'filed', label: 'Filed', fmt: 'date' }, { key: 'party', label: 'Holder', l: true, txt: true },
         { key: 'form', label: 'Form', l: true, render: (r) => `<span class="${/13D/.test(r.form) ? 'warn' : ''}">${esc(r.form)}${/13D/.test(r.form) ? ' · activist' : ' · passive'}${/A$/.test(r.form) ? ' · stake changed' : ''}</span>` },
-        { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url) },
+        { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url, r.ocr ? 'Filing (scan)' : 'Filing') },
       ], s.stakes || [], { sort: 'filed', emptyText: 'No 5%+ stake filings in the last two years.' }),
       { cap: '13D: a 5%+ holder that intends to influence the company (an activist), filed within 5 business days. 13G: a passive holder (index funds, asset managers).' }));
 
@@ -183,11 +183,11 @@
           { key: 'ticker', label: 'Ticker', l: true, render: (r) => `<a href="#/t/${enc(r.ticker)}">${esc(r.ticker)}</a>` },
           { key: 'type', label: 'Type', l: true, render: (r) => side(r.type) }, { key: 'lo', label: 'Amount', render: (r) => range(r.lo, r.hi) },
           { key: 'committee', label: 'Oversight committee', l: true, render: (r) => (r.committee ? `<span class="warn">${esc(r.committee.replace(/^(House|Senate) (Select |Permanent Select )?Committee on (the )?/, ''))}</span>` : '<span class="dim">–</span>') },
-          { key: 'asset', label: 'Asset', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url) },
+          { key: 'asset', label: 'Asset', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url, r.ocr ? 'Filing (scan)' : 'Filing') },
         ], rows.filter(pass), { sort: 'disclosed', max: true, limit: 400, csv: `congress-trades-${days}d.csv`, tools, rowClass: (r) => (r.committee ? 'flagged' : ''),
           emptyText: 'No trade matches these filters.' });
         function redraw() { tbl.redraw(rows.filter(pass)); }
-        b.appendChild(ui.panel(null, tbl, { cap: (d.rows_note ? d.rows_note + '. ' : '') + 'Sorted by disclosure date; the first 400 rows are shown (CSV has all). Sources: the House Clerk and the Senate eFD. Oversight committee: the member sits on a committee with jurisdiction over the company\'s industry (a heuristic).' }));
+        b.appendChild(ui.panel(null, tbl, { cap: (d.rows_note ? d.rows_note + '. ' : '') + 'Sorted by disclosure date; the first 400 rows are shown (CSV has all). Sources: the House Clerk and the Senate eFD; paper reports (scans) are read with OCR and their link says "scan". Oversight committee: the member sits on a committee with jurisdiction over the company\'s industry (a heuristic).' }));
       }, 420);
     }
     load();

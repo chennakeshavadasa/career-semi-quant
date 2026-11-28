@@ -27,7 +27,7 @@ from typing import Any
 
 import requests
 
-from . import cache
+from . import cache, paper_ptr
 
 HOUSE = "https://disclosures-clerk.house.gov/public_disc"
 SENATE = "https://efdsearch.senate.gov"
@@ -251,13 +251,36 @@ def _house_url(f: dict) -> str:
 
 
 def _house_filing(f: dict) -> dict:
+    """One House report, read once and kept. Electronic reports have a text layer; paper reports are scanned
+    images, read with OCR (``paper_ptr``) when Tesseract is installed. A scan stored as unreadable before OCR was
+    available (or by an older reader) is read again."""
+    key = f"congress:house:{f['id']}"
+
     def load():
         from pypdf import PdfReader
         pdf = PdfReader(io.BytesIO(_get(_house_url(f), timeout=60).content))
         text = "\n".join((p.extract_text() or "") for p in pdf.pages)
         rows = parse_house_text(text)
-        return {"rows": rows, "readable": bool(rows) or "Notification" in text}
-    return cache.cached(f"congress:house:{f['id']}", FOREVER, load, disk=True)
+        if rows or "Notification" in text:
+            return {"rows": rows, "readable": True}
+        if len(text.strip()) < 40:                      # no text layer: a scanned paper report
+            if not paper_ptr.available():
+                return {"rows": [], "readable": False, "scan": True, "ocr": 0}
+            filed = date.fromisoformat(f["filed"]) if f.get("filed") else None
+            rows = paper_ptr.read_pdf(pdf, latest=filed)
+            return {"rows": rows, "readable": bool(rows), "scan": True, "ocr": paper_ptr.VERSION}
+        return {"rows": [], "readable": False, "scan": False}
+    got = cache.cached(key, FOREVER, load, disk=True)
+    if _stale_scan(got):
+        got = load()
+        cache.put(key, got, FOREVER, disk=True)
+    return got
+
+
+def _stale_scan(got: dict | None) -> bool:
+    """A stored report that is a scan read without OCR, or by an older version of the reader, while OCR works now."""
+    return bool(got) and not got.get("readable") and paper_ptr.available() and (
+        got.get("ocr", 0) < paper_ptr.VERSION) and got.get("scan", "ocr" not in got)
 
 
 # ─── Senate ──────────────────────────────────────────────────────────────────
@@ -352,11 +375,12 @@ def refresh(days: int = 400, budget_s: float | None = None, workers: int = 6) ->
     """Read every filing of the last ``days`` days that isn't on disk yet (stops starting new ones after
     ``budget_s`` seconds). Returns counts; the rest is read next time."""
     t0, todo = time.time(), _filings(days)
+    todo.sort(key=lambda it: it[1].get("filed") or "", reverse=True)   # newest first: the freshest trades appear first
     stats = {"filings": len(todo), "read": 0, "failed": 0, "skipped": 0}
 
     def one(item):
         chamber, f = item
-        if budget_s is not None and time.time() - t0 > budget_s and cache.peek(f"congress:{chamber.lower()}:{f['id']}") is None:
+        if budget_s is not None and time.time() - t0 > budget_s and _unread(chamber, f):
             stats["skipped"] += 1
             return
         try:
@@ -371,6 +395,21 @@ def refresh(days: int = 400, budget_s: float | None = None, workers: int = 6) ->
     return stats
 
 
+def _stored(chamber: str, f: dict) -> dict | None:
+    key = f"congress:{chamber.lower()}:{f['id']}"
+    got = cache.peek(key)
+    if got is None:
+        from .cache import _disk_load  # filings read by an earlier process
+        d = _disk_load(key)
+        got = d[1] if d else None
+    return got
+
+
+def _unread(chamber: str, f: dict) -> bool:
+    got = _stored(chamber, f)
+    return got is None or (chamber == "House" and _stale_scan(got))
+
+
 def trades(days: int = 400, read_new: bool = True) -> dict:
     """Every disclosed transaction filed in the last ``days`` days, newest first, with the member's party, state
     and committees. ``read_new`` reads filings that aren't on disk yet (slow the first time: about 1,000 filings
@@ -380,20 +419,17 @@ def trades(days: int = 400, read_new: bool = True) -> dict:
         people = members()
         if read_new:
             refresh(days, budget_s=READ_BUDGET_S)
-        rows, stats = [], {"filings": 0, "unreadable": 0, "pending": 0}
+        rows, stats = [], {"filings": 0, "unreadable": 0, "pending": 0, "scanned": 0}
         for chamber, f in _filings(days):
             stats["filings"] += 1
-            key = f"congress:{chamber.lower()}:{f['id']}"
-            got = cache.peek(key)
-            if got is None:
-                from .cache import _disk_load  # filings read by an earlier process
-                d = _disk_load(key)
-                got = d[1] if d else None
-            if got is None:
+            got = _stored(chamber, f)
+            if got is None or (chamber == "House" and _stale_scan(got)):
                 stats["pending"] += 1
                 continue
             if not got["readable"]:
                 stats["unreadable"] += 1
+            elif got.get("scan"):
+                stats["scanned"] += 1                   # a paper report read with OCR
             if chamber == "House":
                 who = _match_house(people, f["last"], f["first"], f["state_dst"])
                 url = _house_url(f)

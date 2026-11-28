@@ -107,7 +107,7 @@ def _congress_rows(rows: list[dict], committees: dict, oversight: set[str]) -> l
         seats = committees.get(r.get("bioguide") or "", [])
         rel = [c for c in seats if c["code"] in oversight]
         out.append({k: r.get(k) for k in ("chamber", "member", "party", "state", "asset", "asset_type", "type",
-                                          "amount_lo", "amount_hi", "traded", "disclosed", "owner", "url")}
+                                          "amount_lo", "amount_hi", "traded", "disclosed", "owner", "url", "ocr")}
                    | {"side": _side(r.get("type")),
                       "relevant": [{"name": c["name"], "title": c.get("title")} for c in rel],
                       "lag_days": (date.fromisoformat(r["disclosed"]) - date.fromisoformat(r["traded"])).days
@@ -278,7 +278,7 @@ def congress_feed(days: int = 90) -> dict:
                          "ticker": r.get("ticker"), "asset": (r.get("asset") or "")[:80], "atype": r.get("asset_type"),
                          "type": r.get("type"), "lo": r.get("amount_lo"), "hi": r.get("amount_hi"), "traded": r.get("traded"),
                          "disclosed": r.get("disclosed"), "owner": r.get("owner"), "lag": lag, "committee": hit[0] if hit else None,
-                         "url": r.get("url")})
+                         "url": r.get("url"), "ocr": bool(r.get("ocr"))})
         by_t = defaultdict(lambda: {"buys": 0, "sells": 0, "buy_usd": 0.0, "sell_usd": 0.0, "members": set(), "asset": None})
         by_m = defaultdict(lambda: {"trades": 0, "buy_usd": 0.0, "sell_usd": 0.0, "party": None, "state": None, "chamber": None})
         for r in rows:

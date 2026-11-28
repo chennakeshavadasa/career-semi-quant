@@ -102,6 +102,11 @@ jobs:
           key: ${{ steps.k.outputs.week }}
           restore-keys: webapp-pip-
 
+      - name: OCR engine (scanned paper Congress reports)
+        if: github.event_name != 'page_build'
+        continue-on-error: true   # without it those reports stay "unreadable"; nothing else depends on it
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr
+
       - name: Publish web edition
         if: github.event_name != 'page_build'  # a restore redeploys the cached build as it is
         timeout-minutes: 22

@@ -22,6 +22,7 @@ import zipfile
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
+from difflib import get_close_matches
 from html import unescape
 from typing import Any
 
@@ -267,8 +268,9 @@ def _house_filing(f: dict) -> dict:
             if not paper_ptr.available():
                 return {"rows": [], "readable": False, "scan": True, "ocr": 0}
             filed = date.fromisoformat(f["filed"]) if f.get("filed") else None
-            rows = paper_ptr.read_pdf(pdf, latest=filed)
-            return {"rows": rows, "readable": bool(rows), "scan": True, "ocr": paper_ptr.VERSION}
+            got = paper_ptr.read(pdf, latest=filed)   # "nothing to report" is a report read; handwriting may not be
+            return {"rows": got["rows"], "readable": bool(got["rows"]) or got["nothing"], "scan": True,
+                    "ocr": paper_ptr.VERSION, "hand": got["skipped"]}
         return {"rows": [], "readable": False, "scan": False}
     got = cache.cached(key, FOREVER, load, disk=True)
     if _stale_scan(got):
@@ -278,9 +280,13 @@ def _house_filing(f: dict) -> dict:
 
 
 def _stale_scan(got: dict | None) -> bool:
-    """A stored report that is a scan read without OCR, or by an older version of the reader, while OCR works now."""
-    return bool(got) and not got.get("readable") and paper_ptr.available() and (
-        got.get("ocr", 0) < paper_ptr.VERSION) and got.get("scan", "ocr" not in got)
+    """A stored report that is a scan read without OCR, or by an older version of the reader, while OCR works now.
+    It is read again; a reading that found trades stays in use until then."""
+    if not got or not paper_ptr.available() or got.get("ocr", 0) >= paper_ptr.VERSION:
+        return False
+    if got.get("scan"):
+        return True
+    return not got.get("readable") and "scan" not in got and "ocr" not in got   # stored before scans were told apart
 
 
 # ─── Senate ──────────────────────────────────────────────────────────────────
@@ -446,6 +452,35 @@ def cross_check(rows: list[dict], people: dict) -> tuple[list[dict], dict]:
     return extra, {"checked": len(theirs), "matched": matched, "added": len(extra), "source": "Bargo", "url": bargo.HOME}
 
 
+def _fill_tickers(rows: list[dict]) -> int:
+    """A scanned report names a company the way the filer wrote it ("Advanced Micro Devic", "AMZN"); electronic
+    reports name the same companies with their tickers. Give a scanned row with no ticker the one those reports
+    use for the same name (or one 90% alike, with the same first word). Returns how many were filled."""
+    names: dict[str, tuple[str, str]] = {}
+    known: set[str] = set()
+    for r in rows:
+        if r.get("ticker") and not r.get("ocr") and r.get("asset_type") in ("Stock", "ETF"):
+            k = paper_ptr.name_key(r.get("asset") or "")
+            if k:
+                names.setdefault(k, (r["ticker"], r["asset_type"]))
+            known.add(r["ticker"])
+    n = 0
+    for r in rows:
+        if not r.get("ocr") or r.get("ticker") or r.get("asset_type") == "Other":
+            continue
+        a = (r.get("asset") or "").strip()
+        k = paper_ptr.name_key(a)
+        if re.fullmatch(r"[A-Za-z]{1,5}", a) and a.upper() in known:
+            hit: tuple[str, str] | None = (a.upper(), "Stock")
+        else:
+            close = get_close_matches(k, list(names), n=1, cutoff=0.9) if k else []
+            hit = names.get(k) or (names[close[0]] if close and close[0].split()[0] == k.split()[0] else None)
+        if hit:
+            r["ticker"], r["asset_type"] = hit
+            n += 1
+    return n
+
+
 def trades(days: int = 400, read_new: bool = True) -> dict:
     """Every disclosed transaction filed in the last ``days`` days, newest first, with the member's party, state
     and committees. ``read_new`` reads filings that aren't on disk yet (slow the first time: about 1,000 filings
@@ -455,15 +490,16 @@ def trades(days: int = 400, read_new: bool = True) -> dict:
         people = members()
         if read_new:
             refresh(days, budget_s=READ_BUDGET_S)
-        rows, stats = [], {"filings": 0, "unreadable": 0, "pending": 0, "scanned": 0}
+        rows, stats = [], {"filings": 0, "unreadable": 0, "pending": 0, "scanned": 0, "handwritten": 0}
         for chamber, f in _filings(days):
             stats["filings"] += 1
             got = _stored(chamber, f)
-            if got is None or (chamber == "House" and _stale_scan(got)):
+            if got is None or (chamber == "House" and _stale_scan(got) and not got["readable"]):
                 stats["pending"] += 1
                 continue
             if not got["readable"]:
                 stats["unreadable"] += 1
+                stats["handwritten"] += bool(got.get("hand"))   # trades seen, but their dates are handwritten
             elif got.get("scan"):
                 stats["scanned"] += 1                   # a paper report read with OCR
             if chamber == "House":
@@ -477,6 +513,7 @@ def trades(days: int = 400, read_new: bool = True) -> dict:
                 rows.append({**r, "chamber": chamber, "member": name, "bioguide": who["bioguide"] if who else None,
                              "party": who["party"] if who else None, "state": who["state"] if who else f.get("state_dst", "")[:2] or None,
                              "disclosed": f["filed"] or r.get("notified"), "url": url})
+        _fill_tickers(rows)
         extra, stats["bargo"] = cross_check(rows, people)   # trades in Bargo's copy that our reading missed
         rows += extra
         rows.sort(key=lambda r: (r["disclosed"] or "", r["traded"] or ""), reverse=True)

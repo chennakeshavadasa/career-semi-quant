@@ -169,7 +169,7 @@
           { label: 'Buys / sells', value: `${fmt.int(tt.buys)} / ${fmt.int(tt.sells)}`, cls: (tt.buys || 0) >= (tt.sells || 0) ? 'up' : 'down' },
           { label: 'Members trading', value: fmt.int(tt.members) },
           { label: 'Committee-linked', value: fmt.int(tt.committee_flagged), cls: tt.committee_flagged ? 'warn' : '', sub: 'member oversees the industry' },
-          { label: 'Filings read', value: fmt.int((st.filings || 0) - (st.unreadable || 0) - (st.pending || 0)), sub: `${fmt.int(st.unreadable)} paper scans not readable${st.pending ? ` · ${st.pending} pending` : ''}` },
+          { label: 'Filings read', value: fmt.int((st.filings || 0) - (st.unreadable || 0) - (st.pending || 0)), sub: `${fmt.int(st.unreadable)} paper scans not readable${st.handwritten ? ` (${fmt.int(st.handwritten)} handwritten)` : ''}${st.pending ? ` · ${st.pending} pending` : ''}` },
         ]));
         const tcols = (k) => [{ key: 'ticker', label: 'Ticker', l: true, render: (r) => `<a href="#/t/${enc(r.ticker)}">${esc(r.ticker)}</a>` },
           { key: 'name', label: 'Name', l: true, txt: true }, { key: k, label: k === 'buys' ? 'Buys' : 'Sells', fmt: 'int' },
@@ -202,7 +202,7 @@
         ], rows.filter(pass), { sort: 'disclosed', max: true, limit: 400, csv: `congress-trades-${days}d.csv`, tools, rowClass: (r) => (r.committee ? 'flagged' : ''),
           emptyText: 'No trade matches these filters.' });
         function redraw() { tbl.redraw(rows.filter(pass)); }
-        b.appendChild(ui.panel(null, tbl, { cap: (d.rows_note ? d.rows_note + '. ' : '') + 'Sorted by disclosure date; the first 400 rows are shown (CSV has all). Sources: the House Clerk and the Senate eFD; paper reports (scans) are read with OCR and their link says "scan". Oversight committee: the member sits on a committee with jurisdiction over the company\'s industry (a heuristic).' }));
+        b.appendChild(ui.panel(null, tbl, { cap: (d.rows_note ? d.rows_note + '. ' : '') + 'Sorted by disclosure date; the first 400 rows are shown (CSV has all). Sources: the House Clerk and the Senate eFD; paper reports (scans) are read with OCR and their link says "scan"; a handwritten row whose date OCR cannot read is left out, not guessed. Oversight committee: the member sits on a committee with jurisdiction over the company\'s industry (a heuristic).' }));
       }, 420);
     }
     load();

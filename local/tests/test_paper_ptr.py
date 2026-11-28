@@ -7,6 +7,7 @@ from datetime import date
 import numpy as np
 import pytest
 from PIL import Image
+from pypdf import PdfReader
 
 from semiquant.data import cache, congress, paper_ptr as pp
 
@@ -180,7 +181,8 @@ def test_scans_read_before_ocr_are_read_again_once_it_is_available(no_cache, mon
     assert congress._stale_scan({"rows": [], "readable": False})                 # stored by the old reader
     assert not congress._stale_scan({"rows": [], "readable": False, "scan": False})   # not a scan: never retried
     assert not congress._stale_scan({"rows": [{"x": 1}], "readable": True})
-    monkeypatch.setattr(pp, "read_pdf", lambda pdf, latest=None: [{"asset": "Nvidia Corporation Cmn", "ocr": True}])
+    monkeypatch.setattr(pp, "read", lambda pdf, latest=None: {"rows": [{"asset": "Nvidia Corporation Cmn", "ocr": True}],
+                                                             "nothing": False, "skipped": 0})
     again = congress._house_filing(FILING)
     assert again["readable"] and again["ocr"] == pp.VERSION and len(calls) == 2   # read again, and stored
 
@@ -238,3 +240,116 @@ def test_reports_read_by_an_older_reader_are_read_again(monkeypatch):
     monkeypatch.setattr(pp, "_have", True)
     assert congress._stale_scan({"rows": [], "readable": False, "scan": True, "ocr": pp.VERSION - 1})
     assert not congress._stale_scan({"rows": [], "readable": False, "scan": True, "ocr": pp.VERSION})
+    # a scan read by an older reader is read again even if it found trades (the old reader misread the current form)
+    assert congress._stale_scan({"rows": [{"x": 1}], "readable": True, "scan": True, "ocr": pp.VERSION - 1})
+    assert not congress._stale_scan({"rows": [{"x": 1}], "readable": True})       # an electronic report: never
+
+
+# ─── the form's other versions ───────────────────────────────────────────────
+
+def _cells(n, asset_at=1):
+    out, x = [], 100
+    for i in range(n):
+        w = 400 if i == asset_at else 70
+        out.append((x, x + w))
+        x += w
+    return out
+
+
+def _word(t, c, y=500):
+    return {"t": t, "cx": (c[0] + c[1]) / 2, "cy": y}
+
+
+def test_the_columns_of_each_version_of_the_form():
+    """Which column is which, from the printed "(MM/DD/YY)" headings (as OCR reads them) or else from the dates."""
+    c = _cells(17)                                            # older form: owner, asset, P S E, 2 dates, A-J
+    lay = pp.layout(c, [_word("(MM/DD/YY)", c[5]), _word("(MMIDDIYY)", c[6])])
+    assert [k for k, _ in lay["kinds"]] == ["buy", "sell", "exchange"] and lay["date"] == c[5] and lay["notified"] == c[6]
+    assert len(lay["amounts"]) == 10 and lay["known"] and lay["owner"] == c[0] and lay["asset"] == c[1]
+    c = _cells(19)                                            # current form: + partial sale, + K
+    lay = pp.layout(c, [_word("(MM/ODIYY}", c[6])])
+    assert [k for k, _ in lay["kinds"]] == ["buy", "sell", "sell_partial", "exchange"] and lay["notified"] == c[7]
+    assert len(lay["amounts"]) == 11 and lay["body"] == 500
+    c = _cells(20)                                            # brokers' layout: + capital gains (a heading misread
+    lay = pp.layout(c, [_word("(MM/DD/YY)", c[8])])          # in the notified column changes nothing)
+    assert lay["date"] == c[7] and [k for k, _ in lay["kinds"]] == ["buy", "sell", "exchange", None, "sell_partial"]
+    assert lay["body"] == 500 and lay["known"]
+    c = _cells(22)                                            # an unknown layout: placed by the dates in it
+    ws = [_word("07-01-2025", c[1], 600)] + [_word(t, c[i], y) for i, t in ((5, "10/08/26"), (6, "11/02/26")) for y in (600, 660)]
+    lay = pp.layout(c, ws, date(2026, 11, 5))
+    assert lay["date"] == c[5] and len(lay["kinds"]) == 3 and len(lay["amounts"]) == 11 and lay["body"] is None
+    assert pp.layout(_cells(22), []) is None and pp.layout(_cells(12), [_word("(MM/DD/YY)", c[5])]) is None
+
+
+def test_one_type_per_row_in_the_forms_order():
+    assert pp._kind(["sell", "exchange", "sell_partial"]) == "sell_partial"   # brokers: sale + partial, a stray mark between
+    assert pp._kind(["sell_partial"]) == "sell_partial"                      # the House form's own column
+    assert pp._kind(["buy", "sell_partial"]) == "buy" and pp._kind(["exchange"]) == "exchange" and pp._kind([]) is None
+
+
+def test_more_ocr_slips_in_dates_and_headings():
+    assert pp.parse_date("7/1(2025", loose=True) == "2025-07-01" and pp.parse_date("7/1(2025") is None   # "/" read as "("
+    assert all(pp._date_head(t) for t in ("(MM/DD/YY)", "(MMIDDIYY)", "(MM/ODIYY}", "(MMUDDIYY)", "iMMIODYY)", "(MM/DO/YY)"))
+    assert not any(pp._date_head(t) for t in ("Common", "COMMUNITY", "MMM"))
+    assert pp._NOTHING.search("NOTHING FO REPORT FOR FEBRUARY 2025") and pp._NOTHING.search("NOTHING CIO] OO | TO REPORT")
+
+
+def test_tickers_written_on_the_form_and_names_learned_from_electronic_reports():
+    assert pp.match_ticker("Zoetis Inc ZTS") == ("ZTS", "Stock")
+    assert pp.match_ticker("Paypal Hldgs Inc Com (PYPL)") == ("PYPL", "Stock")
+    assert pp.match_ticker("Select Sector Spdr Tr - XLE") == ("XLE", "ETF")
+    assert pp.match_ticker("Massachusetts ST FOR ISS SR C BER") == (None, "Other")   # a municipal bond's series, not a ticker
+    assert pp.match_ticker("AMZN") == ("AMZN", "Stock") and pp.match_ticker("Sell AT&T Inc @ 25.51")[0] == "T"
+    assert pp.name_key("Advanced Micro Devices, Inc. - Common Stock (AMD) [ST]") == "ADVANCED MICRO DEVICES"
+    assert pp.name_key("Sell AT&T Inc @ 25.51") == pp.name_key("AT&T Inc. - Common Stock (T) [ST]")
+    rows = [{"asset": "Advanced Micro Devices, Inc. - Common Stock (AMD) [ST]", "ticker": "AMD", "asset_type": "Stock"},
+            {"asset": "Amazon.com, Inc. - Common Stock (AMZN) [ST]", "ticker": "AMZN", "asset_type": "Stock"},
+            {"asset": "Advanced Micro Devic", "ticker": None, "asset_type": "Stock", "ocr": True},
+            {"asset": "Amzn", "ticker": None, "asset_type": "Stock", "ocr": True},
+            {"asset": "Advanced Drainage Systems", "ticker": None, "asset_type": "Stock", "ocr": True},
+            {"asset": "US Treasury Bill", "ticker": None, "asset_type": "Other", "ocr": True}]
+    assert congress._fill_tickers(rows) == 2
+    assert [r["ticker"] for r in rows[2:]] == ["AMD", "AMZN", None, None]
+
+
+@need_ocr
+def test_the_older_form_is_read():
+    """The House form before 2024 (17 columns: purchase, sale, exchange; amounts A-J), typed, with big drawn X's."""
+    rows = pp.read_page(img("older_form.png"), date(2026, 11, 10))
+    assert [(r["ticker"], r["asset_type"], r["type"]) for r in rows] == [("SPMD", "ETF", "buy"), ("XLE", "ETF", "sell")]
+    assert all((r["traded"], r["notified"], r["amount_lo"], r["owner"]) == ("2026-10-22", "2026-11-01", 1001, "Joint") for r in rows)
+
+
+@need_ocr
+def test_the_current_form_is_read():
+    """The current House form (19 columns: + partial sale and K, a printed box per mark), typed, with a check mark."""
+    rows = pp.read_page(img("current_form.png"), date(2025, 8, 6))
+    assert len(rows) == 1 and "AMERICAN EXPRESS BOND" in rows[0]["asset"].upper()
+    r = rows[0]
+    assert (r["type"], r["traded"], r["notified"], r["amount_lo"], r["owner"], r["ticker"]) == ("sell", "2025-07-01", "2025-08-06", 15001, "Joint", None)
+
+
+@need_ocr
+def test_handwriting_is_read_where_it_can_be_and_never_guessed():
+    """Four handwritten rows, all dated 01/10/25 with amount A: the spouse's AT&T, Genuine Parts, Merck and NVIDIA
+    trades. A row whose date OCR can't read is counted as skipped, never guessed; what is read must be right."""
+    got = pp.read(PdfReader(io.BytesIO(scan_pdf("handwritten.png"))), date(2026, 6, 30))
+    assert len(got["rows"]) + got["skipped"] == 4 and not got["nothing"]
+    assert all((r["traded"], r["amount_lo"]) == ("2025-01-10", 1001) and r["type"] in ("buy", "sell") for r in got["rows"])
+
+
+@need_ocr
+def test_a_report_of_no_trades_is_read_as_such():
+    got = pp.read(PdfReader(io.BytesIO(scan_pdf("nothing.png"))), date(2025, 3, 6))   # "Nothing to report for February 2025"
+    assert got == {"rows": [], "nothing": True, "skipped": 0}
+
+
+def test_a_faint_page_keeps_the_filings_layout_but_another_version_of_the_form_does_not():
+    cells = {n: pp.cells_of(pp.rules(ink(n + ".png"))[0]) for n in ("page2", "page4", "cover", "current_form", "older_form")}
+    assert pp._same_form(cells["page4"], cells["page2"])                 # broken lines: 18 columns found of 20
+    missing = cells["page2"][:10] + [(cells["page2"][10][0], cells["page2"][11][1])] + cells["page2"][12:]
+    assert pp._same_form(missing, cells["page2"])
+    wider = [(int(a * 1.04) + 20, int(b * 1.04) + 20) for a, b in cells["page2"]]   # scanned a little larger
+    assert pp._same_form(wider, cells["page2"])
+    assert not pp._same_form(cells["cover"], cells["page2"])             # the House form before brokers' pages
+    assert not pp._same_form(cells["current_form"], cells["older_form"])

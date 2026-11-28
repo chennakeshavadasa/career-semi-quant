@@ -138,20 +138,39 @@ def _warm_trend(query: str) -> None:
 
 
 def news(theatre_id: str, quick: bool = False) -> dict:
-    """Headlines and the coverage trend for one flashpoint. Raises if GDELT gave neither.
+    """Headlines and the coverage trend for one flashpoint. Raises if there are neither.
 
-    ``quick`` (the local server): use the trend only if it is cached and fetch it in the background otherwise, so
-    every card gets its headlines after one GDELT call instead of two."""
+    Headlines come from Yahoo Finance's news search first (fast and reliable from the build servers, which GDELT
+    often rate-limits), topped up from GDELT when Yahoo has fewer than three. The coverage trend is GDELT's.
+    ``quick`` (the local server): use the trend only if it is cached and fetch it in the background otherwise."""
     t = THEATRES.get(theatre_id)
     if not t:
         raise KeyError(theatre_id)
     errors: list[str] = []
+    terms = _terms(t["query"])
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
     heads: list[dict] = []
+    seen: set[str] = set()
+
+    def add(items: list[dict]) -> None:
+        for a in items:
+            key = "".join(ch for ch in a["title"].lower() if ch.isalnum())[:80]
+            if key not in seen and _relevant(a["title"], terms) and (a.get("seen") or "") >= week_ago:
+                seen.add(key)
+                heads.append(a)
     try:
-        terms = _terms(t["query"])
-        heads = [a for a in gdelt.articles(t["query"], hours=72, n=30) if _relevant(a["title"], terms)][:8]
+        add([{"title": " ".join(str(x.get("title") or "").split()), "url": x.get("url"), "domain": x.get("publisher") or "",
+              "seen": x.get("time"), "country": ""} for x in yahoo.search_news(t["search"], 25) if x.get("url")])
     except Exception as exc:  # noqa: BLE001
-        errors.append(f"headlines: {type(exc).__name__}: {str(exc)[:100]}")
+        errors.append(f"headlines: Yahoo: {type(exc).__name__}: {str(exc)[:100]}")
+    if len(heads) < 3 and not gdelt.paused():
+        try:
+            add(gdelt.articles(t["query"], hours=72, n=30))
+        except Exception as exc:  # noqa: BLE001
+            if not heads:
+                errors.append(f"headlines: {type(exc).__name__}: {str(exc)[:100]}")
+    heads.sort(key=lambda a: a.get("seen") or "", reverse=True)
+    heads = heads[:8]
     attn, series = None, None
     try:
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")

@@ -259,8 +259,8 @@
         b.appendChild(ui.empty('Ship counts are unavailable right now (the IMF PortWatch service did not answer).'));
       }
       b.appendChild(sec('Flashpoints'));
-      b.appendChild(h('p', { class: 'note' }, 'Conflicts and tensions, newest English-language headlines from ', h('a', { href: 'https://www.gdeltproject.org', target: '_blank', rel: 'noopener' }, 'GDELT'),
-        ', and what each can affect. The "can affect" lists are curated judgement, not data; the headlines and the markets are live. Straits that are disrupted come first.'));
+      b.appendChild(h('p', { class: 'note' }, 'Conflicts and tensions, the newest headlines (Yahoo Finance news and ', h('a', { href: 'https://www.gdeltproject.org', target: '_blank', rel: 'noopener' }, 'GDELT'),
+        ') and what each can affect. The "can affect" lists are curated judgement, not data; the headlines and the markets are live. Flashpoints next to a disrupted strait come first.'));
       b.appendChild(theatresSection(d, pick));
       b.appendChild(sec('Events logged by PortWatch'));
       b.appendChild(eventsSection(d, pick));
@@ -271,7 +271,7 @@
       b.appendChild(semisSection(d, pick));
       b.appendChild(h('p', { class: 'note', style: { marginTop: '18px' } }, h('b', null, 'How to read this. '),
         'Ship counts come from satellite ship signals (AIS) and lag by about a week; ships that switch the signal off are not counted. A status needs the traffic to be low against both its 3-year level and the same weeks of earlier years. News volume measures attention, not severity. ',
-        `Sources: IMF PortWatch (CC BY 4.0), GDELT Project, Yahoo Finance. Built ${fmt.dateTime(d.as_of)}.`));
+        `Sources: IMF PortWatch (CC BY 4.0), Yahoo Finance, GDELT Project. Built ${fmt.dateTime(d.as_of)}.`));
       if ((d.errors || []).length) b.appendChild(h('p', { class: 'note dim' }, 'Some sources did not answer at the last refresh: ' + d.errors.map((e) => e.split(':')[0]).join(', ') + '.'));
     }, 520);
   };

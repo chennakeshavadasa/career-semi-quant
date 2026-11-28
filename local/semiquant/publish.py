@@ -36,7 +36,7 @@ from urllib.parse import quote as urlq
 
 from . import __version__, config
 from .analytics._util import jsonable
-from .data import congress, gdelt, yahoo
+from .data import congress, yahoo
 from .service import market as mkt
 from .service import screener as scr
 from .service import smartmoney as sm
@@ -266,8 +266,8 @@ class Publisher:
 
     def world(self) -> None:
         """World risk page: ship traffic, disruption events, markets and chip-supply exposure (one file), a daily-series
-        file per chokepoint, and each flashpoint's news. GDELT allows one request every 5 seconds, so the news has its
-        own time cap per run; the flashpoints it didn't reach are done by the next run."""
+        file per chokepoint, and each flashpoint's news (Yahoo headlines, GDELT extras and coverage trend). The news has
+        its own time cap per run; flashpoints it didn't reach are done by the next run."""
         from . import world as worldmap
         why = ("This section is still being prepared: its data source (IMF PortWatch, GDELT or Yahoo) did not answer at the "
                "last refresh. It is retried at every refresh (about every 15 minutes).")
@@ -278,7 +278,7 @@ class Publisher:
         # a run with a time budget (a push: the layout should go live fast) gives the news a smaller share
         cap = self.NEWS_BUDGET_S if not self.deadline else min(self.NEWS_BUDGET_S, max(30.0, (self.deadline - self.now) / 2))
         for t in worldmap.THEATRES:
-            if time.time() - t0 > cap or gdelt.paused():
+            if time.time() - t0 > cap:  # (news() skips GDELT by itself while it is paused; Yahoo still answers)
                 self.stats["deferred"] += 1
                 continue
             self.put(f"/api/world/news?theatre={t['id']}", "hourly", lambda tid=t["id"]: wld.news(tid), why=why)

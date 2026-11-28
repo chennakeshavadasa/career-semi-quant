@@ -3,7 +3,7 @@ import gzip
 import json
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -16,6 +16,7 @@ from semiquant.service import world as sw
 from semiquant.universe import ALL_META
 
 FX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "world")
+RECENT = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")   # headlines are kept for 7 days
 
 
 def load(name):
@@ -49,7 +50,7 @@ def test_links_between_chokepoints_flashpoints_assets_and_chip_items_resolve():
     for t in W.THEATRES:
         assert set(t["chokepoints"]) <= set(W.CHOKEPOINTS), t["id"]
         assert set(t["assets"]) <= set(W.ASSETS), t["id"]
-        assert t["affects"] and t["name"] and t["region"]
+        assert t["affects"] and t["name"] and t["region"] and t["search"]
     for x in W.SEMIS:
         assert set(x["chokepoints"]) <= set(W.CHOKEPOINTS), x["id"]
         assert set(x["theatres"]) <= th, x["id"]
@@ -99,6 +100,7 @@ def fake(monkeypatch):
     frames["BZ=F"] = frame(99, spike=0.25)                                   # an oil spike
     monkeypatch.setattr(yahoo, "daily_many", lambda syms, period="10y", live=True: {s: frames[s] for s in syms if s in frames})
     monkeypatch.setattr(yahoo, "quotes", lambda syms: {s: {"change_pct": 1.5, "price": 100.0} for s in syms})
+    monkeypatch.setattr(yahoo, "search_news", lambda q, count=20: [])
     return monkeypatch
 
 
@@ -169,8 +171,8 @@ def test_news_filters_headlines_and_drops_today(fake):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     tl = [(f"2026-0{m}-{d:02d}", 0.5) for m in (8, 9, 10) for d in range(1, 28)] + [(today, 99.0)]
     fake.setattr(gdelt, "articles", lambda q, hours=72, n=8: [
-        {"title": "US disables merchant vessel trying to evade Iran blockade", "url": "https://a", "domain": "a.com", "seen": "2026-11-28T10:45:00Z", "country": ""},
-        {"title": "newsroomamerica . com", "url": "https://b", "domain": "b", "seen": "2026-11-28T10:45:00Z", "country": ""}])
+        {"title": "US disables merchant vessel trying to evade Iran blockade", "url": "https://a", "domain": "a.com", "seen": RECENT, "country": ""},
+        {"title": "newsroomamerica . com", "url": "https://b", "domain": "b", "seen": RECENT, "country": ""}])
     fake.setattr(gdelt, "timeline", lambda q, mode="timelinevol", days=100: tl)
     d = sw.news("iran_gulf")
     assert [h["domain"] for h in d["headlines"]] == ["a.com"]
@@ -221,7 +223,7 @@ def test_publisher_writes_the_world_files_and_keeps_going_when_news_fails(fake, 
 
 def test_a_partial_news_answer_is_retried_at_every_refresh(fake, tmp_path):
     fake.setattr(gdelt, "articles", lambda q, hours=72, n=8: [
-        {"title": "US disables merchant vessel trying to evade Iran blockade", "url": "https://a", "domain": "a.com", "seen": "2026-11-28T10:45:00Z", "country": ""}])
+        {"title": "US disables merchant vessel trying to evade Iran blockade", "url": "https://a", "domain": "a.com", "seen": RECENT, "country": ""}])
     fake.setattr(gdelt, "timeline", lambda *a, **k: (_ for _ in ()).throw(gdelt.GdeltBusy("rate limit")))
     pub = Publisher(tmp_path)
     pub.data.mkdir(parents=True)
@@ -232,10 +234,12 @@ def test_a_partial_news_answer_is_retried_at_every_refresh(fake, tmp_path):
     assert pub.due(path, "hourly")                     # headlines are kept, the missing trend is fetched again next time
 
 
-def test_the_publisher_stops_asking_gdelt_once_it_has_paused_itself(fake, tmp_path):
+def test_news_keeps_coming_from_yahoo_while_gdelt_is_paused(fake, tmp_path):
     import time
     asked = []
     fake.setattr(gdelt, "articles", lambda *a, **k: asked.append(1) or [])
+    fake.setattr(yahoo, "search_news", lambda q, count=20: [
+        {"title": f"Tankers turn back as {q} tension rises", "url": "https://y/" + q, "publisher": "Reuters", "time": RECENT}])
     fake.setitem(gdelt._state, "blocked_until", time.time() + 100)
     try:
         pub = Publisher(tmp_path)
@@ -243,14 +247,40 @@ def test_the_publisher_stops_asking_gdelt_once_it_has_paused_itself(fake, tmp_pa
         pub.world()
     finally:
         gdelt.reset()
-    assert not asked and pub.stats["deferred"] == len(W.THEATRES)
-    assert (pub.data / "world.json").exists()          # everything that does not need GDELT is still published
+    assert not asked                                   # GDELT is not asked while it pauses
+    n = json.loads((pub.data / file_key("/api/world/news?theatre=iran_gulf")).read_text())
+    assert n["headlines"][0]["domain"] == "Reuters" and n["available"] is False    # the trend is still missing
+    assert len(list((pub.data / "world").glob("news__*.json"))) == len(W.THEATRES)
+
+
+def test_yahoo_headlines_come_first_and_gdelt_only_tops_up(fake):
+    old = (datetime.now(timezone.utc) - timedelta(days=9)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    later = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    y = [{"title": "Iran warns tankers near the Strait of Hormuz", "url": "https://y/1", "publisher": "Reuters", "time": RECENT},
+         {"title": "Oil jumps as Iran blockade tightens around Hormuz", "url": "https://y/2", "publisher": "Bloomberg", "time": later},
+         {"title": "IRAN WARNS TANKERS NEAR THE STRAIT OF HORMUZ!", "url": "https://y/3", "publisher": "AP", "time": RECENT},   # duplicate
+         {"title": "Iran talks stall over sanctions relief, diplomats say", "url": "https://y/4", "publisher": "AP", "time": old},  # too old
+         {"title": "Stocks rise as markets await jobs data", "url": "https://y/5", "publisher": "AP", "time": RECENT},         # not about it
+         {"title": "Insurers lift war-risk premiums for Persian Gulf voyages", "url": "https://y/6", "publisher": "FT", "time": RECENT}]
+    asked = []
+    fake.setattr(yahoo, "search_news", lambda q, count=20: y)
+    fake.setattr(gdelt, "articles", lambda *a, **k: asked.append(1) or [])
+    fake.setattr(gdelt, "timeline", lambda *a, **k: [(f"2026-10-{d:02d}", 1.0) for d in range(1, 31)] * 3)
+    d = sw.news("iran_gulf")
+    assert [h["url"] for h in d["headlines"]] == ["https://y/2", "https://y/1", "https://y/6"]   # newest first, filtered
+    assert not asked and d["available"] is True
+    # Yahoo has too little: GDELT tops it up and the two merge by time
+    fake.setattr(yahoo, "search_news", lambda q, count=20: y[:1])
+    fake.setattr(gdelt, "articles", lambda *a, **k: [{"title": "Navy escorts resume through the Strait of Hormuz", "url": "https://g/1",
+                                                      "domain": "gdelt.example", "seen": later, "country": ""}])
+    d = sw.news("iran_gulf")
+    assert [h["url"] for h in d["headlines"]] == ["https://g/1", "https://y/1"]
 
 
 def test_quick_news_uses_a_cached_trend_and_warms_a_missing_one(fake):
     calls = []
     fake.setattr(gdelt, "articles", lambda q, hours=72, n=8: [
-        {"title": "US disables merchant vessel trying to evade Iran blockade", "url": "https://a", "domain": "a.com", "seen": "2026-11-28T10:45:00Z", "country": ""}])
+        {"title": "US disables merchant vessel trying to evade Iran blockade", "url": "https://a", "domain": "a.com", "seen": RECENT, "country": ""}])
     fake.setattr(gdelt, "timeline", lambda *a, **k: calls.append(1) or [("2026-10-01", 1.0)] * 40)
     fake.setattr(gdelt, "cached_timeline", lambda *a, **k: None)
     d = sw.news("iran_gulf", quick=True)

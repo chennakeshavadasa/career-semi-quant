@@ -27,7 +27,7 @@ from typing import Any
 
 import requests
 
-from . import cache, paper_ptr
+from . import bargo, cache, paper_ptr
 
 HOUSE = "https://disclosures-clerk.house.gov/public_disc"
 SENATE = "https://efdsearch.senate.gov"
@@ -410,6 +410,42 @@ def _unread(chamber: str, f: dict) -> bool:
     return got is None or (chamber == "House" and _stale_scan(got))
 
 
+_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "md", "phd", "hon"}
+
+
+def _last_name(name: str) -> str:
+    """'Gilbert Ray Cisneros, Jr.' -> 'cisneros'; 'Hon. Michael A. Rulli' -> 'rulli'."""
+    words = [w for w in re.findall(r"[a-z]+", _fold(name or "")) if w not in _SUFFIXES]
+    return words[-1] if words else ""
+
+
+def _trade_key(r: dict) -> tuple:
+    side = "sell" if str(r.get("type") or "").startswith("sell") else r.get("type")
+    return (r.get("traded"), (r.get("ticker") or "").upper(), side, _last_name(r.get("member") or ""))
+
+
+def cross_check(rows: list[dict], people: dict) -> tuple[list[dict], dict]:
+    """Compare our trades with Bargo's latest (an independent copy of the same filings). Returns (the trades Bargo
+    has and we don't, stats). Those trades are shown with a credit to Bargo; a failure just skips the check."""
+    try:
+        theirs = bargo.recent()
+    except Exception as exc:  # noqa: BLE001 - the check is optional
+        return [], {"error": f"{type(exc).__name__}: {str(exc)[:100]}"}
+    ours = {_trade_key(r) for r in rows}
+    extra, matched = [], 0
+    for b in theirs:
+        if _trade_key(b) in ours:
+            matched += 1
+            continue
+        last = _last_name(b["member"])
+        first = (b["member"] or "").split(" ")[0]
+        who = (_match_house(people, last, first, b["state_dst"]) if b["chamber"] == "House" else _match_senate(people, last, first))
+        extra.append({**{k: v for k, v in b.items() if k != "state_dst"}, "member": who["name"] if who else b["member"],
+                      "bioguide": who["bioguide"] if who else None, "party": who["party"] if who else None,
+                      "state": who["state"] if who else (b["state_dst"] or "")[:2] or None})
+    return extra, {"checked": len(theirs), "matched": matched, "added": len(extra), "source": "Bargo", "url": bargo.HOME}
+
+
 def trades(days: int = 400, read_new: bool = True) -> dict:
     """Every disclosed transaction filed in the last ``days`` days, newest first, with the member's party, state
     and committees. ``read_new`` reads filings that aren't on disk yet (slow the first time: about 1,000 filings
@@ -441,6 +477,8 @@ def trades(days: int = 400, read_new: bool = True) -> dict:
                 rows.append({**r, "chamber": chamber, "member": name, "bioguide": who["bioguide"] if who else None,
                              "party": who["party"] if who else None, "state": who["state"] if who else f.get("state_dst", "")[:2] or None,
                              "disclosed": f["filed"] or r.get("notified"), "url": url})
+        extra, stats["bargo"] = cross_check(rows, people)   # trades in Bargo's copy that our reading missed
+        rows += extra
         rows.sort(key=lambda r: (r["disclosed"] or "", r["traded"] or ""), reverse=True)
         stats["errors"] = sorted(ERRORS.values())
         if not rows and ERRORS:

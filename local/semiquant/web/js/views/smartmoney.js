@@ -17,6 +17,15 @@
   const who = (r) => `${esc(r.member || '')} <span class="dim">${esc([r.party, r.state].filter(Boolean).join('-'))}${r.chamber ? ' · ' + esc(String(r.chamber)[0] === 'S' ? 'Senate' : 'House') : ''}</span>`;
   const link = (url, text) => (url ? `<a href="${esc(url)}" target="_blank" rel="noopener"${/scan/.test(text || '') ? ' title="A paper report, scanned: read with OCR. Check the filing if a number matters."' : ''}>${esc(text || 'Filing')}</a>` : '–');
   const lag = (d) => (d == null ? '–' : `<span class="${d > 45 ? 'down' : 'dim'}" title="${d > 45 ? 'Later than the 45 days the law allows' : 'Days from trade to disclosure'}">${d}d${d > 45 ? ' late' : ''}</span>`);
+  const BARGO = 'https://www.bargo.ai/free-apis/congress';
+  // A trade read from the official filing, or one only Bargo's copy had (its licence asks for a visible credit link).
+  const filing = (r) => (r.source === 'bargo'
+    ? `<a href="${BARGO}" target="_blank" rel="noopener" title="Not found in our reading of the official filings; this trade comes from Bargo's free Congress API">via Bargo</a>`
+    : link(r.url, r.ocr ? 'Filing (scan)' : 'Filing'));
+  const bargoCredit = (st) => (st && st.checked ? h('p', { class: 'note', style: { margin: '0 0 10px' } },
+    'Cross-checked with ', h('a', { href: BARGO, target: '_blank', rel: 'noopener' }, 'Bargo'),
+    `'s free Congress API: ${st.matched} of its ${st.checked} latest trades were already here` +
+    (st.added ? `; ${st.added} more ${st.added === 1 ? 'is' : 'are'} added from it, marked "via Bargo".` : '.')) : null);
   const ROLE = { top: ['Top executive', 'down'], owner: ['10%+ owner', 'warn'], director: ['Director', ''], officer: ['Officer', ''] };
 
   function flags(list) {
@@ -61,6 +70,10 @@
       const c12 = cg.filter((r) => (r.disclosed || '') >= yr);
       const is6 = (d.insider_summary || {})['6M'] || {};
       const adds = funds.filter((f) => (f.change || 0) > 0.005).length, cuts = funds.filter((f) => (f.change || 0) < -0.005).length;
+      if (cg.some((r) => r.source === 'bargo')) {
+        b.appendChild(h('p', { class: 'note', style: { margin: '0 0 6px' } }, 'Some Congress trades below come from ',
+          h('a', { href: BARGO, target: '_blank', rel: 'noopener' }, 'Bargo'), '\'s free Congress API (marked "via Bargo").'));
+      }
       b.appendChild(h('p', { class: 'note' }, h('b', null, 'Who else is trading ' + sym + '. '),
         'Members of Congress, big funds and 5%+ holders, and the company\'s own executives, with the trades that matter flagged. ',
         'Each item shows when it happened and when it became public: the law decides how fast each kind is disclosed (table at the bottom).'));
@@ -89,7 +102,7 @@
         { key: 'side', label: 'Type', l: true, render: (r) => side(r.type) },
         { key: 'amount_lo', label: 'Amount', render: (r) => range(r.amount_lo, r.amount_hi) },
         { key: 'rel', label: 'Oversight committee', l: true, get: (r) => ((r.relevant || [])[0] || {}).name || '', render: (r) => ((r.relevant || []).length ? `<span class="warn">${esc(r.relevant[0].name.replace(/^(House|Senate|United States Senate) (Select |Permanent Select |Special )?Committee on (the )?/, ''))}${r.relevant[0].title ? ' (' + esc(r.relevant[0].title) + ')' : ''}</span>` : '<span class="dim">–</span>') },
-        { key: 'owner', label: 'Owner', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url, r.ocr ? 'Filing (scan)' : 'Filing') },
+        { key: 'owner', label: 'Owner', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => filing(r) },
       ], cg, { sort: 'disclosed', max: true, csv: `${sym}-congress.csv`, rowClass: (r) => ((r.relevant || []).length ? 'flagged' : ''),
         emptyText: 'No member of Congress disclosed a trade in this stock in the last two years.' }),
       { cap: `Committees that oversee this industry: ${(d.oversight || []).map((c) => c.replace(/^(House|Senate) (Select |Permanent Select )?Committee on (the )?/, (m, ch) => ch + ' ')).join('; ') || '–'}. Amounts are the reported ranges. Paper reports are scanned images, read with OCR: their link says "scan".` }));
@@ -149,6 +162,8 @@
       box.innerHTML = '';
       ui.async(box, () => api('/api/congress?days=' + days), (b, d) => {
         const tt = d.totals || {}, st = d.stats || {};
+        const credit = bargoCredit(st.bargo);
+        if (credit) b.appendChild(credit);
         b.appendChild(ui.kpis([
           { label: 'Trades disclosed', value: fmt.int(tt.trades), sub: `in the last ${days} days` },
           { label: 'Buys / sells', value: `${fmt.int(tt.buys)} / ${fmt.int(tt.sells)}`, cls: (tt.buys || 0) >= (tt.sells || 0) ? 'up' : 'down' },
@@ -183,7 +198,7 @@
           { key: 'ticker', label: 'Ticker', l: true, render: (r) => `<a href="#/t/${enc(r.ticker)}">${esc(r.ticker)}</a>` },
           { key: 'type', label: 'Type', l: true, render: (r) => side(r.type) }, { key: 'lo', label: 'Amount', render: (r) => range(r.lo, r.hi) },
           { key: 'committee', label: 'Oversight committee', l: true, render: (r) => (r.committee ? `<span class="warn">${esc(r.committee.replace(/^(House|Senate) (Select |Permanent Select )?Committee on (the )?/, ''))}</span>` : '<span class="dim">–</span>') },
-          { key: 'asset', label: 'Asset', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => link(r.url, r.ocr ? 'Filing (scan)' : 'Filing') },
+          { key: 'asset', label: 'Asset', l: true, txt: true }, { key: 'url', label: 'Filing', l: true, nosort: true, render: (r) => filing(r) },
         ], rows.filter(pass), { sort: 'disclosed', max: true, limit: 400, csv: `congress-trades-${days}d.csv`, tools, rowClass: (r) => (r.committee ? 'flagged' : ''),
           emptyText: 'No trade matches these filters.' });
         function redraw() { tbl.redraw(rows.filter(pass)); }

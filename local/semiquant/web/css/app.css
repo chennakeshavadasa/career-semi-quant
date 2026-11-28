@@ -86,7 +86,7 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--rule-str
 .brand:hover { text-decoration: none; }
 /* Chip mark: die and leads in currentColor (the theme accent), price line cut out of the die. */
 .brand .logo { width: 30px; height: 30px; flex: none; color: var(--accent); }
-.brand .logo svg { display: block; width: 100%; height: 100%; }
+.brand .logo svg, .brand .logo img { display: block; width: 100%; height: 100%; } /* the app icon tile (Monte Carlo bloom) */
 .brand b { font-size: 16.5px; letter-spacing: 0.005em; }
 .brand small { display: block; font: 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin-top: -2px; }
 .search { position: relative; flex: 1; max-width: 560px; }

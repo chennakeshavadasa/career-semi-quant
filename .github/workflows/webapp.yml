@@ -72,14 +72,27 @@ jobs:
           echo "hour=webapp-$(date -u +%Y%m%d%H)" >> "$GITHUB_OUTPUT"
           echo "week=webapp-pip-$(date -u +%G%V)" >> "$GITHUB_OUTPUT"
 
-      # Previous output + Yahoo cache: each run only redoes what is due.
+      # Previous output + Yahoo cache: each run only redoes what is due. Push runs file their build
+      # under their own key (the hour's key is taken by its first run), so a restore right after a
+      # push gets the new layout. Restores only read, and always the newest build: saving there filed
+      # the older build they redeployed under the hour's key, and later restores brought it back.
       - name: Restore published data
+        if: github.event_name != 'page_build'
         uses: actions/cache@v4
         with:
           path: |
             ~/.semiquant/cache
             .qt-out
-          key: ${{ steps.k.outputs.hour }}
+          key: ${{ github.event_name == 'push' && format('{0}-{1}', steps.k.outputs.hour, github.run_id) || steps.k.outputs.hour }}
+          restore-keys: webapp-2
+      - name: Restore the newest published build (read only)
+        if: github.event_name == 'page_build'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.semiquant/cache
+            .qt-out
+          key: webapp-restore-${{ github.run_id }}  # never stored: the newest webapp-2* entry wins
           restore-keys: webapp-2
 
       - name: Restore pip downloads

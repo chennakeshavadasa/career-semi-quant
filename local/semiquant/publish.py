@@ -36,10 +36,11 @@ from urllib.parse import quote as urlq
 
 from . import __version__, config
 from .analytics._util import jsonable
-from .data import congress, yahoo
+from .data import congress, gdelt, yahoo
 from .service import market as mkt
 from .service import screener as scr
 from .service import smartmoney as sm
+from .service import world as wld
 from .service import ticker as tk
 from .service import tools
 from .service.export import snap_key
@@ -144,7 +145,7 @@ class Publisher:
             return True
         return b'"available":false' in head.replace(b" ", b"") or b'"unavailable":true' in head.replace(b" ", b"")
 
-    def put(self, path: str, tier: str, fn: Callable[[], Any], kind: str | None = None) -> None:
+    def put(self, path: str, tier: str, fn: Callable[[], Any], kind: str | None = None, why: str | None = None) -> None:
         if not self.due(path, tier):
             self.stats["reused"] += 1
             return
@@ -161,7 +162,7 @@ class Publisher:
                 return
             # First time and nothing to show (e.g. an ETF has no analysts): publish an explicit
             # empty state so the page explains it instead of failing; retried next run.
-            text = json.dumps({"unavailable": True, "message": "Not available yet: Yahoo did not return this section at the last "
+            text = json.dumps({"unavailable": True, "message": why or "Not available yet: Yahoo did not return this section at the last "
                                "refresh; it is retried at every refresh (about every 15 minutes). ETFs and indices have "
                                "no analysts, statements or insiders."})
             p = self.data / key
@@ -252,6 +253,7 @@ class Publisher:
             self.put(f"/api/market/breadth?u={u}", "hourly", lambda u=u: mkt.breadth(u))
             self.put(f"/api/market/systemic?u={u}", "slow", lambda u=u: mkt.systemic(u))
             self.put(f"/api/factorlab?u={u}", "daily", lambda u=u: mkt.factorlab(u))
+        self.world()
         # Congress: read the filings published since the last run (the first run reads two years, about
         # 1,500 filings, over a few runs), then the feeds
         try:
@@ -261,6 +263,27 @@ class Publisher:
             self.errors.append(f"congress refresh: {type(exc).__name__}: {str(exc)[:160]}")
         for d in (30, 90, 365):
             self.put(f"/api/congress?days={d}", "hourly", lambda d=d: sm.congress_feed(d))
+
+    def world(self) -> None:
+        """World risk page: ship traffic, disruption events, markets and chip-supply exposure (one file), a daily-series
+        file per chokepoint, and each flashpoint's news. GDELT allows one request every 5 seconds, so the news has its
+        own time cap per run; the flashpoints it didn't reach are done by the next run."""
+        from . import world as worldmap
+        why = ("This section is still being prepared: its data source (IMF PortWatch, GDELT or Yahoo) did not answer at the "
+               "last refresh. It is retried at every refresh (about every 15 minutes).")
+        self.put("/api/world", "hourly", wld.overview, why=why)
+        for cid in worldmap.CHOKEPOINTS:
+            self.put(f"/api/world/chokepoint/{cid}", "daily", lambda cid=cid: wld.chokepoint(cid), why=why)
+        t0 = time.time()
+        # a run with a time budget (a push: the layout should go live fast) gives the news a smaller share
+        cap = self.NEWS_BUDGET_S if not self.deadline else min(self.NEWS_BUDGET_S, max(30.0, (self.deadline - self.now) / 2))
+        for t in worldmap.THEATRES:
+            if time.time() - t0 > cap or gdelt.paused():
+                self.stats["deferred"] += 1
+                continue
+            self.put(f"/api/world/news?theatre={t['id']}", "hourly", lambda tid=t["id"]: wld.news(tid), why=why)
+
+    NEWS_BUDGET_S = 200
 
     def ticker(self, sym: str) -> None:
         """Quick pass: everything that changes intraday (always done)."""

@@ -15,7 +15,7 @@ import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import Body, FastAPI, Query, Request
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +29,7 @@ from ..service import screener as scr
 from ..service import smartmoney as sm
 from ..service import ticker as tk
 from ..service import tools
+from ..service import world as wld
 
 log = logging.getLogger("semiquant.server")
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -252,6 +253,24 @@ def create_app() -> FastAPI:
     @app.get("/api/congress")
     def congress_feed(days: int = 90):
         return sm.congress_feed(days if days in (30, 90, 365) else 90)
+
+    @app.get("/api/world")
+    def world_overview():
+        return wld.overview()
+
+    @app.get("/api/world/chokepoint/{cid}")
+    def world_chokepoint(cid: str):
+        try:
+            return wld.chokepoint(cid)
+        except KeyError:
+            raise HTTPException(404, f"Unknown chokepoint: {cid}")
+
+    @app.get("/api/world/news")
+    def world_news(theatre: str):
+        try:
+            return wld.news(theatre, quick=True)
+        except KeyError:
+            raise HTTPException(404, f"Unknown flashpoint: {theatre}")
 
     @app.get("/api/ticker/{sym}/factors")
     def t_factors(sym: str):

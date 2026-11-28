@@ -27,6 +27,7 @@ const ROUTES = [
   ['compare', '#/compare?s=NVDA,AMD,SOXX'], ['portfolio', '#/portfolio'], ['offer', '#/offer?t=NVDA'], ['settings', '#/settings'],
   ...T.map((t) => ['nvda_' + t, '#/t/NVDA/' + t]),
   ['nvda_smart', '#/t/NVDA/smart'], ['congress', '#/congress'], ['congress365', '#/congress?days=365'],
+  ['world', '#/world'], ['world_taiwan', '#/world?s=chokepoint11'],
   ['factorlab', '#/factorlab?u=semis'], ['factorlab_us', '#/factorlab?u=us_large'],
   ['aapl', '#/t/AAPL'], ['spy', '#/t/SPY'], ['tokyo', '#/t/8035.T'], ['btc', '#/t/BTC-USD'],
 ];

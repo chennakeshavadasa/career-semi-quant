@@ -746,3 +746,38 @@ table.t tr.flagged td { background: rgba(var(--warn-rgb), .10); }
 .flag .fm { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; min-height: 32px; margin-top: 2px; }
 .flag .fm a { display: inline-flex; align-items: center; min-height: 32px; }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ─── World risk ─────────────────────────────────────────────────────── */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips .chip { white-space: normal; max-width: 100%; text-align: left; }
+button.chip { background: transparent; cursor: pointer; min-height: 34px; padding: 6px 12px; line-height: 1.3; }
+button.chip.pick:hover, button.chip.pick:focus-visible { border-color: var(--accent); color: var(--accent); }
+.wsplit { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 14px; margin-top: 12px; align-items: start; }
+.wsplit > * { min-width: 0; }
+.wsplit .grid { gap: 14px; }
+.wgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 14px; align-items: start; }
+.wgrid > * { min-width: 0; }
+.wcard .pb { display: flex; flex-direction: column; gap: 6px; }
+.wsub { font: 700 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); margin-top: 8px; }
+.wlist { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13px; line-height: 1.5; }
+.wlist li { overflow-wrap: anywhere; }
+.wnews { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.wnews a { color: var(--ink); font-weight: 600; font-size: 13.5px; line-height: 1.4; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wnews a:hover { color: var(--accent); }
+.wmeta { display: block; color: var(--ink-4); font: 11.5px var(--mono); margin-top: 1px; }
+.wtick { display: flex; flex-wrap: wrap; gap: 8px; }
+.wtick .chip.tk { display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 6px 12px; font-size: 12px; }
+.wtick a.chip.tk:hover { border-color: var(--accent); text-decoration: none; }
+.wbadge { font-size: 11.5px; }
+.flag.click { cursor: pointer; }
+.flag.click:hover, .flag.click:focus-visible { border-color: var(--down); }
+@media (max-width: 900px) { .wsplit { grid-template-columns: minmax(0, 1fr); } }
+
+.wname { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.world .chip.down { color: var(--down); border-color: rgba(var(--down-rgb), .7); }
+.world .chip.warn { color: var(--warn); border-color: rgba(var(--warn-rgb), .7); }
+.world .chip.acc { color: var(--accent); border-color: rgba(var(--accent-rgb), .7); }
+.world .chip.up { color: var(--up); border-color: rgba(var(--up-rgb), .7); }
+
+.wb { margin-left: auto; display: flex; gap: 6px; align-items: center; min-width: 0; }
+@media (max-width: 700px) { .wb { margin-left: 0; } }

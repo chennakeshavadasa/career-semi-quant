@@ -11,7 +11,7 @@ It covers four built-in universes, and any other Yahoo symbol you type:
 | Global leaders | 64 (Europe, Japan, China, Korea/Taiwan, India, Canada, Latin America, Australia, SE Asia) | region |
 | ETFs | 65 (broad market, sectors, factors, bonds, commodities and crypto, countries, themes) | category |
 
-It opens as a dashboard in your browser and also works from the terminal. Everything stays on your machine; the only network traffic is to Yahoo Finance.
+It opens as a dashboard in your browser and also works from the terminal. Everything stays on your machine. Network traffic goes to Yahoo Finance and, for the Insiders & Congress and World risk pages, to public sources that need no key: SEC EDGAR, the House Clerk, the Senate's eFD, IMF PortWatch and GDELT.
 
 The website edition ([nithinpuru.github.io/quant-terminal](https://nithinpuru.github.io/quant-terminal/)) runs on weekly data refreshed twice a day. This edition is the live, deeper version.
 
@@ -51,6 +51,8 @@ Stop the dashboard with Ctrl-C in the terminal window.
 
 **Market dashboard.** US indices and futures, Treasury yields (curve and 10Y-3M spread), FX and crypto, commodities, global indices, VIX term structure (contango or backwardation), sector ETF rotation, and for the universe you pick (semiconductors, US large caps, global leaders or ETFs): a market-cap heatmap grouped by sub-sector / sector / region, top gainers and losers, group moves, breadth (share above the 20/50/200-day averages, new highs and lows, correlation, dispersion) and a hidden Markov model regime of its reference ETF (SOXX, SPY or ACWI). Systemic risk for each universe: absorption ratio (how much the stocks move as one, with its fragility shift) and the turbulence index (unusual moves or correlations, and which stocks drive them). Plus US movers, upcoming earnings across all universes and headlines.
 
+**World risk** (`#/world`). Wars and flashpoints, the straits and canals ships pass through, and what they can hit. Ships per day through 28 chokepoints (IMF PortWatch, counted from satellite AIS signals), each against its own normal: a strait is flagged only when it is low against both its 3-year level and the same weeks of earlier years, so seasonal swings do not trigger it. The table shows how long a disruption has lasted, which ship types are missing (tankers, containers, dry bulk) and a daily chart. Also: PortWatch's event log (closures, storms, quakes), 16 flashpoints with the newest English-language headlines and coverage trend (GDELT) and what each can affect, the markets that carry a shock (oil, gas, freight, defense, havens, Asian chip markets) with 5-day stress, and where chip supply depends on all of it: Taiwan's fabs, Korean memory, Gulf helium and LNG, Black Sea neon, Chinese gallium and germanium, Japanese materials, Asia-Europe freight, battery metals. The "what it affects" notes are curated judgement; the numbers are live.
+
 **Company workspace** (any Yahoo symbol: `NVDA`, `005930.KS`, `8035.T`, `ASML.AS`, `^GSPC`, `BTC-USD`, `ES=F`):
 
 | Tab | What it shows |
@@ -63,10 +65,11 @@ Stop the dashboard with Ctrl-C in the terminal window.
 | Fundamentals | Statements (annual and quarterly), margins, ROE/ROIC, R&D and stock-based-compensation intensity, dilution, Piotroski F-score, Altman Z, multiples, an interactive DCF with sensitivity grid, reverse DCF (the growth the price implies), valuation history, sector peers |
 | Analysts & earnings | Price targets, rating trend, every upgrade/downgrade with target changes, EPS and revenue consensus, estimate revisions (7/30/60/90 days), earnings history, an event study of every report (abnormal returns, post-earnings drift after beats vs misses) |
 | Ownership | Insider buying and selling (Form 4), largest institutions and funds, short interest, days to cover |
+| Insiders & Congress | Who else is trading the stock: members of Congress (House Clerk and Senate eFD reports, trades by members of a committee that oversees the industry flagged), the company's executives (Form 4), planned sales (Form 144), 5%+ stakes (13D/13G) and funds holding 0.5%+. Each item shows when it happened and when it became public, and new ones are flagged |
 | Factors & regimes | Style-factor regression on ETF spreads (market, semis, size, value, momentum, quality, low vol) with Newey-West t-stats and variance attribution, macro sensitivities (yields, dollar, oil, VIX), rolling betas, hidden Markov volatility regimes, closest peers |
 | Filings & news | SEC filings with links, dividends, splits, news |
 
-**Tools.** **Factor lab**: do momentum, reversal, low volatility, 52-week-high, trend and low-beta signals predict next month's returns in a universe? Monthly rank information coefficients with t-statistics, quintile spreads, decay, turnover, how alike the signals are, and today's combined ranking. A screener over any universe or watchlist (about 40 columns, ranked by a composite quant score within that list: momentum, trend, value, quality, growth, estimate revisions, analyst view, low volatility; plus a scatter map), Compare (up to 12 tickers), Portfolio (live value in USD, Euler risk contributions, VaR, seven optimizers incl. risk parity and hierarchical risk parity, efficient frontier, backtest, crisis replay, 12-month Monte Carlo), Offer & RSU value (Monte Carlo of a grant over its vesting schedule, RSUs or options, up to three offers side by side), Calendar (earnings and economic events).
+**Tools.** **Congress trades**: every stock trade disclosed by members of Congress in the last 30, 90 or 365 days, most bought and sold, most active members, committee-linked trades flagged. **Factor lab**: do momentum, reversal, low volatility, 52-week-high, trend and low-beta signals predict next month's returns in a universe? Monthly rank information coefficients with t-statistics, quintile spreads, decay, turnover, how alike the signals are, and today's combined ranking. A screener over any universe or watchlist (about 40 columns, ranked by a composite quant score within that list: momentum, trend, value, quality, growth, estimate revisions, analyst view, low volatility; plus a scatter map), Compare (up to 12 tickers), Portfolio (live value in USD, Euler risk contributions, VaR, seven optimizers incl. risk parity and hierarchical risk parity, efficient frontier, backtest, crisis replay, 12-month Monte Carlo), Offer & RSU value (Monte Carlo of a grant over its vesting schedule, RSUs or options, up to three offers side by side), Calendar (earnings and economic events).
 
 ## Terminal commands
 
@@ -125,6 +128,9 @@ Settings, watchlists, your portfolio, the data cache and exports live in `~/.sem
 ```text
 semiquant/
   data/yahoo.py      every Yahoo request: caching, batching, fallbacks
+  data/sec.py, congress.py       SEC EDGAR filings and Congress trade reports (Insiders & Congress)
+  data/portwatch.py, gdelt.py    ship traffic per strait, conflict news (World risk)
+  world.py           the curated map behind World risk: straits, flashpoints, markets, chip-supply links
   analytics/         pure numpy/pandas/scipy/statsmodels/arch functions, unit-tested
   service/           combines data and analytics; shared by the API, the CLI and exports
   server/app.py      FastAPI: JSON API under /api, the dashboard at /

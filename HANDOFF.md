@@ -1,6 +1,6 @@
 # Handoff: Semi Quant Terminal
 
-State at 2026-11-28 11:00 UTC. Read this first, then `git log --oneline -20 origin/master`.
+State at 2026-11-28 11:46 UTC. Read this first, then `git log --oneline -20 origin/master`.
 
 ## What this is
 
@@ -17,6 +17,8 @@ One codebase, four ways to use it:
 
 ## Shipped today (newest first)
 
+- **World risk** page `#/world` (local and web, desktop nav + phone More list): ships per day through 28 straits and canals (IMF PortWatch, AIS-based, lags about a week) with a status against each strait's own normal (3-year median *and* the same weeks of earlier years, the more cautious wins; start dates from PortWatch's event log when it has one), PortWatch's disruption log, 16 flashpoints with GDELT headlines and coverage trend, the markets that carry a shock (Yahoo: oil, gas, freight, defense, havens, Asian chip markets) and chip-supply exposure. Code: `data/portwatch.py`, `data/gdelt.py`, `analytics/worldrisk.py`, `world.py` (the curated map: what each strait carries, what each flashpoint can affect, chip links), `service/world.py`, `web/js/views/world.js`. Static files: `world.json`, `world/chokepoint/<id>.json`, `world/news__theatre-<id>.json`. Tests `test_worldrisk.py`, `test_portwatch_gdelt.py`, `test_world.py` on real recorded answers in `tests/fixtures/world/` (regenerate: `python tests/make_world_fixtures.py`). At build time the data showed Hormuz at about 3 ships a day against 78 normally since 1 Mar 2026 (PortWatch event HORMUZ-26, ongoing), Kerch and Bosporus disrupted, Bab el-Mandeb below normal.
+- Verified live at 11:02 UTC: the Insiders & Congress tab works on both sites. All 227 published symbols serve `smartmoney.json` on both; the website needed the 10:52 `quick` deploy that was already running.
 - `bcb3c23` publish: each stock's Insiders & Congress data moved to the always-run pass (the first run's 2-min heavy budget was used up reading Congress filings, so the tab 404'd).
 - `0a2cefa` **Insiders & Congress**: ticker tab `smart` + page `#/congress`. Data: `local/semiquant/data/congress.py` (House Clerk index + PTR PDFs via pypdf, Senate eFD search + report pages, @unitedstates legislators/committees), `data/sec.py` (EDGAR full-text search: Form 4, Form 144, 13D/13G), `service/smartmoney.py` (highlights, committee oversight heuristic, feed). UI `web/js/views/smartmoney.js`. Tests `local/tests/test_congress.py` (+ real filings in `tests/data/`).
 - `85bd2b6` `js/quant.js` → `js/models.js`: EasyPrivacy's `/quant.js` rule (uBlock, AdGuard, Brave) blocked it and broke Offer/Portfolio. `tests/test_blocklists.py` now fails on any blocked file name.
@@ -28,12 +30,12 @@ One codebase, four ways to use it:
 
 ## In flight at handoff (verify first)
 
-- `bcb3c23` deploys: the webapp push run and a website deploy dispatched with `quick=true`. Check both serve NVDA's tab data and that the tab renders:
+- World risk deploys: the webapp push run and a website `deploy.yml` run with `quick: true`. Check:
   ```bash
-  curl -sI https://chennakeshavadasa.github.io/career-semi-quant/app/data/ticker/NVDA/smartmoney.json | head -1
-  curl -sI https://nithinpuru.github.io/quant-terminal/app/data/ticker/NVDA/smartmoney.json | head -1
+  curl -sI https://chennakeshavadasa.github.io/career-semi-quant/app/data/world.json | head -1
+  curl -sI https://nithinpuru.github.io/quant-terminal/app/data/world.json | head -1
   ```
-  Then open `#/t/NVDA/smart` and `#/congress` on both. If the website still 404s, dispatch its `deploy.yml` again with `quick: true`.
+  then open `#/world` on both. Flashpoint headlines fill over the first runs (GDELT has a time cap per run, see below); cards say "Headlines are being prepared" until then.
 - First Congress runs leave a few filings "pending"; each run reads more (4-min cap). `stats` in `data/congress__days-90.json` shows it.
 
 ## Open items
@@ -41,7 +43,8 @@ One codebase, four ways to use it:
 1. **Owner setting (recommended):** career-semi-quant → Settings → Pages → Source: **GitHub Actions**. Stops the branch-based Pages builds that blank the app for a minute after every push to master (the restore dance in `webapp.yml`).
 2. **Every fund ≥0.5% (13F) and exact 5%+ stake percentages** need SEC archive access, which requires a contact email in the User-Agent. Only with the owner's explicit OK and an address they choose; today `data/sec.py` uses the search API, which needs none.
 3. Executive-branch officials' trades (OGE 278-T) are not covered: no clean feed.
-4. Polish: chart annotation text 9-10.5 px on a few heatmaps (risk, factor lab) is flagged "tiny" by the phone audit; README does not mention the quant pack or Insiders & Congress yet.
+4. Polish: chart annotation text 9-10.5 px on a few heatmaps (risk, factor lab) is flagged "tiny" by the phone audit.
+5. World risk: GDELT throughput from GitHub Actions is untested. GDELT allows one request per 5 seconds per address and shared addresses get 429s and resets (this sandbox did). If most `world/news__theatre-*.json` files stay `unavailable` after a day, look at GDELT's other feeds or a curated RSS source. The notes in `world.py` are judgement; review them now and then.
 
 ## How to work here (learned the hard way)
 
@@ -52,12 +55,13 @@ One codebase, four ways to use it:
 - **File names**: no shipped file may match a content-blocker rule (`local/tests/data/blocked_script_names.txt`). The test enforces it.
 - **SEC**: `www.sec.gov` (archives, company_tickers.json) refuses requests without a contact email; `efts.sec.gov` and `data.sec.gov` work with a generic client name. In the search API's `forms` filter list **base forms only** (`4,144`, `SCHEDULE 13G`, ...): listing `/A` forms drops results; amendments come back anyway.
 - **Congress sources**: House PDFs put NULs where the heading font lacks glyphs (`parse_house_text` handles it); Senate eFD needs the terms-of-use POST first (`_senate_session`). Disclosure lag: median 27 days, 10% over 116 days (the law allows 45).
+- **World risk sources**: PortWatch is an ArcGIS service (`services9.arcgis.com/weJ1QsnbMYJlCHdG/.../Daily_Chokepoints_Data`, `PortWatch_chokepoints_database`, `portwatch_disruptions_database`); `date` is a DateOnly field, filter with `date >= 'YYYY-MM-DD'`, 10,000 rows per answer. GDELT DOC API: `data/gdelt.py` throttles to one call per 5.5 s, retries once, pauses 10 min after 4 failures (`gdelt.paused()`); the publisher caps the news at 200 s per run (less on budgeted push runs) and a partial answer carries `"available": false` so it is retried next run. The cloud environment "Semi Quant Terminal" allows both github.io hosts, `api.gdeltproject.org` and `services9.arcgis.com`; Yahoo is not reachable from it, so build a static copy with synthetic prices to test UI (see the World risk commit).
 - **Checks before shipping**:
   ```bash
   cd local && pytest -q                        # 279 tests
   for f in semiquant/web/js/*.js semiquant/web/js/views/*.js; do node --check "$f"; done
   semiquant serve --no-browser &               # then the phone audit:
-  node devtools/uitest.js http://127.0.0.1:8050/ /tmp/ui a360,p412,zoom130,se375light,land800,tab768 market,nvda_smart,congress
+  node devtools/uitest.js http://127.0.0.1:8050/ /tmp/ui a360,p412,zoom130,se375light,land800,tab768 market,nvda_smart,congress,world
   ```
   `uitest.js` (Playwright) reports overflow, overlapping text, clipping, small tap targets and tiny text per page and screen size; `scrl` (table scrollers) is expected.
 - **Static check without a deploy**: `Publisher(out, full=[...])` + `copy_app()`, `quotes()`, `put(...)` for the pages you changed, `meta()`; serve `out` and open it (see `0a2cefa` for the routes).

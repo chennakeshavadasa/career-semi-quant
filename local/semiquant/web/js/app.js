@@ -68,7 +68,7 @@
 
   // ─── Search / command palette ─────────────────────────────────────────
   const COMMANDS = [
-    ['#/market', 'Market dashboard', 'Page'], ['#/screener', 'Screener: semis, US large caps, global, ETFs', 'Page'],
+    ['#/market', 'Market dashboard', 'Page'], ['#/world', 'World risk: conflicts, straits, shipping', 'Page'], ['#/screener', 'Screener: semis, US large caps, global, ETFs', 'Page'],
     ['#/compare', 'Compare tickers', 'Page'], ['#/portfolio', 'Portfolio risk & optimizer', 'Page'],
     ['#/offer', 'Offer & RSU value simulator', 'Page'], ['#/calendar', 'Earnings & economic calendar', 'Page'],
     ['#/settings', 'Settings, exports & help', 'Page'],
@@ -208,6 +208,7 @@
     const icon = (d) => h('span', { html: '<svg viewBox="0 0 24 24">' + d + '</svg>' });
     view.appendChild(h('div', { class: 'page-h' }, h('div', null, h('h1', null, 'More'))));
     const items = [
+      ['#/world', 'World risk', 'Wars, straits and shipping, and what they can hit', '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>'],
       ['#/factorlab', 'Factor lab', 'Which signals predict returns: IC, quintile spreads, decay', '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/>'],
       ['#/congress', 'Congress trades', 'What members of Congress bought and sold; committee seats flagged', '<path d="M4 20h16M5 17h14M6 17V10M10 17V10M14 17V10M18 17V10M3 10h18L12 4z"/>'],
       ['#/compare', 'Compare', 'Performance, risk and correlation side by side', '<path d="M4 18l5-6 4 3 7-9"/>'],

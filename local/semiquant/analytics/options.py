@@ -879,11 +879,11 @@ def risk_neutral_density(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, e
     pdf[1:-1] = (C[2:] - 2 * C[1:-1] + C[:-2]) / (dK * dK) / disc
     neg = float(-pdf[pdf < 0].sum() * dK)
     pdf = np.clip(pdf, 0, None)
-    mass = float(pdf.sum() * dK)
+    mass = float(np.trapezoid(pdf, K)) if hasattr(np, "trapezoid") else float(np.trapz(pdf, K))
     if not mass > 0:
         return {"available": False, "message": "The fitted smile does not give a valid distribution."}
     pdf /= mass
-    cdf = np.cumsum(pdf) * dK
+    cdf = np.concatenate([[0.0], np.cumsum(0.5 * (pdf[1:] + pdf[:-1]) * dK)])  # trapezoid: CDF at the nodes
     quant = {f"p{int(p * 100)}": float(np.interp(p, cdf, K)) for p in (0.05, 0.25, 0.5, 0.75, 0.95)}
     x = K / S - 1
     mean = float((x * pdf).sum() * dK)
@@ -921,7 +921,7 @@ def model_free_iv(calls: pd.DataFrame, puts: pd.DataFrame, spot: float, expiry: 
     core = _core(calls, puts, spot, expiry, asof, r, q)
     K, c, p, F, T, rr = core["K"], core["c"], core["p"], core["F"], core["T"], core["r"]
     out = {"expiry": core["expiry"], "T": T, "dte": T * 365.0 if np.isfinite(T) else None, "mfiv": None,
-           "variance": None, "n_strikes": 0, "forward": F}
+           "variance": None, "n_strikes": 0, "k_min": None, "k_max": None, "forward": F}
     if K.size < 4 or not (np.isfinite(F) and F > 0 and np.isfinite(T) and T > 0):
         return jsonable(out)
     below = np.flatnonzero(K <= F)

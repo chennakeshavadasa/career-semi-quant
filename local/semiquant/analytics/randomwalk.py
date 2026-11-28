@@ -60,9 +60,9 @@ def variance_ratios(prices, qs=(2, 5, 10, 20)) -> list[dict]:
         for j in range(1, q):
             delta = n * float((d2[j:] * d2[:-j]).sum()) / denom
             theta += (2 * (q - j) / q) ** 2 * delta
-        z = (vr - 1) / math.sqrt(theta) if theta > 0 else float("nan")
-        out.append({"q": q, "vr": vr, "z": z, "p": float(2 * (1 - norm.cdf(abs(z)))) if np.isfinite(z) else None})
-    return out
+        z = math.sqrt(n) * (vr - 1) / math.sqrt(theta) if theta > 0 else None  # Lo & MacKinlay z*(q)
+        out.append({"q": q, "vr": vr, "z": z, "p": float(2 * norm.sf(abs(z))) if z is not None and np.isfinite(z) else None})
+    return jsonable(out)
 
 
 def random_walk_tests(prices, alpha: float = 0.05) -> dict:

@@ -64,8 +64,10 @@ def _rank_ic(a: pd.Series, b: pd.Series, min_names: int) -> float | None:
 
 
 def _max_dd(cum: np.ndarray) -> float:
-    peak = np.maximum.accumulate(cum)
-    return float((cum / peak - 1).min())
+    """Max drawdown of a wealth path, measured from the starting capital 1.0 as well."""
+    w = np.concatenate([[1.0], np.asarray(cum, float)])
+    peak = np.maximum.accumulate(w)
+    return float((w / peak - 1).min())
 
 
 def factor_lab(closes: pd.DataFrame, years: int = 10, quantiles: int = 5, min_names: int = 15,
@@ -109,6 +111,7 @@ def factor_lab(closes: pd.DataFrame, years: int = 10, quantiles: int = 5, min_na
             else:
                 qrets.append(np.full(quantiles, np.nan))
                 spread.append(np.nan)
+                prev_top = None  # a skipped month breaks the turnover chain
         icv = np.array([x for x in ics if x is not None], float)
         sp = np.array(spread, float)
         spv = sp[np.isfinite(sp)]

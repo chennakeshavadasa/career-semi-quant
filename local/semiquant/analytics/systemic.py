@@ -39,7 +39,7 @@ def absorption_ratio(closes: pd.DataFrame, window: int = 252, frac: float = 0.2,
     out = {"available": False, "n_assets": int(r.shape[1]), "window": window}
     if r.shape[1] < 10 or len(r) < window + 2 * step:
         return out
-    ts, ar, pc1 = [], [], []
+    ts, ar, pc1, used = [], [], [], 0
     for end in range(window, len(r) + 1, step):
         R = r.iloc[end - window:end].dropna(axis=1)
         if R.shape[1] < 10:
@@ -52,6 +52,7 @@ def absorption_ratio(closes: pd.DataFrame, window: int = 252, frac: float = 0.2,
         if not tot > 0:
             continue
         k = max(1, int(round(frac * len(ev))))
+        used = len(ev)
         ts.append(r.index[end - 1])
         ar.append(float(ev[:k].sum() / tot))
         pc1.append(float(ev[0] / tot))
@@ -60,7 +61,7 @@ def absorption_ratio(closes: pd.DataFrame, window: int = 252, frac: float = 0.2,
     a = np.asarray(ar)
     yr = a[-max(2, 252 // step):]
     shift = float((a[-3:].mean() - yr.mean()) / yr.std(ddof=1)) if yr.std(ddof=1) > 0 else None
-    out.update(available=True, n_top=max(1, int(round(frac * r.shape[1]))), current=float(a[-1]), pc1=float(pc1[-1]),
+    out.update(available=True, n_assets=used, n_top=max(1, int(round(frac * used))), current=float(a[-1]), pc1=float(pc1[-1]),
                percentile=pct_rank(a, float(a[-1])), shift=shift,
                series={"t": [iso(t) for t in ts], "ar": ar, "pc1": pc1})
     return jsonable(out)

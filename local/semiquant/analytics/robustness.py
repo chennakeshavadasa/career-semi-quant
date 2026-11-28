@@ -50,7 +50,7 @@ def asymmetric_risk(prices, market, freq: str = "D", tails=(0.05, 0.10)) -> dict
     df = pd.concat([r.rename("r"), m.rename("m")], axis=1, join="inner").dropna()
     out = {"freq": "weekly" if freq.upper().startswith("W") else "daily", "n": int(len(df)), "beta": None,
            "downside_beta": None, "upside_beta": None, "beta_asymmetry": None, "coskewness": None,
-           "cokurtosis": None, "crash_beta": None, "tail_dependence": []}
+           "cokurtosis": None, "crash_beta": None, "crash_avg_stock": None, "crash_avg_market": None, "tail_dependence": []}
     if len(df) < 40:
         return out
     x, y = df["m"].to_numpy(float), df["r"].to_numpy(float)

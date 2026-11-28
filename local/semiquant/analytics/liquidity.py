@@ -31,7 +31,8 @@ def typical_spread(adv_usd: float, price: float | None = None, usd_listing: bool
     """Typical bid-ask spread for a stock trading ``adv_usd`` a day (bucket table above), never below
     one cent on a US-dollar listing. Daily-bar estimators (Corwin-Schultz, Roll, Abdi-Ranaldo) read
     volatility as spread for liquid stocks, so they are not used for large caps."""
-    s = next(v for lo, v in SPREAD_BUCKETS if (adv_usd or 0) >= lo)
+    adv = adv_usd if isinstance(adv_usd, (int, float)) and math.isfinite(adv_usd) else 0.0
+    s = next(v for lo, v in SPREAD_BUCKETS if adv >= lo)
     if usd_listing and price and price > 0:
         s = max(s, 0.01 / price)
     return s
@@ -53,7 +54,10 @@ def corwin_schultz(df, window: int = 60) -> float | None:
     day t+1 are shifted by the overnight gap when the open is outside day t's range (the paper's
     adjustment), so a gap is not mistaken for a spread.
     """
-    d = _frame(df).dropna(subset=["high", "low"]).tail(window + 1)
+    d = _frame(df)
+    if not {"high", "low"} <= set(d.columns):
+        return None
+    d = d.dropna(subset=["high", "low"]).tail(window + 1)
     if len(d) < 10:
         return None
     h, lo, c = d["high"].to_numpy(float), d["low"].to_numpy(float), d["close"].to_numpy(float)
@@ -85,7 +89,7 @@ def roll_spread(df, window: int = 60) -> float | None:
         return None
     dp = c.diff().dropna().to_numpy(float)
     cov = np.cov(dp[1:], dp[:-1], ddof=1)[0, 1]
-    if not np.isfinite(cov) or cov >= 0:
+    if not np.isfinite(cov) or cov >= -1e-12 * max(float(np.var(dp)), 1e-300):  # >= 0 up to rounding
         return None
     return float(2 * math.sqrt(-cov) / c.iloc[-1])
 
@@ -127,7 +131,7 @@ def liquidity_profile(df, shares_outstanding: float | None = None, fx_to_usd: fl
         q = usd / (px * fx_to_usd) if px > 0 else float("nan")
         part = q / adv20 if adv20 > 0 else float("nan")
         cost = 0.5 * spread + IMPACT_Y * sigma * math.sqrt(part) if np.isfinite(part) else None
-        row = {"usd": usd, "shares": q, "pct_adv": part, "cost": cost, "cost_usd": cost * usd if cost else None}
+        row = {"usd": usd, "shares": q, "pct_adv": part, "cost": cost, "cost_usd": cost * usd if cost is not None else None}
         for p in (0.10, 0.20):
             days = max(part / p, 1.0) if np.isfinite(part) else None
             key = f"{int(p * 100)}"

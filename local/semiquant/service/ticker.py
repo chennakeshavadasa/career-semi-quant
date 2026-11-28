@@ -328,11 +328,12 @@ def _crash_and_liquidity(sym: str, df: pd.DataFrame, spy, rf: float) -> dict:
         if len(close) > n * 0.95:
             sharpe[w] = safe(rb.sharpe_confidence, close.tail(n + 1), rf, default=None)
     fx = fx_to_usd([q.get("currency")]).get(q.get("currency"), 1.0) if q.get("currency") else 1.0
+    fx = fx if isinstance(fx, (int, float)) and np.isfinite(fx) and fx > 0 else 1.0
     return {
         "crash": safe(rb.asymmetric_risk, five, spy, freq, default=None) if spy is not None else None,
         "sharpe_confidence": sharpe,
         "drawdown_risk": safe(rb.drawdown_risk, close.tail(2521), default=None),
-        "liquidity": safe(liq.liquidity_profile, df.tail(260), q.get("shares_out"), fx or 1.0,
+        "liquidity": safe(liq.liquidity_profile, df.tail(260), q.get("shares_out"), fx,
                           bid=q.get("bid"), ask=q.get("ask"), quote_live=q.get("market_state") == "REGULAR", default=None),
     }
 

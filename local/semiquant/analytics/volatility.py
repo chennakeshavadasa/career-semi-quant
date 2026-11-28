@@ -356,7 +356,8 @@ def har_rv(df, horizons=(1, 5, 21, 63), window: int = 1000, history: int = 504) 
     variance mean(RV_{t+1..t+h}) is regressed (OLS) on [1, log RV_t, log mean of the last 5, log mean
     of the last 22] over the last ``window`` days (log-HAR: earnings gaps and crash days do not
     dominate the fit as they do in levels; direct forecasts, no iteration). The forecast is
-    exp(fitted + residual variance / 2) at the last day, annualised as sqrt(252 * variance).
+    exp(fitted) times Duan's smearing factor mean(exp(residuals)) (no normality assumption on the log
+    residuals), annualised as sqrt(252 * variance).
     Returns {"forecasts": [{h, vol, r2, coef: {const, day, week, month}}], "current": {day, week,
     month} (annualised vols of the three components), "fit": {t, actual, fitted} for h = 21 over the
     last ``history`` days (realised forward vol vs the model's in-sample forecast)}.
@@ -380,15 +381,15 @@ def har_rv(df, horizons=(1, 5, 21, 63), window: int = 1000, history: int = 504) 
         y = D["y"].to_numpy(float)
         beta, *_ = np.linalg.lstsq(A, y, rcond=None)
         fitted = A @ beta
-        resid_var = float(np.var(y - fitted, ddof=4))
+        smear = float(np.mean(np.exp(y - fitted)))  # Duan (1983) smearing: no normality assumption
         ss = float(((y - y.mean()) ** 2).sum())
         r2 = 1 - float(((y - fitted) ** 2).sum()) / ss if ss > 0 else None
-        f = math.exp(float(np.dot([1.0, *np.log(last[["day", "week", "month"]].to_numpy(float))], beta)) + resid_var / 2)
+        f = math.exp(float(np.dot([1.0, *np.log(last[["day", "week", "month"]].to_numpy(float))], beta))) * smear
         out["forecasts"].append({"h": h, "vol": math.sqrt(f * ppy), "r2": r2,
                                  "coef": dict(zip(("const", "day", "week", "month"), map(float, beta)))})
         if h == 21:
             tail = D.tail(history)
-            fit = np.exp(A[-len(tail):] @ beta + resid_var / 2)
+            fit = np.exp(A[-len(tail):] @ beta) * smear
             out["fit"] = {"t": [iso(t) for t in tail.index], "actual": [math.sqrt(math.exp(v) * ppy) for v in tail["y"]],
                           "fitted": [math.sqrt(v * ppy) for v in fit]}
     return jsonable(out)

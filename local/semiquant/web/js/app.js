@@ -221,7 +221,11 @@
       inAndroidApp && window.SQAndroid && SQAndroid.checkUpdate
         // Two parts update separately: the layout (web edition, redeployed on every push) and the
         // Android shell (APK, rebuilt only when android/ changes). The button refreshes both.
-        ? h('button', { type: 'button', onclick: () => { SQAndroid.checkUpdate(); if (SQ.checkForUpdate) SQ.checkForUpdate(); } },
+        ? h('button', { type: 'button', onclick: () => {
+            // App builds with checkAppUpdate leave the layout to this page; older ones only have checkUpdate.
+            if (SQAndroid.checkAppUpdate) SQAndroid.checkAppUpdate(); else SQAndroid.checkUpdate();
+            if (SQ.checkForUpdate) SQ.checkForUpdate();
+          } },
           icon('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
           h('span', null, 'Update app', h('small', null, 'App ' + (SQAndroid.appVersion ? SQAndroid.appVersion() : '?')
             + (SQ.static && window.SQ_STATIC.build ? ' · layout ' + window.SQ_STATIC.build : '') + ' · loads the newest layout and app build')))

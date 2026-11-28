@@ -199,7 +199,11 @@
   // A page that stays open (an installed app, the Android WebView) keeps running the code it
   // loaded until it reloads. When a newer layout is published, offer it, and take it the next
   // time the app comes back to the foreground (a safe moment: nothing is being typed).
-  SQ.newBuild = () => !!(S.meta && S.meta.build && ST.build && S.meta.build !== ST.build);
+  // Newer = a different build published after this page's own. After each push to master, GitHub's
+  // branch-based Pages build and the restore in webapp.yml can briefly bring back an older build:
+  // never "update" to that.
+  SQ.newBuild = () => !!(S.meta && S.meta.build && ST.build && S.meta.build !== ST.build
+    && (!ST.built_at || Date.parse(S.meta.built_at) > Date.parse(ST.built_at)));
   // Remember which build a reload was for, so a CDN that still serves the old page for a moment
   // can't cause a reload loop: then the app just keeps offering the Reload button.
   const triedFor = () => { try { return sessionStorage.getItem('sq-reload-for'); } catch (e) { return null; } };

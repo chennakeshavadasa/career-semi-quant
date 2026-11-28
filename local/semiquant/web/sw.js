@@ -1,7 +1,7 @@
 /* Service worker for the published dashboard (installable app).
  * App files (versioned with ?v=build): cache first, so the app opens instantly.
  * Pages and data/*.json: network first, so you always get the newest published numbers,
- * falling back to the last copy when offline. Never touches /api/ (local edition). */
+ * falling back to the last copy when offline or when the server answers with an error. Never touches /api/ (local edition). */
 const BUILD = '__BUILD__';
 const SHELL = 'sq-shell-' + BUILD;
 const DATA = 'sq-data';
@@ -31,8 +31,13 @@ async function networkFirst(request, cacheName) {
     const response = request.mode === 'navigate'
       ? await fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' })
       : await fetch(request);
-    if (response.ok) (await caches.open(cacheName)).put(key, response.clone());
-    return response;
+    if (response.ok) {
+      (await caches.open(cacheName)).put(key, response.clone());
+      return response;
+    }
+    // An error answer: after each push to master, GitHub's branch-based Pages build removes the
+    // app for a minute or two (see webapp.yml). Keep showing the last good copy, as when offline.
+    return (await caches.match(key)) || response;
   } catch (err) {
     const hit = await caches.match(key);
     if (hit) return hit;

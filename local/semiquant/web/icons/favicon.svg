@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <title>Semi Quant Terminal</title>
+  <!-- The chip mark tuned for 16-32 px: drawn on a 16 px grid (straight edges
+       fall on whole pixels at 16 and 32 px), two leads a side, a heavier price line. -->
+  <defs>
+    <mask id="sq-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
+      <rect width="32" height="32" fill="#fff"/>
+      <path d="M10 19l4-4 3 3 5-5" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <path d="M12 0v4m8-4v4M12 28v4m8-4v4M0 12h4m-4 8h4M28 12h4m-4 8h4" fill="none" stroke="#FB8B1E" stroke-width="4"/>
+  <rect x="6" y="6" width="20" height="20" rx="2" fill="#FB8B1E" mask="url(#sq-cut)"/>
+</svg>

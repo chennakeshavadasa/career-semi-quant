@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Semi Quant Terminal</title>
+  <!-- Chip with a market line: an amber die with twelve leads; the rising price
+       line is cut out of the die. Amber #FB8B1E on a black rounded square. -->
+  <defs>
+    <mask id="sq-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <rect width="512" height="512" fill="#fff"/>
+      <path d="M194 294 240 248 264 272 318 218" fill="none" stroke="#000" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#000"/>
+  <path d="M200 96v42m56-42v42m56-42v42M200 374v42m56-42v42m56-42v42M96 200h42m-42 56h42m-42 56h42M374 200h42m-42 56h42m-42 56h42" fill="none" stroke="#FB8B1E" stroke-width="26"/>
+  <rect x="152" y="152" width="208" height="208" rx="14" fill="#FB8B1E" mask="url(#sq-cut)"/>
+</svg>

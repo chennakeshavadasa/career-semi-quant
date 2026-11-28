@@ -84,8 +84,9 @@ kbd { font: 11px var(--mono); padding: 1px 5px; border: 1px solid var(--rule-str
 }
 .brand { display: flex; align-items: center; gap: 10px; min-width: calc(var(--side-w) - 30px); color: var(--ink); }
 .brand:hover { text-decoration: none; }
-.brand .logo { width: 30px; height: 30px; border: 1.5px solid var(--ink); border-radius: 7px; display: grid; place-items: center; }
-.brand .logo svg { width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+/* Chip mark: die and leads in currentColor (the theme accent), price line cut out of the die. */
+.brand .logo { width: 30px; height: 30px; flex: none; color: var(--accent); }
+.brand .logo svg { display: block; width: 100%; height: 100%; }
 .brand b { font-size: 16.5px; letter-spacing: 0.005em; }
 .brand small { display: block; font: 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin-top: -2px; }
 .search { position: relative; flex: 1; max-width: 560px; }
@@ -395,8 +396,7 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
 
 /* Top bar: brand, command line, status */
 [data-theme="dark"] .topbar { background: #000; border-bottom: 2px solid var(--amber); }
-[data-theme="dark"] .brand .logo { border: 0; background: var(--amber); width: 30px; height: 30px; }
-[data-theme="dark"] .brand .logo svg { stroke: #000; stroke-width: 3; }
+[data-theme="dark"] .brand .logo { color: var(--amber); }
 [data-theme="dark"] .brand b { font-size: 15px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--amber); }
 [data-theme="dark"] .brand small { color: var(--ink-4); font-size: 10px; letter-spacing: .1em; }
 [data-theme="dark"] .search input {

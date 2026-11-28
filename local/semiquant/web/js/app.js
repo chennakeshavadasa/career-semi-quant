@@ -269,5 +269,10 @@
     SQ.updateStatus();
     if (!SQ.snapshot) setInterval(SQ.updateStatus, 60000);
     SQ.render();
+    // Content blockers match scripts by file name (EasyPrivacy blocked our old "quant.js"): say so
+    // instead of failing later with "SQ.quant is undefined".
+    const missing = [['quant', 'portfolio and offer models'], ['charts', 'charts'], ['ta', 'indicators'], ['qp', 'quant panels']]
+      .filter(([k]) => !SQ[k]).map(([, label]) => label);
+    if (missing.length) ui.toast(`Part of the app did not load (${missing.join(', ')}). A content blocker may have blocked it: allow this site, then reload.`, 15000);
   })();
 })();

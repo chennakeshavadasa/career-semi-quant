@@ -1,4 +1,6 @@
 /* Portfolio analytics computed in the browser (web edition and Android app, no server).
+ * Never name this file quant.js: EasyPrivacy (uBlock Origin, AdGuard, Brave) blocks any "/quant.js"
+ * script (Quantcast's tag), which left SQ.quant undefined for those users.
  * A port of semiquant.analytics.portfolio / risk.stress_test / montecarlo.simulate that returns the
  * same JSON as the local edition's /api/portfolio/analyze, so one renderer serves both:
  *   risk        ex-post risk of the current weights (2 years daily): vol, Sharpe, Sortino, beta,

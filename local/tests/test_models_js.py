@@ -1,4 +1,4 @@
-"""The browser port (web/js/quant.js, used by the web edition and the Android app) must give the
+"""The browser port (web/js/models.js, used by the web edition and the Android app) must give the
 same optimizer weights and portfolio risk as semiquant.analytics.portfolio. Needs Node; skipped
 without it."""
 import json
@@ -10,7 +10,7 @@ import pytest
 
 from semiquant.analytics import portfolio as pf
 
-QUANT_JS = os.path.join(os.path.dirname(__file__), "..", "semiquant", "web", "js", "quant.js")
+QUANT_JS = os.path.join(os.path.dirname(__file__), "..", "semiquant", "web", "js", "models.js")
 
 RUNNER = r"""
 global.window = { SQ: { fmt: { ok: (v) => v != null && isFinite(v) } } };

@@ -85,7 +85,8 @@ def _headline(rows: list[dict]) -> str | None:
     if not bad:
         return None
     r = max(bad, key=lambda x: (wr.STATUS_RANK[x["status"]], x["days"] or 0))
-    since = f", since {datetime.fromisoformat(r['since']).strftime('%-d %b %Y')}" if r["since"] else ""
+    d = date.fromisoformat(r["since"]) if r["since"] else None
+    since = f", since {d.day} {d.strftime('%b %Y')}" if d else ""  # no %-d: Windows' strftime rejects it
     return (f"{r['name']}: {r['avg7']:.0f} ships a day against about {r['base']:.0f} normally "
             f"({r['chg'] * 100:+.0f}%){since}.")
 

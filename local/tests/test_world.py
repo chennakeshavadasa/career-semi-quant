@@ -263,3 +263,12 @@ def test_quick_news_uses_a_cached_trend_and_warms_a_missing_one(fake):
     assert calls == [1]                                    # fetched in the background for the next load
     fake.setattr(gdelt, "cached_timeline", lambda *a, **k: [(f"2026-10-{d:02d}", 1.0) for d in range(1, 31)] * 3)
     assert sw.news("iran_gulf", quick=True)["attention"] is not None
+
+
+def test_no_platform_specific_date_formats():
+    # "%-d" (no leading zero) is a glibc extension: Windows' strftime raises "Invalid format string"
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1] / "semiquant"
+    bad = [f"{p.name}:{i + 1}" for p in root.rglob("*.py") for i, line in enumerate(p.read_text(encoding="utf-8").splitlines())
+           if re.search(r"strftime\([^)]*%-", line)]
+    assert not bad, bad

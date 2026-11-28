@@ -26,6 +26,7 @@ from ..data import yahoo
 from ..data.yahoo import DataError
 from ..service import market as mkt
 from ..service import screener as scr
+from ..service import smartmoney as sm
 from ..service import ticker as tk
 from ..service import tools
 
@@ -243,6 +244,14 @@ def create_app() -> FastAPI:
     @app.get("/api/ticker/{sym}/ownership")
     def t_owner(sym: str):
         return tk.ownership(sym)
+
+    @app.get("/api/ticker/{sym}/smartmoney")
+    def t_smart(sym: str):
+        return sm.ticker(sym)
+
+    @app.get("/api/congress")
+    def congress_feed(days: int = 90):
+        return sm.congress_feed(days if days in (30, 90, 365) else 90)
 
     @app.get("/api/ticker/{sym}/factors")
     def t_factors(sym: str):

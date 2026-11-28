@@ -8,12 +8,12 @@
 
   const TABS = [
     ['overview', 'Overview'], ['risk', 'Risk & returns'], ['volatility', 'Volatility'], ['tail', 'Tail risk & stress'],
-    ['options', 'Options'], ['fundamentals', 'Fundamentals'], ['analysts', 'Analysts & earnings'], ['ownership', 'Ownership'],
+    ['options', 'Options'], ['fundamentals', 'Fundamentals'], ['analysts', 'Analysts & earnings'], ['ownership', 'Ownership'], ['smart', 'Insiders & Congress'],
     ['factors', 'Factors & regimes'], ['events', 'Filings & news'],
   ];
   SQ.TICKER_TABS = TABS;
   // Phone labels (the tabs are a grid of keys there).
-  const SHORT = { risk: 'Risk', tail: 'Tail risk', fundamentals: 'Financials', analysts: 'Analysts', ownership: 'Owners', factors: 'Factors', events: 'News' };
+  const SHORT = { risk: 'Risk', tail: 'Tail risk', fundamentals: 'Financials', analysts: 'Analysts', ownership: 'Owners', smart: 'Insiders', factors: 'Factors', events: 'News' };
   const two = (long, short) => [h('span', { class: 'bl' }, long), h('span', { class: 'bs' }, short)];
   const state = { sym: null, quote: null, overview: null };
   SQ.tickerState = state;

@@ -726,3 +726,23 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
 .update-toast { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .update-toast .btn { height: 28px; padding: 0 10px; font-size: 12.5px; }
 [data-theme="dark"] .update-toast .btn { background: #000; color: var(--amber); border-color: #000; }
+
+/* Insiders & Congress (who else is trading a stock) */
+.flags { display: grid; gap: 8px; }
+.flag { border: 1px solid var(--rule); border-left: 4px solid var(--ink-4); border-radius: var(--radius-sm); padding: 9px 12px; background: var(--card); }
+.flag.red { border-left-color: var(--down); }
+.flag.green { border-left-color: var(--up); }
+.flag.amber { border-left-color: var(--warn); }
+.flag .ft { font-weight: 700; color: var(--ink); line-height: 1.4; overflow-wrap: anywhere; }
+.flag .fd { color: var(--ink-2); font-size: 13px; line-height: 1.5; margin-top: 3px; overflow-wrap: anywhere; }
+.flag .fm { color: var(--ink-4); font-size: 12px; }
+.flag .fm a { color: var(--accent); }
+.new-badge { display: inline-block; font: 700 10.5px var(--mono); letter-spacing: .06em; padding: 1px 6px; margin-right: 8px; border-radius: 3px; background: var(--warn); color: #000; vertical-align: 1px; }
+table.t tr.flagged td { background: rgba(var(--warn-rgb), .10); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filters input[type=search] { min-width: 160px; flex: 1 1 180px; }
+.filters input[type=search], .filters select { min-height: 36px; padding: 4px 8px; font-size: 13.5px; }
+.filters label { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; }
+.flag .fm { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; min-height: 32px; margin-top: 2px; }
+.flag .fm a { display: inline-flex; align-items: center; min-height: 32px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }

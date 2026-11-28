@@ -27,6 +27,7 @@ dependencies = [
   "rich>=13.7",
   "openpyxl>=3.1",
   "plotly>=5.22",
+  "pypdf>=4.0",
 ]
 
 [project.optional-dependencies]

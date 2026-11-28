@@ -36,9 +36,10 @@ from urllib.parse import quote as urlq
 
 from . import __version__, config
 from .analytics._util import jsonable
-from .data import yahoo
+from .data import congress, yahoo
 from .service import market as mkt
 from .service import screener as scr
+from .service import smartmoney as sm
 from .service import ticker as tk
 from .service import tools
 from .service.export import snap_key
@@ -251,6 +252,15 @@ class Publisher:
             self.put(f"/api/market/breadth?u={u}", "hourly", lambda u=u: mkt.breadth(u))
             self.put(f"/api/market/systemic?u={u}", "slow", lambda u=u: mkt.systemic(u))
             self.put(f"/api/factorlab?u={u}", "daily", lambda u=u: mkt.factorlab(u))
+        # Congress: read the filings published since the last run (the first run reads two years, about
+        # 1,500 filings, over a few runs), then the feeds
+        try:
+            congress.READ_BUDGET_S = 240
+            congress.refresh(730, budget_s=240)
+        except Exception as exc:  # noqa: BLE001 - the feeds keep their previous files
+            self.errors.append(f"congress refresh: {type(exc).__name__}: {str(exc)[:160]}")
+        for d in (30, 90, 365):
+            self.put(f"/api/congress?days={d}", "hourly", lambda d=d: sm.congress_feed(d))
 
     def ticker(self, sym: str) -> None:
         """Quick pass: everything that changes intraday (always done)."""
@@ -276,6 +286,8 @@ class Publisher:
             self.put(f"{base}/{tab}", "slow", lambda fn=fn: fn(sym), tab)
         for tab, fn in (("fundamentals", tk.fundamentals), ("ownership", tk.ownership), ("events", tk.events)):
             self.put(f"{base}/{tab}", "daily", lambda fn=fn: fn(sym), tab)
+        # who else is trading it: fresh SEC filings (Form 4 / 144 / 13D) and Congress, checked hourly
+        self.put(f"{base}/smartmoney", "hourly", lambda: sm.ticker(sym))
 
     def published(self) -> list[str]:
         """Tickers with a full page = those whose overview file exists (robust to partial runs)."""

@@ -219,9 +219,16 @@
       standalone() ? null : h('button', { type: 'button', onclick: SQ.install }, icon('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>'),
         h('span', null, 'Install as an app', h('small', null, 'Home-screen icon, opens full screen, keeps the last data offline'))),
       inAndroidApp && window.SQAndroid && SQAndroid.checkUpdate
-        ? h('button', { type: 'button', onclick: () => SQAndroid.checkUpdate() }, icon('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
-          h('span', null, 'Update app', h('small', null, 'Version ' + (SQAndroid.appVersion ? SQAndroid.appVersion() : '?') + ' · checks for a new build and installs it')))
-        : null,
+        // Two parts update separately: the layout (web edition, redeployed on every push) and the
+        // Android shell (APK, rebuilt only when android/ changes). The button refreshes both.
+        ? h('button', { type: 'button', onclick: () => { SQAndroid.checkUpdate(); if (SQ.checkForUpdate) SQ.checkForUpdate(); } },
+          icon('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
+          h('span', null, 'Update app', h('small', null, 'App ' + (SQAndroid.appVersion ? SQAndroid.appVersion() : '?')
+            + (SQ.static && window.SQ_STATIC.build ? ' · layout ' + window.SQ_STATIC.build : '') + ' · loads the newest layout and app build')))
+        : SQ.static && SQ.checkForUpdate
+          ? h('button', { type: 'button', onclick: () => SQ.checkForUpdate() }, icon('<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>'),
+            h('span', null, 'Check for updates', h('small', null, 'Build ' + window.SQ_STATIC.build + ' · reloads into the newest published version')))
+          : null,
       SQ.static && !inAndroidApp && /android/i.test(navigator.userAgent)
         ? h('a', { href: APK, rel: 'noopener' }, icon('<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>'),
           h('span', null, 'Android app (APK)', h('small', null, 'Download and install the native app')))

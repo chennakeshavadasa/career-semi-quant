@@ -25,7 +25,12 @@ function withoutQuery(request) {
 async function networkFirst(request, cacheName) {
   const key = withoutQuery(request);
   try {
-    const response = await fetch(request);
+    // Pages: revalidate with the server (a cheap 304 when unchanged). A plain fetch takes the
+    // browser's HTTP cache (GitHub Pages: max-age=600) and shows the old layout for up to
+    // 10 minutes after a deploy, even though this is "network first".
+    const response = request.mode === 'navigate'
+      ? await fetch(request.url, { cache: 'no-cache', credentials: 'same-origin' })
+      : await fetch(request);
     if (response.ok) (await caches.open(cacheName)).put(key, response.clone());
     return response;
   } catch (err) {

@@ -719,3 +719,10 @@ table.t td .bar { display: inline-block; height: 6px; border-radius: 3px; backgr
   :root label:has(> input[type=checkbox]) { min-height: 36px; display: inline-flex; align-items: center; gap: 8px; }
   :root .brand .logo { width: 34px; height: 34px; }
 }
+
+/* Brand mark (brand/quant-terminal-icon.svg): carries its own black tile and orange glyph. */
+.brand .logo.qt-mark { border: 0; background: none; }
+.brand .logo.qt-mark svg { width: 30px; height: 30px; fill: initial; stroke: none; }
+.update-toast { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.update-toast .btn { height: 28px; padding: 0 10px; font-size: 12.5px; }
+[data-theme="dark"] .update-toast .btn { background: #000; color: var(--amber); border-color: #000; }

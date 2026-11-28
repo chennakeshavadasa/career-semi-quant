@@ -195,17 +195,61 @@
     const streaming = SQ.stream && SQ.stream.fresh(); // prices are live; the analytics are from the build
     if (txt) txt.textContent = `${streaming ? 'Analytics' : 'Data'} ${fmt.time(m.built_at)} · ${ago(m.built_at)} · ${open ? 'US market open' : st.message || 'US market closed'}`;
   };
+  // ─── app updates: meta.json names the build of the published UI ───────
+  // A page that stays open (an installed app, the Android WebView) keeps running the code it
+  // loaded until it reloads. When a newer layout is published, offer it, and take it the next
+  // time the app comes back to the foreground (a safe moment: nothing is being typed).
+  SQ.newBuild = () => !!(S.meta && S.meta.build && ST.build && S.meta.build !== ST.build);
+  // Remember which build a reload was for, so a CDN that still serves the old page for a moment
+  // can't cause a reload loop: then the app just keeps offering the Reload button.
+  const triedFor = () => { try { return sessionStorage.getItem('sq-reload-for'); } catch (e) { return null; } };
+  SQ.applyUpdate = async () => {
+    try { sessionStorage.setItem('sq-reload-for', S.meta.build); } catch (e) { /* ignore */ }
+    SQ.ui.toast('Loading the latest version…', 4000);
+    try {
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update(); // fetch the new sw.js now; it activates at once (skipWaiting)
+        const w = reg.installing || reg.waiting;
+        if (w) await new Promise((ok) => { w.addEventListener('statechange', () => w.state === 'activated' && ok()); setTimeout(ok, 4000); });
+      }
+    } catch (e) { /* no service worker: the reload alone is enough */ }
+    try { for (const k of await caches.keys()) if (k.startsWith('sq-shell-')) await caches.delete(k); } catch (e) { /* ignore */ }
+    location.reload();
+  };
+  /** The "Check for updates" / "Update app" button: newest layout first, then (Android) the app build. */
+  SQ.checkForUpdate = async () => {
+    try { await SQ.loadMeta(); } catch (e) { SQ.ui.toast('Offline: cannot check for a new version right now.', 4000); return; }
+    if (SQ.newBuild()) return SQ.applyUpdate();
+    if (!(window.SQAndroid && SQAndroid.checkUpdate)) SQ.ui.toast(`You have the latest version (build ${ST.build}).`, 4000);
+  };
+  let offered = false;
+  function offerUpdate() {
+    if (offered || !SQ.newBuild()) return;
+    offered = true;
+    const t = SQ.h('div', { class: 'toast update-toast', role: 'status' }, 'A new version of the app is ready. ',
+      SQ.h('button', { type: 'button', class: 'btn primary', onclick: () => { t.remove(); SQ.applyUpdate(); } }, 'Reload'),
+      SQ.h('button', { type: 'button', class: 'btn', onclick: () => t.remove() }, 'Later'));
+    document.body.appendChild(t);
+  }
   async function poll() {
     let changed = false;
     try { changed = await SQ.loadMeta(); } catch (e) { /* offline */ }
     if (changed && S.quotes) {
       try { await quotes(true); SQ.live.tick(true); } catch (e) { /* ignore */ }
-      SQ.ui.toast(`New data published (${fmt.time(S.meta.built_at)}). Prices updated; tap refresh for every number.`, 5000);
+      if (!SQ.newBuild()) SQ.ui.toast(`New data published (${fmt.time(S.meta.built_at)}). Prices updated; tap refresh for every number.`, 5000);
     }
+    offerUpdate();
     SQ.updateStatus();
   }
   setInterval(poll, 60000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    await poll();
+    // Back from the background after a while with a newer layout published: just take it.
+    if (SQ.newBuild() && triedFor() !== S.meta.build && hiddenAt && Date.now() - hiddenAt > 30000) SQ.applyUpdate();
+  });
 
   // ─── sharing a page (instead of downloading an HTML snapshot) ─────────
   SQ.shareLink = async (title) => {

@@ -199,8 +199,11 @@ class Publisher:
         shutil.copy2(Path(plotly.__file__).parent / "package_data" / "plotly.min.js", self.out / "vendor" / "plotly.min.js")
         h = hashlib.sha1()
         for f in sorted((self.out).rglob("*")):
-            if f.is_file() and "data" not in f.relative_to(self.out).parts and f.suffix in (".js", ".css", ".html"):
+            if f.is_file() and "data" not in f.relative_to(self.out).parts and f.name not in ("index.html", "sw.js"):
+                h.update(f.relative_to(self.out).as_posix().encode())
                 h.update(f.read_bytes())
+        for f in ("index.html", "sw.js", "manifest.webmanifest"):  # the sources (the outputs embed the old build)
+            h.update((WEB / f).read_bytes())
         build = h.hexdigest()[:10]
         cfg = {"base": "data/", "build": build, "version": __version__}
         html = (WEB / "index.html").read_text(encoding="utf-8")

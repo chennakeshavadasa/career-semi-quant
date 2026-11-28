@@ -1,0 +1,70 @@
+# Handoff: Semi Quant Terminal
+
+State at 2026-11-28 11:00 UTC. Read this first, then `git log --oneline -20 origin/master`.
+
+## What this is
+
+One codebase, four ways to use it:
+
+| Surface | Where | Built from |
+|---|---|---|
+| **Local edition** (full app, live data on your PC) | `semiquant serve` → http://127.0.0.1:8050 | `local/` (Python package `semiquant`: `data/`, `analytics/`, `service/`, `server/`, `web/`) |
+| **Web edition, Android's copy** | https://chennakeshavadasa.github.io/career-semi-quant/app/ | `.github/workflows/webapp.yml`: `semiquant publish` (static UI + `data/*.json`), every 15 min weekdays, every 3 h weekends |
+| **Android app** (WebView on the URL above) | release `android` (`SemiQuant.apk`, `version.json`) | `.github/workflows/android.yml`, only when `android/**` changes on master |
+| **Website** | https://nithinpuru.github.io/quant-terminal/ → forwards to `/quant-terminal/app/` | repo **NithinPuru/nithinpuru.github.io**, `deploy.yml` pip-installs `semiquant` from this repo's `master` and publishes it. The old single-page terminal (`public/quant-terminal/`, mirrored by its `quant-terminal-sync.yml`) is served at `/quant-terminal/classic.html` |
+
+`master` is production. Working branch for Claude sessions: `claude/pensive-einstein-jrrduh` (fast-forward master to it).
+
+## Shipped today (newest first)
+
+- `bcb3c23` publish: each stock's Insiders & Congress data moved to the always-run pass (the first run's 2-min heavy budget was used up reading Congress filings, so the tab 404'd).
+- `0a2cefa` **Insiders & Congress**: ticker tab `smart` + page `#/congress`. Data: `local/semiquant/data/congress.py` (House Clerk index + PTR PDFs via pypdf, Senate eFD search + report pages, @unitedstates legislators/committees), `data/sec.py` (EDGAR full-text search: Form 4, Form 144, 13D/13G), `service/smartmoney.py` (highlights, committee oversight heuristic, feed). UI `web/js/views/smartmoney.js`. Tests `local/tests/test_congress.py` (+ real filings in `tests/data/`).
+- `85bd2b6` `js/quant.js` → `js/models.js`: EasyPrivacy's `/quant.js` rule (uBlock, AdGuard, Brave) blocked it and broke Offer/Portfolio. `tests/test_blocklists.py` now fails on any blocked file name.
+- `8ca279e` webapp.yml: restores (page_build) only read the cache and take the newest build; push runs save under their own key. Before this a restore could bring back an older build (old logo).
+- `e96051e` restored the `quantpack.js` script tag + Factor lab link that a merge dropped.
+- `94e06d3` merged the other session's update fixes; **logo = "bell of candles"** (owner's pick, option B) everywhere: `brand/`, PWA icons, Android mipmaps, favicons, header marks (web + classic page).
+- Earlier today: quant pack (crash risk/PSR, liquidity & impact, HAR-RV, random-walk tests, implied distribution, model-free IV, systemic risk, factor lab) and its tests.
+- Website repo (NithinPuru/nithinpuru.github.io, `main`): `3a04c4c` `/quant-terminal/` forwards to the app (classic page at `classic.html`; smoke test updated), `d849176` `deploy.yml` input `quick` and 2-min budget on pushes.
+
+## In flight at handoff (verify first)
+
+- `bcb3c23` deploys: the webapp push run and a website deploy dispatched with `quick=true`. Check both serve NVDA's tab data and that the tab renders:
+  ```bash
+  curl -sI https://chennakeshavadasa.github.io/career-semi-quant/app/data/ticker/NVDA/smartmoney.json | head -1
+  curl -sI https://nithinpuru.github.io/quant-terminal/app/data/ticker/NVDA/smartmoney.json | head -1
+  ```
+  Then open `#/t/NVDA/smart` and `#/congress` on both. If the website still 404s, dispatch its `deploy.yml` again with `quick: true`.
+- First Congress runs leave a few filings "pending"; each run reads more (4-min cap). `stats` in `data/congress__days-90.json` shows it.
+
+## Open items
+
+1. **Owner setting (recommended):** career-semi-quant → Settings → Pages → Source: **GitHub Actions**. Stops the branch-based Pages builds that blank the app for a minute after every push to master (the restore dance in `webapp.yml`).
+2. **Every fund ≥0.5% (13F) and exact 5%+ stake percentages** need SEC archive access, which requires a contact email in the User-Agent. Only with the owner's explicit OK and an address they choose; today `data/sec.py` uses the search API, which needs none.
+3. Executive-branch officials' trades (OGE 278-T) are not covered: no clean feed.
+4. Polish: chart annotation text 9-10.5 px on a few heatmaps (risk, factor lab) is flagged "tiny" by the phone audit; README does not mention the quant pack or Insiders & Congress yet.
+
+## How to work here (learned the hard way)
+
+- **Sync before anything**: other Claude sessions push to master too. `git fetch origin`, merge, never force-push or rebase pushed history.
+- **Merge conflicts in text files**: resolve the hunks. `git checkout --theirs <file>` takes the whole file and silently drops your side (it dropped the quant pack's script tag).
+- **What a push to master triggers**: branch Pages build (app 404 for ~1 min; installed apps show their cached copy) → `webapp.yml` restore; `webapp.yml` publish (push = 2-min heavy budget, scheduled = 12); `android.yml` if `android/**` changed (new APK, in-app update); `test.yml` if `public/**`; `local-tests.yml` if `local/**`. **The website only updates through its own deploy**: dispatch `deploy.yml` in NithinPuru/nithinpuru.github.io with `quick: true` after a code change, or wait for its schedule.
+- **Anything every stock page needs goes in `Publisher.ticker()`** (always runs). `ticker_slow()` stops at the time budget.
+- **File names**: no shipped file may match a content-blocker rule (`local/tests/data/blocked_script_names.txt`). The test enforces it.
+- **SEC**: `www.sec.gov` (archives, company_tickers.json) refuses requests without a contact email; `efts.sec.gov` and `data.sec.gov` work with a generic client name. In the search API's `forms` filter list **base forms only** (`4,144`, `SCHEDULE 13G`, ...): listing `/A` forms drops results; amendments come back anyway.
+- **Congress sources**: House PDFs put NULs where the heading font lacks glyphs (`parse_house_text` handles it); Senate eFD needs the terms-of-use POST first (`_senate_session`). Disclosure lag: median 27 days, 10% over 116 days (the law allows 45).
+- **Checks before shipping**:
+  ```bash
+  cd local && pytest -q                        # 279 tests
+  for f in semiquant/web/js/*.js semiquant/web/js/views/*.js; do node --check "$f"; done
+  semiquant serve --no-browser &               # then the phone audit:
+  node devtools/uitest.js http://127.0.0.1:8050/ /tmp/ui a360,p412,zoom130,se375light,land800,tab768 market,nvda_smart,congress
+  ```
+  `uitest.js` (Playwright) reports overflow, overlapping text, clipping, small tap targets and tiny text per page and screen size; `scrl` (table scrollers) is expected.
+- **Static check without a deploy**: `Publisher(out, full=[...])` + `copy_app()`, `quotes()`, `put(...)` for the pages you changed, `meta()`; serve `out` and open it (see `0a2cefa` for the routes).
+
+## Owner's preferences (from this conversation)
+
+- Wants changes **live** (app and website), quickly; checks often ("is it live now?"). Report status plainly with what was verified.
+- Logo is settled: bell of candles. Rejected: chip, Q (looks like a search icon), fan of paths, "worm" curves, black swan (a metaphor, not quant).
+- Phone UI quality matters: test every screen size before shipping.
+- Wants the newest information fastest: show both "traded" and "public since" dates, flag NEW items.

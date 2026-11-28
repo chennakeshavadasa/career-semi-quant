@@ -208,3 +208,33 @@ def test_a_page_scanned_sideways_is_turned_upright():
 @need_ocr
 def test_a_sideways_page_reads_like_the_upright_one():
     check(pp.read_page(pp.upright(img("page2.png").rotate(90, expand=True)), LATEST), PAGE2)
+
+
+def test_ocr_needs_both_tesseract_and_pillow(monkeypatch):
+    import importlib.util
+    monkeypatch.setattr(pp, "_have", None)
+    monkeypatch.setattr(pp.shutil, "which", lambda name: "/usr/bin/tesseract")
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
+    assert pp.available() is False
+    monkeypatch.setattr(pp, "_have", None)
+    monkeypatch.setattr(pp.shutil, "which", lambda name: None)
+    assert pp.available() is False
+    monkeypatch.setattr(pp, "_have", None)
+
+
+def test_a_missing_imaging_library_fails_the_read_instead_of_storing_an_empty_one():
+    class Page:
+        @property
+        def images(self):
+            raise ImportError("pillow is required to do image extraction")
+
+    class Pdf:
+        pages = [Page()]
+    with pytest.raises(ImportError):
+        pp.read_pdf(Pdf())
+
+
+def test_reports_read_by_an_older_reader_are_read_again(monkeypatch):
+    monkeypatch.setattr(pp, "_have", True)
+    assert congress._stale_scan({"rows": [], "readable": False, "scan": True, "ocr": pp.VERSION - 1})
+    assert not congress._stale_scan({"rows": [], "readable": False, "scan": True, "ocr": pp.VERSION})

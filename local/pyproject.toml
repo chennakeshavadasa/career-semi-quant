@@ -28,6 +28,7 @@ dependencies = [
   "openpyxl>=3.1",
   "plotly>=5.22",
   "pypdf>=4.0",
+  "pillow>=10.0",     # page images of scanned Congress reports (pypdf needs it to decode them)
 ]
 
 [project.optional-dependencies]

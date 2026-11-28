@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-VERSION = 1  # bump to re-read every scanned filing after an improvement
+VERSION = 2  # bump to re-read every scanned filing after an improvement (2: v1 ran once without Pillow)
 # Amount columns A-K of the form: $1,001-$15,000 ... Over $50,000,000, and K = a spouse's or child's asset over $1M
 AMOUNTS: list[tuple[int, int | None]] = [(1001, 15000), (15001, 50000), (50001, 100000), (100001, 250000), (250001, 500000),
                                          (500001, 1000000), (1000001, 5000000), (5000001, 25000000), (25000001, 50000000),
@@ -38,9 +38,11 @@ _have: bool | None = None
 
 
 def available() -> bool:
+    """Tesseract (the OCR program) and Pillow (to decode the page images) are both installed."""
     global _have
     if _have is None:
-        _have = shutil.which("tesseract") is not None
+        import importlib.util
+        _have = shutil.which("tesseract") is not None and importlib.util.find_spec("PIL") is not None
     return _have
 
 
@@ -325,6 +327,8 @@ def read_pdf(pdf: Any, latest: date | None = None) -> list[dict]:
     for page in pdf.pages:
         try:
             im = [i.image for i in page.images]
+        except ImportError:
+            raise   # a missing library: fail, so the report is read again later instead of being stored as empty
         except Exception:  # noqa: BLE001 - an image this pypdf can't decode: skip the page
             continue
         if im:
